@@ -33,7 +33,7 @@
     </div>
 </div>
 <div class="copyw3-agile">
-    <p> © 2020 Fifcom Technology Studio.| Source Code : <a href="https://github.com/FIFCOM/PasteBin" target="_blank">FIFCOM/PasteBin.</a></p>
+    <p> © 2020 Fifcom Technology Studio | <a href="https://github.com/FIFCOM/Pastebin" target="_blank">PasteBin <?=PASTEBIN_VERSION?></a></p>
 </div>
 </body>
 </html>
