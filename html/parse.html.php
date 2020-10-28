@@ -22,7 +22,7 @@
     <div class="main-agilerow">
         <div class="sub-w3lsright agileits-w3layouts stack twisted">
             <h2>FIFCOM PasteBin</h2>
-            <p><span><a href="https://<?=$SvrName?>/<?=$pbName?>&raw=true" target="_blank">RAW</a></span> | <span><a href="https://<?=$SvrName?>" target="_blank">Create a new PasteBin</a></span></p>
+            <p><span><a href="https://<?=$SvrName?>/<?=$pbName?>&raw=1" target="_blank">RAW</a></span> | <span><a href="https://<?=$SvrName?>" target="_blank">Create a new PasteBin</a></span></p>
             <form action="#" method="post">
                 <textarea class="form-control" name="pastebin" id="pastebin" rows="1" onclick=copyinput() placeholder=" Nothing to show."><?=$pastebin?></textarea>
                 <input type="button" value="Copy to clipboard" onclick="copyinput()"/>
