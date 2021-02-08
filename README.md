@@ -1,10 +1,10 @@
 # Pastebin
-Pastebin is a simple PHP program for storing and sharing text
+Pastebin is a PHP program for storing and sharing text
 
 Nginx Pseudo-static:
 
 ```
 location / {
-            rewrite ^/(.+)$ /parse.php?pb=$1 last;
+            rewrite ^/(J.*)$ /view.php?pb=$1 last;
         }
 ```
