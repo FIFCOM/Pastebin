@@ -12,8 +12,8 @@ ini_set('display_errors', 0);
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="keywords" content="PasteBin service developed by FIFCOM" />
     <link rel="shortcut icon" href="<?=$pastebinIcon?>"/>
-    <link rel="stylesheet" href="pages/md/css/editormd.preview.min.css" />
-    <link rel="stylesheet" href="pages/md/css/editormd.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/css/editormd.preview.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/css/editormd.min.css" />
     <script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
     <link
       rel="stylesheet"
@@ -120,9 +120,9 @@ ini_set('display_errors', 0);
     	});
     </script>
     <script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
-    <script src="pages/md/editormd.js"></script>
-    <script src="pages/md/lib/marked.min.js"></script>
-    <script src="pages/md/lib/prettify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/editormd.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/lib/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/lib/prettify.min.js"></script>
     <script type="text/javascript">
         $(function() {
             var editor = editormd("pastebin-editormd", {
@@ -130,7 +130,7 @@ ini_set('display_errors', 0);
                 height: 540,
                 markdown: "",
                 emoji: true,
-                path: 'pages/md/lib/',
+                path: 'https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/lib/',
                 imageUpload: false,
                 toolbarIcons : function() {
                     return ["bold", "italic", "quote", "|", "h1", "h2", "h3", "h4", "|", "list-ul", "list-ol", "hr", "|", "link", "image", "code", "code-block", "table", "|", "search", "||", "watch", "preview"]

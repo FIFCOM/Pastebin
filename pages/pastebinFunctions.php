@@ -11,14 +11,12 @@ function randomString8($salt)
 }
 
 function pastebinEncrypt($data, $password){
-    $iv = PASTEBIN_CRYPT_IV;
-    $encrypted=  openssl_encrypt($data,'aes-128-cbc', $password, OPENSSL_RAW_DATA, $iv);
+    $encrypted =  openssl_encrypt($data,'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_CRYPT_IV);
     return $encrypted;
 }
 
 function pastebinDecrypt($data, $password){
-    $iv = PASTEBIN_CRYPT_IV;
-    $decrypted=  openssl_decrypt($data,'aes-128-cbc', $password, OPENSSL_RAW_DATA, $iv);
+    $decrypted =  openssl_decrypt($data,'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_CRYPT_IV);
     return $decrypted;
 }
 
