@@ -26,6 +26,12 @@ function pastebinGetSubString($string, $start, $end) {
     return $substr;
 }
 
+function pastebinTitle() {
+    //$pastebinAuthor = isset($_REQUEST['token'])?fidQuery($_REQUEST['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
+    //$pastebinTimestamp = 
+    return 0;
+}
+
 function pastebinWrite($pastebin, $title, $viewer){
     $pastebinCryptPassword = randomString8(PASTEBIN_SECURITY_TOKEN);
     $pastebinFileName = randomString8(PASTEBIN_SECURITY_TOKEN);
@@ -57,8 +63,12 @@ function pastebinView($fileName, $cryptPassword, $type){
         return "Pastebin无效或已被删除。[PB_ERR_NOT_FOUND]";
     }
 }
-$pastebinConsoleCopy = 'console.log("\n %c FIFCOM Pastebin '.PASTEBIN_VERSION.' %c https://github.com/FIFCOM/Pastebin \n\n","color: #ffffff; background: #0D47A1; padding:5px 0;","background: #42A5F5; padding:5px 0;");
-console.log("\n %c LICENSE : GNU LGPL v2.1 %c https://github.com/FIFCOM/Pastebin/blob/master/LICENSE \n\n","color: #ffffff; background: #00695C; padding:5px 0;","background: #4DB6AC; padding:5px 0;");';
+
+function pastebinQRUri($string){
+    return 'https://www.zhihu.com/qrcode?url='.urlencode($string);
+}
+
+$pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  '.PASTEBIN_VERSION.'%cGNU LGPL\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%chttps://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
 $pastebinIcon = ICON_URL?ICON_URL:"https://q.qlogo.cn/headimg_dl?dst_uin=1280874899&spec=640";
 $pastebinTLSEncryption = TLS_ENCRYPT == "enable"?"https://":"http://";
 $pastebinPrimaryTheme = isset($_REQUEST['pastebinPrimaryTheme'])?$_REQUEST['pastebinPrimaryTheme']:PRIMARY_THEME;

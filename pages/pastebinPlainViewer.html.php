@@ -13,7 +13,7 @@ ini_set('display_errors', 0);
     <meta name="keywords" content="PasteBin service developed by FIFCOM" />
     <link rel="shortcut icon" href="<?=$pastebinIcon?>"/>
     <script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
-
+    <style>.center{text-align:center}</style>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/css/mdui.min.css"
@@ -27,6 +27,7 @@ ini_set('display_errors', 0);
         <div class="mdui-toolbar mdui-color-theme">
             <span id="toggle" class="mdui-btn mdui-btn-icon mdui-ripple-white mdui-appbar-scroll-toolbar-hide "><i class="mdui-icon material-icons">menu</i></span>
             <a href="./" class="mdui-typo-headline">FIFCOM Pastebin</a>
+            <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '查看二维码', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">filter_center_focus</i></button>
             <a href="./" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
         </div>
         <div class="mdui-toolbar-spacer"></div>
@@ -58,8 +59,16 @@ ini_set('display_errors', 0);
         </div>
         </div>
     </div>
-    <a href="./" class="mdui-fab mdui-fab-fixed mdui-color-theme-accent" type="submit"><i class="mdui-icon material-icons">add</i></a>
     <div class="mdui-container doc-container">
+        <div class="mdui-dialog" id="pastebin-qr">
+            <div class="mdui-dialog-title">二维码分享</div>
+            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>"></div></div>
+            <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
+                <button class="mdui-btn mdui-ripple" onclick="copyqr()" mdui-dialog-confirm>复制链接至剪贴板</button>
+                <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
+            </div>
+        </div>
+
         <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
             <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
         <div class="mdui-card-primary mdui-typo">
@@ -88,6 +97,14 @@ ini_set('display_errors', 0);
     function copyinput() 
     { 
     var input=document.getElementById("pastebin");
+    input.select();
+    document.execCommand("Copy");
+    } 
+    </SCRIPT>
+    <SCRIPT LANGUAGE="JavaScript"> 
+    function copyqr() 
+    { 
+    var input=document.getElementById("pastebin-qr");
     input.select();
     document.execCommand("Copy");
     } 

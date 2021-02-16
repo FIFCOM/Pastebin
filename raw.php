@@ -1,5 +1,5 @@
 <?php
-	header("Content-type:text/html;charset=utf-8;");
+	header("Content-type:text/txt;charset=utf-8;");
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
     $pastebinFileName = isset($_REQUEST['id'])?$_REQUEST['id']:"0";
