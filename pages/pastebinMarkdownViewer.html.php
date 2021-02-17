@@ -21,12 +21,12 @@ ini_set('display_errors', 0);
       integrity="sha384-cLRrMq39HOZdvE0j6yBojO4+1PrHfB7a9l5qLcmRm/fiWXYY+CndJPmyu5FV/9Tw"
       crossorigin="anonymous"
     />
-    <title>FIFCOM Pastebin</title>
+    <title><?=$pastebinTitle?> - <?=SITE_NAME?></title>
 </head>
 <body class="mdui-appbar-with-toolbar mdui-theme-primary-<?=$pastebinPrimaryTheme?> mdui-theme-accent-<?=$pastebinAccentTheme?> mdui-theme-layout-auto mdui-loaded">
     <header class="mdui-appbar mdui-appbar-fixed">
         <div class="mdui-toolbar mdui-color-theme">
-            <a href="./" class="mdui-typo-headline">FIFCOM Pastebin</a>
+            <a href="./" class="mdui-typo-headline"><?=SITE_NAME?></a>
             <a href="./" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
         </div>
         <div class="mdui-toolbar-spacer"></div>

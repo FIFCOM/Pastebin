@@ -1,7 +1,7 @@
 <?php
 // ====== Basic Settings ======
 // Optional theme color : amber blue blue-grey brown cyan deep-orange deep-purple green grey indigo light-blue light-green lime orange pink purple red teal yellow
-//define('SITE_NAME', 'FIFCOM Pastebin [Beta]');
+define('SITE_NAME', 'FIFCOM Pastebin [Beta]');
 define('PRIMARY_THEME', 'indigo');
 define('ACCENT_THEME', 'pink');
 define('ICON_URL', 'https://q.qlogo.cn/headimg_dl?dst_uin=1280874899&spec=640');

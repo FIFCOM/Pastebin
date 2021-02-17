@@ -18,7 +18,8 @@
     $pastebinCardMessage = '<span><a href="'.$pastebinTLSEncryption.$SvrName.'/raw.php?id='.$pastebinFileName.'&key='.$pastebinCryptPassword.'&token='.$pastebinRawAccessToken.'" target="_blank">原始内容</a></span>';
     $pastebinTitle = pastebinView($pastebinFileName, $pastebinCryptPassword, "title");
     $pastebin = pastebinView($pastebinFileName, $pastebinCryptPassword, "pastebin");
-    $pastebinQR = pastebinQRUri($pastebinTLSEncryption.$SvrName.'/'.base64_encode($pastebinEncodedRequest));
+    $pastebinQR = pastebinQRUri($pastebinTLSEncryption.$SvrName.'/'.base64_encode($pastebinEncodedRequest), '1');
+    $pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption.$SvrName.'/'.base64_encode($pastebinEncodedRequest), '0');
     if ($pastebinViewerType == "1")
     {
         require_once("pages/pastebinPlainViewer.html.php");

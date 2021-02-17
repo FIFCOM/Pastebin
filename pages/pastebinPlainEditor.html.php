@@ -20,15 +20,15 @@ ini_set('display_errors', 0);
       integrity="sha384-cLRrMq39HOZdvE0j6yBojO4+1PrHfB7a9l5qLcmRm/fiWXYY+CndJPmyu5FV/9Tw"
       crossorigin="anonymous"
     />
-    <title>FIFCOM Pastebin</title>
+    <title><?=SITE_NAME?></title>
 </head>
 <body class="mdui-drawer-body-left mdui-appbar-with-toolbar mdui-theme-primary-<?=$pastebinPrimaryTheme?> mdui-theme-accent-<?=$pastebinAccentTheme?> mdui-theme-layout-auto mdui-loaded">
     <header class="mdui-appbar mdui-appbar-fixed">
     <div class="mdui-toolbar mdui-color-theme">
             <span id="toggle" class="mdui-btn mdui-btn-icon mdui-ripple-white mdui-appbar-scroll-toolbar-hide "><i class="mdui-icon material-icons">menu</i></span>
-            <a href="./" class="mdui-typo-headline">FIFCOM Pastebin</a>
+            <a href="./" class="mdui-typo-headline"><?=SITE_NAME?></a>
             <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '查看二维码', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">filter_center_focus</i></button>
-            <a href="./" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
+            <a href="./" target="_blank" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
         </div>
         <div class="mdui-toolbar-spacer"></div>
     </header>
@@ -87,9 +87,9 @@ ini_set('display_errors', 0);
     <div class="mdui-container doc-container">
         <div class="mdui-dialog" id="pastebin-qr">
             <div class="mdui-dialog-title">二维码分享</div>
-            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>"></div></div>
-            <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
-                <button class="mdui-btn mdui-ripple" onclick="copyqr()" mdui-dialog-confirm>复制链接至剪贴板</button>
+            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>"></div>
+            </div>
+            <div class="mdui-dialog-actions">
                 <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
             </div>
         </div>
@@ -120,14 +120,6 @@ ini_set('display_errors', 0);
     		maindrawer.toggle();
     	});
     </script>
-    <SCRIPT LANGUAGE="JavaScript"> 
-    function copyqr() 
-    { 
-    var input=document.getElementById("pastebin-qr");
-    input.select();
-    document.execCommand("Copy");
-    } 
-    </SCRIPT>
     <script><?=$pastebinConsoleCopy?></script>
 </body>
 </html>
