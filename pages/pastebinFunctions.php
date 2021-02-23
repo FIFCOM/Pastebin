@@ -27,9 +27,9 @@ function pastebinGetSubString($string, $start, $end) {
 }
 
 function pastebinTitle() {
-    //$pastebinAuthor = isset($_REQUEST['token'])?fidQuery($_REQUEST['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
-    //$pastebinTimestamp = 
-    return 0;
+    $pastebinAuthor = isset($_COOKIE['token'])?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
+    $pastebinTimestamp = '20'.date("y/m/d H:i:s");
+    return '未命名的Pastebin - Paste from '.$pastebinAuthor.' at '.$pastebinTimestamp;
 }
 
 function pastebinWrite($pastebin, $title, $viewer){

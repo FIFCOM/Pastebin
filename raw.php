@@ -2,6 +2,7 @@
 	header("Content-type:text/txt;charset=utf-8;");
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
+    require_once("pages/fidFunctions.php");
     $pastebinFileName = isset($_REQUEST['id'])?$_REQUEST['id']:"0";
     $pastebinCryptPassword = isset($_REQUEST['key'])?$_REQUEST['key']:"0";
     $pastebinRawAccessToken = isset($_REQUEST['token'])?$_REQUEST['token']:"0";

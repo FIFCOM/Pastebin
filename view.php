@@ -2,6 +2,7 @@
 	header("Content-type:text/html;charset=utf-8;");
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
+    require_once("pages/fidFunctions.php");
     $pastebinEncodedRequest = (isset($_REQUEST['pb']) && strlen(base64_decode($_REQUEST['pb'])) >= 19 && strlen(base64_decode($_REQUEST['pb'])) <= 21)?base64_decode($_REQUEST['pb']):"0";
     if ($pastebinEncodedRequest)
     {

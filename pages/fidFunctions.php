@@ -4,3 +4,10 @@ if( !defined('PASTEBIN_VERSION' ) ) {
     exit();
 }
 
+function fidHideIP($ip) {
+    return preg_replace('/((?:\d+\.){3})\d+/', "\\1*", $ip);
+}
+
+function fidQuery($str) {
+    return "Guest";
+}

@@ -2,6 +2,7 @@
 	header("Content-type:text/html;charset=utf-8;");
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
+    require_once("pages/fidFunctions.php");
     $fidAction = isset($_REQUEST['action'])?$_REQUEST['action']:"0";
     if ($fidAction == "cookie"){
         $fidCookieCallbackURI = isset($_REQUEST['uri'])?$_REQUEST['uri']:base64_encode("pages/pastebinPlainEditor.html.php");
