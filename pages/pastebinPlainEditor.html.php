@@ -27,7 +27,7 @@ ini_set('display_errors', 0);
     <div class="mdui-toolbar mdui-color-theme">
             <span id="toggle" class="mdui-btn mdui-btn-icon mdui-ripple-white mdui-appbar-scroll-toolbar-hide "><i class="mdui-icon material-icons">menu</i></span>
             <a href="./" class="mdui-typo-headline"><?=SITE_NAME?></a>
-            <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '查看二维码', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">filter_center_focus</i></button>
+            <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '二维码分享', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">share</i></button>
             <a href="./" target="_blank" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
         </div>
         <div class="mdui-toolbar-spacer"></div>
@@ -87,9 +87,9 @@ ini_set('display_errors', 0);
     <div class="mdui-container doc-container">
         <div class="mdui-dialog" id="pastebin-qr">
             <div class="mdui-dialog-title">二维码分享</div>
-            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>"></div>
+            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>" width="300" height="300"></div>
             </div>
-            <div class="mdui-dialog-actions">
+            <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
                 <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
             </div>
         </div>

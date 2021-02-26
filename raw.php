@@ -1,5 +1,4 @@
 <?php
-	header("Content-type:text/txt;charset=utf-8;");
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
     require_once("pages/fidFunctions.php");
@@ -11,6 +10,7 @@
     if ($pastebinFileName && $pastebinCryptPassword)
     {
         $pastebinRaw = pastebinView($pastebinFileName, $pastebinCryptPassword, $pastebinType);
+        header("Content-type:text/plain;charset=utf-8;");
         echo $pastebinRaw;
     } else{
         header('HTTP/1.0 403 Forbidden');

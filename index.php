@@ -3,7 +3,6 @@
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
     require_once("pages/fidFunctions.php");
-    setcookie("token", "1", time()+3600);
     $SvrName = $_SERVER['HTTP_HOST'].str_replace('/index.php','',$_SERVER['PHP_SELF']);
 	$pastebinTitle = pastebinTitle();
     $pastebin=isset($_REQUEST['pastebin'])?$_REQUEST['pastebin']:0;

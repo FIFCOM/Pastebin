@@ -27,7 +27,7 @@ ini_set('display_errors', 0);
         <div class="mdui-toolbar mdui-color-theme">
             <span id="toggle" class="mdui-btn mdui-btn-icon mdui-ripple-white mdui-appbar-scroll-toolbar-hide "><i class="mdui-icon material-icons">menu</i></span>
             <a href="./" class="mdui-typo-headline"><?=SITE_NAME?></a>
-            <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '查看二维码', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">filter_center_focus</i></button>
+            <button style="position: absolute; right: 50px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '二维码分享', position: 'bottom'}" mdui-dialog="{target: '#pastebin-qr'}"><i class="mdui-icon material-icons">share</i></button>
             <a href="./" style="position: absolute; right: 5px; border-radius: 100%" class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple" mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
         </div>
         <div class="mdui-toolbar-spacer"></div>
@@ -62,9 +62,8 @@ ini_set('display_errors', 0);
     <div class="mdui-container doc-container">
         <div class="mdui-dialog" id="pastebin-qr">
             <div class="mdui-dialog-title">二维码分享</div>
-            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>"></div><textarea id="pastebin-qr" style="display:none;"><?=$pastebinQRRawURL?></textarea></div>
+            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>" width="300" height="300"></div></div>
             <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
-                <button class="mdui-btn mdui-ripple" onclick="copyqr()" mdui-dialog-confirm>复制链接至剪贴板</button>
                 <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
             </div>
         </div>
@@ -78,7 +77,7 @@ ini_set('display_errors', 0);
               <label class="mdui-textfield-label">标题</label>
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
-                <p><input style="float: right;" class="mdui-btn mdui-color-theme-accent mdui-ripple" type="submit" value="COPY" onclick="copyinput()"></p>
+                <p><input style="float: right;" class="mdui-btn mdui-color-theme-accent mdui-ripple" type="submit" value="复制" onclick="copyinput()"></p>
           </div>
     </div>
 
@@ -98,14 +97,6 @@ ini_set('display_errors', 0);
     { 
     var input=document.getElementById("pastebin");
     input.select();
-    document.execCommand("Copy");
-    } 
-    </SCRIPT>
-    <SCRIPT LANGUAGE="JavaScript"> 
-    function copyqr() 
-    { 
-    var input1=document.getElementById("pastebin-qr");
-    input1.select();
     document.execCommand("Copy");
     } 
     </SCRIPT>

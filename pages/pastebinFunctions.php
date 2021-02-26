@@ -28,7 +28,7 @@ function pastebinGetSubString($string, $start, $end) {
 
 function pastebinTitle() {
     $pastebinAuthor = isset($_COOKIE['token'])?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
-    $pastebinTimestamp = '20'.date("y/m/d H:i:s");
+    $pastebinTimestamp = '20'.date("y/m/d H:i");
     return '未命名的Pastebin - Paste from '.$pastebinAuthor.' at '.$pastebinTimestamp;
 }
 
@@ -58,7 +58,7 @@ function pastebinView($fileName, $cryptPassword, $type){
         $encryptedData = fread($dataFP, filesize("data/$type/$dataRealFileName.pb"));
         fclose($dataFP);
         $decryptedData = pastebinDecrypt(base64_decode($encryptedData), $dataRealCryptPassword);
-        return $decryptedData?$decryptedData:"PastebinKey错误，这可能是因为链接被修改/不完整。[PB_ERR_INVALID_KEY]";
+        return $decryptedData?$decryptedData:"PastebinKey错误，这可能是因为链接无效/被修改/不完整。[PB_ERR_INVALID_KEY]";
     }else{
         return "Pastebin无效或已被删除。[PB_ERR_NOT_FOUND]";
     }
