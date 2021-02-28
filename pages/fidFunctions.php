@@ -5,9 +5,17 @@ if( !defined('PASTEBIN_VERSION' ) ) {
 }
 
 function fidHideIP($ip) {
-    return preg_replace('/((?:\d+\.){3})\d+/', "\\1*", $ip);
+    return preg_replace('/((?:\d+\.){2})\d+/', "\\1*", $ip);
 }
 
 function fidQuery($str) {
     return "Guest";
+}
+
+function fidIsset($token) {
+    if (isset($token)){
+        if ($token == "0") return 0; else return 1;
+    } else {
+        return 0;
+    }
 }
