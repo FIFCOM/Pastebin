@@ -71,15 +71,16 @@ ini_set('display_errors', 0);
         <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
             <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
         <div class="mdui-card-primary mdui-typo">
-            <?=$pastebinCardMessage?>
+        <?=$pastebinCardMessage?>
             </div></div>
             </br>
               <label class="mdui-textfield-label">标题</label>
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
-                <p><input style="float: right;" class="mdui-btn mdui-color-theme-accent mdui-ripple" type="submit" value="复制" onclick="copyinput()"></p>
           </div>
+          <div style="width: 500px; height: 30px; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
     </div>
+    <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" onclick="copyinput()"><i class="mdui-icon material-icons">content_copy</i></button>
 
     <script
       src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"

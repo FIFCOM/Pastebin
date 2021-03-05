@@ -29,22 +29,27 @@ function pastebinGetSubString($string, $start, $end) {
 function pastebinTitle() {
     $pastebinAuthor = fidIsset(isset($_COOKIE['token'])?$_COOKIE['token']:0)?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
     $pastebinTimestamp = '20'.date("y/m/d H:i");
-    return '未命名 - Paste from '.$pastebinAuthor.' at '.$pastebinTimestamp;
+    return '未命名的Pastebin - ID : '.randomString8(PASTEBIN_SECURITY_TOKEN."TitleID");
 }
 
 function pastebinWrite($pastebin, $title, $viewer){
-    $pastebinCryptPassword = randomString8(PASTEBIN_SECURITY_TOKEN);
-    $pastebinFileName = randomString8(PASTEBIN_SECURITY_TOKEN);
+    $pastebinCryptPassword = randomString8(PASTEBIN_SECURITY_TOKEN."Crypt");
+    $pastebinFileName = randomString8(PASTEBIN_SECURITY_TOKEN."FN");
     $pastebinRealCryptPassword = hash("sha256", dechex(crc32(dechex(crc32("$pastebinCryptPassword")))));
     $pastebinRealFileName = hash("sha256", "$pastebinFileName");
     $encryptedTitle = base64_encode(pastebinEncrypt($title, $pastebinRealCryptPassword));
     $encryptedPastebin = base64_encode(pastebinEncrypt($pastebin, $pastebinRealCryptPassword));
+    $pastebinAuthor = fidIsset(isset($_COOKIE['token'])?$_COOKIE['token']:0)?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
+    $encryptedInfo = base64_encode(pastebinEncrypt('Paste from '.$pastebinAuthor.' at '.'20'.date("y/m/d H:i"), $pastebinRealCryptPassword));
     $titleFP = fopen("data/title/$pastebinRealFileName.pb", 'w');
     fwrite($titleFP, $encryptedTitle . "\n");
     fclose($titleFP);
     $pastebinFP = fopen("data/pastebin/$pastebinRealFileName.pb", 'w');
     fwrite($pastebinFP, $encryptedPastebin . "\n");
     fclose($pastebinFP);
+    $infoFP = fopen("data/info/$pastebinRealFileName.pb", 'w');
+    fwrite($infoFP, $encryptedInfo . "\n");
+    fclose($infoFP);
     return base64_encode("$"."$pastebinFileName"."+".dechex(crc32("$pastebinCryptPassword"))."-".$viewer."!");
     // $00000000+00000000-0!
 }

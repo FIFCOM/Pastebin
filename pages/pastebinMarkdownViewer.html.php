@@ -35,13 +35,14 @@ ini_set('display_errors', 0);
         <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
             <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
         <div class="mdui-card-primary mdui-typo">
-            <?=$pastebinMarkdownCardMessage?>
+        <?=$pastebinMarkdownCardMessage?>
             </div></div>
             </br>
               <label class="mdui-textfield-label">标题</label>
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <div id="pastebin-editormd"><textarea name="pastebin" id="pastebin" style="display:none;"><?=$pastebin?></textarea></div>
           </div>
+          <div style="width: 500px; height: 30px; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
     </div>
 
     <script

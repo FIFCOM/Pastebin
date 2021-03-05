@@ -104,11 +104,10 @@ ini_set('display_errors', 0);
               <label class="mdui-textfield-label">标题</label>
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24" placeholder=" Enter text..."></textarea>
-                <p><input style="float: right;" class="mdui-btn mdui-color-theme-accent mdui-ripple" type="submit" value="PASTE"></p>
-            </form>
           </div>
     </div>
-
+    <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"><i class="mdui-icon material-icons">add</i></button>
+    </form>
     <script
       src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
       integrity="sha384-gCMZcshYKOGRX9r6wbDrvF+TcCCswSHFucUzUPwka+Gr+uHgjlYvkABr95TCOz3A"

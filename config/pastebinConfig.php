@@ -10,7 +10,7 @@ define('PASTEBIN_MAX_LENTH', '102400'); // defalt 100kb (1024 * 100)
 //define('ADMIN_ACCESS_KEY', '1145141919810');
 
 // ====== Advanced Settings =======
-define('TLS_ENCRYPT', 'enable'); // enable or disable, recommended to enable.
+define('TLS_ENCRYPT', 'disable'); // enable or disable, recommended to enable.
 define('PASTEBIN_CRYPT_IV', 'pastebin11451419'); // precisely 16 bytes long.
 define('PASTEBIN_SECURITY_TOKEN', 'pastebin114514'); // any string.
 
