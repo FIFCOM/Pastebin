@@ -15,8 +15,8 @@ define('PASTEBIN_CRYPT_IV', 'pastebin11451419'); // precisely 16 bytes long.
 define('PASTEBIN_SECURITY_TOKEN', 'pastebin114514'); // any string.
 
 // ====== Others ======
-define('PASTEBIN_VERSION', 'v2.0 (Beta 2102)'); // DON'T change.
-
+define('PASTEBIN_VERSION', 'v2.0 (Beta 2103)'); // DON'T change.
+define('SITE_URL', ''); // custom site url, '' = defalt
 
 error_reporting(E_ALL);
 $_ERROR = array();

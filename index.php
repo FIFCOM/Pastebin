@@ -3,7 +3,7 @@
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
     require_once("pages/fidFunctions.php");
-    $SvrName = $_SERVER['HTTP_HOST'].str_replace('/index.php','',$_SERVER['PHP_SELF']);
+    $SvrName = pastebinCustomURL().str_replace('/index.php','',$_SERVER['PHP_SELF']);
 	$pastebinTitle = pastebinTitle();
     $pastebin=isset($_REQUEST['pastebin'])?$_REQUEST['pastebin']:0;
     $title=isset($_REQUEST['title'])?$_REQUEST['title']:0;

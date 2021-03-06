@@ -14,7 +14,7 @@
         header('HTTP/1.0 403 Forbidden');
         exit();
     }
-    $SvrName = $_SERVER['HTTP_HOST'].str_replace('/view.php','',$_SERVER['PHP_SELF']);
+    $SvrName = pastebinCustomURL().str_replace('/view.php','',$_SERVER['PHP_SELF']);
     $pastebinInfo = pastebinView($pastebinFileName, $pastebinCryptPassword, "info");
     $pastebinMarkdownCardMessage = '<span><a href="'.$pastebinTLSEncryption.$SvrName.'/'.base64_encode($pastebinEncodedRequest).'&viewerType=1"><abbr title="使用默认预览查看">查看源代码</abbr></a> | <a href="'.$pastebinTLSEncryption.$SvrName.'/raw.php?id='.$pastebinFileName.'&key='.$pastebinCryptPassword.'&token='.$pastebinRawAccessToken.'" target="_blank">原始内容</a></span>';
     $pastebinCardMessage = '<span><a href="'.$pastebinTLSEncryption.$SvrName.'/raw.php?id='.$pastebinFileName.'&key='.$pastebinCryptPassword.'&token='.$pastebinRawAccessToken.'" target="_blank">原始内容</a></span>';

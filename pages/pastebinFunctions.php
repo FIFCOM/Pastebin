@@ -73,6 +73,11 @@ function pastebinQRUri($string, $bool){
     return $bool?'https://www.zhihu.com/qrcode?url='.urlencode($string):$string;
 }
 
+function pastebinCustomURL(){
+    $url = SITE_URL?SITE_URL:0;
+    return $url?$url:$_SERVER['HTTP_HOST'];
+}
+
 $pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  '.PASTEBIN_VERSION.'%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%chttps://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
 $pastebinIcon = ICON_URL?ICON_URL:"https://q.qlogo.cn/headimg_dl?dst_uin=1280874899&spec=640";
 $pastebinTLSEncryption = TLS_ENCRYPT == "enable"?"https://":"http://";
