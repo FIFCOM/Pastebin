@@ -42,7 +42,7 @@ ini_set('display_errors', 0);
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <div id="pastebin-editormd"><textarea name="pastebin" id="pastebin" style="display:none;"><?=$pastebin?></textarea></div>
           </div>
-          <div style="width: 500px; height: 30px; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
+          <div style="text-align:center; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
     </div>
 
     <script

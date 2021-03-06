@@ -78,7 +78,7 @@ ini_set('display_errors', 0);
               <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
                 <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
           </div>
-          <div style="width: 500px; height: 30px; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
+          <div style="text-align:center; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
     </div>
     <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" onclick="copyinput()"><i class="mdui-icon material-icons">content_copy</i></button>
 

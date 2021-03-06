@@ -63,9 +63,9 @@ function pastebinView($fileName, $cryptPassword, $type){
         $encryptedData = fread($dataFP, filesize("data/$type/$dataRealFileName.pb"));
         fclose($dataFP);
         $decryptedData = pastebinDecrypt(base64_decode($encryptedData), $dataRealCryptPassword);
-        return $decryptedData?$decryptedData:"PastebinKey错误，这可能是因为链接无效/被修改/不完整。[PB_ERR_INVALID_KEY]";
+        return $decryptedData?$decryptedData:"Pastebin.".$type.".key错误，这可能是因为链接无效/被修改/不完整。[PB_ERR_INVALID_KEY]";
     }else{
-        return "Pastebin无效或已被删除。[PB_ERR_NOT_FOUND]";
+        return "Pastebin.".$type."无效或已被删除。[PB_ERR_NOT_FOUND]";
     }
 }
 
