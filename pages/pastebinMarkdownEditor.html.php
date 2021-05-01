@@ -101,10 +101,10 @@ ini_set('display_errors', 0);
         <div class="mdui-card-primary mdui-typo">
             <?=$pastebinCardMessage?>
             </div></div>
-            </br>
+            <br>
             <form action="#" method="post">
               <label class="mdui-textfield-label">标题</label>
-              <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
+              <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""><br>
               <div id="pastebin-editormd"><textarea name="pastebin" id="pastebin" style="display:none;"></textarea></div>
           </div>
     </div>

@@ -4,10 +4,17 @@ if( !defined('PASTEBIN_VERSION' ) ) {
     exit();
 }
 
-function randomString8($salt)
+function pastebinRandomToken($strLength)
 {
-    $time = uniqid();
-    return dechex(crc32("$time-$salt"));
+    $str = 'qwertyuiopasdfghjklzxcvbnm';
+    $str .= 'QWERTYUIOPASDFGHJKLZXCVBNM';
+    $str .= '1234567890';
+    $token = '';
+    for ($it = 0; $it < $strLength; $it++) try {
+        $token .= $str[random_int(0, strlen($str) - 1)];
+    } catch (Exception $e) {
+    }
+    return $token;
 }
 
 function pastebinEncrypt($data, $password){
@@ -29,12 +36,12 @@ function pastebinGetSubString($string, $start, $end) {
 function pastebinTitle() {
     $pastebinAuthor = fidIsset(isset($_COOKIE['token'])?$_COOKIE['token']:0)?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
     $pastebinTimestamp = '20'.date("y/m/d H:i");
-    return '未命名的Pastebin - ID : '.randomString8(PASTEBIN_SECURITY_TOKEN."TitleID");
+    return '未命名的Pastebin - ID : '.pastebinRandomToken(8);
 }
 
 function pastebinWrite($pastebin, $title, $viewer){
-    $pastebinCryptPassword = randomString8(PASTEBIN_SECURITY_TOKEN."Crypt");
-    $pastebinFileName = randomString8(PASTEBIN_SECURITY_TOKEN."FN");
+    $pastebinCryptPassword = pastebinRandomToken(8);
+    $pastebinFileName = pastebinRandomToken(8);
     $pastebinRealCryptPassword = hash("sha256", dechex(crc32(dechex(crc32("$pastebinCryptPassword")))));
     $pastebinRealFileName = hash("sha256", "$pastebinFileName");
     $encryptedTitle = base64_encode(pastebinEncrypt($title, $pastebinRealCryptPassword));
