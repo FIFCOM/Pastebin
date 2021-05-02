@@ -118,13 +118,12 @@ ini_set('display_errors', 0);
                 <?= $pastebinCardMessage ?>
             </div>
         </div>
-        </br>
-
+        <br>
             <label class="mdui-textfield-label">标题</label>
-            <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?= $pastebinTitle ?>"
-                   autocomplete="off" autofocus="" required=""><br>
-            <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
-                      placeholder=" Enter text..."></textarea>
+        <label for="title"></label><input id="title" name="title" class="mdui-textfield-input" type="text" value="<?= $pastebinTitle ?>"
+                                          autocomplete="off" autofocus="" required=""><br>
+        <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
+                                                placeholder=" Enter text..."></textarea>
     </div>
 </div>
 <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"><i

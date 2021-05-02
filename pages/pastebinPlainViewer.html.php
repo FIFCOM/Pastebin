@@ -46,7 +46,6 @@ ini_set('display_errors', 0);
             <a href="./<?=base64_encode($pastebinEncodedRequest)?>&viewerType=2" class="mdui-list-item mdui-ripple ">Markdown预览</a>
           </div>
         </div>
-            <div class="mdui-collapse-item ">
           <div class="mdui-collapse-item-header mdui-list-item mdui-ripple">
             <i class="mdui-list-item-icon mdui-icon material-icons mdui-text-color-teal">info</i>
             <div class="mdui-list-item-content">关于</div>
@@ -62,7 +61,7 @@ ini_set('display_errors', 0);
     <div class="mdui-container doc-container">
         <div class="mdui-dialog" id="pastebin-qr">
             <div class="mdui-dialog-title">二维码分享</div>
-            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>" width="300" height="300"></div></div>
+            <div class="mdui-dialog-content"><div class="center"><img src="<?=$pastebinQR?>" width="300" height="300" alt=""></div></div>
             <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
                 <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
             </div>
@@ -73,12 +72,12 @@ ini_set('display_errors', 0);
         <div class="mdui-card-primary mdui-typo">
         <?=$pastebinCardMessage?>
             </div></div>
-            </br>
+            <br>
               <label class="mdui-textfield-label">标题</label>
-              <input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""></br>
-                <textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
+            <label for="title"></label><input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""><br>
+            <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
           </div>
-          <div style="text-align:center; margin: 0px auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
+          <div style="text-align:center; margin: 0 auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
     </div>
     <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" onclick="copyinput()"><i class="mdui-icon material-icons">content_copy</i></button>
 

@@ -3,9 +3,9 @@
     require_once("config/pastebinConfig.php");
     require_once("pages/pastebinFunctions.php");
     require_once("pages/fidFunctions.php");
-    $fidAction = isset($_REQUEST['action'])?$_REQUEST['action']:"0";
+    $fidAction = $_REQUEST['action'] ?? "0";
     if ($fidAction == "cookie"){
-        $fidCookieCallbackURI = isset($_REQUEST['uri'])?$_REQUEST['uri']:base64_encode("pages/pastebinPlainEditor.html.php");
+        $fidCookieCallbackURI = $_REQUEST['uri'] ?? base64_encode("pages/pastebinPlainEditor.html.php");
         $fidCookieToken = "0";
         $SvrName = $_SERVER['HTTP_HOST'].str_replace('/fid.php','',$_SERVER['PHP_SELF']);
         setcookie("uri", "$fidCookieCallbackURI", time()+3600);
@@ -15,4 +15,3 @@
         header('HTTP/1.0 403 Forbidden');
         exit();
     }
-?>

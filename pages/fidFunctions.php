@@ -8,11 +8,13 @@ function fidHideIP($ip) {
     return preg_replace('/((?:\d+\.){2})\d+/', "\\1*", $ip);
 }
 
-function fidQuery($str) {
+function fidQuery($str): string
+{
     return "Guest";
 }
 
-function fidIsset($token) {
+function fidIsset($token): int
+{
     if (isset($token)){
         if ($token == "0") return 0; else return 1;
     } else {

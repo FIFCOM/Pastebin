@@ -8,7 +8,7 @@
     {
     $pastebinFileName = pastebinGetSubString($pastebinEncodedRequest, "$", "+");
 	$pastebinCryptPassword = dechex(crc32(pastebinGetSubString($pastebinEncodedRequest, "+", "-")));
-    $pastebinViewerType = isset($_REQUEST['viewerType'])?$_REQUEST['viewerType']:pastebinGetSubString($pastebinEncodedRequest, "-", "!");
+    $pastebinViewerType = $_REQUEST['viewerType'] ?? pastebinGetSubString($pastebinEncodedRequest, "-", "!");
     $pastebinRawAccessToken = "0";  // coming soon...
     } else{
         header('HTTP/1.0 403 Forbidden');
@@ -34,4 +34,3 @@
         header('HTTP/1.0 403 Forbidden');
         exit();
     }
-?>
