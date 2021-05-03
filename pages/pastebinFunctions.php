@@ -35,8 +35,6 @@ function pastebinGetSubString($string, $start, $end)
 
 function pastebinTitle(): string
 {
-//    $pastebinAuthor = fidIsset($_COOKIE['token'] ?? 0)?fidQuery($_COOKIE['token'], "token2user"):fidHideIP($_SERVER['REMOTE_ADDR']);
-//    $pastebinTimestamp = '20'.date("y/m/d H:i");
     return '未命名的Pastebin - ID : ' . pastebinRandomToken(8);
 }
 
@@ -50,16 +48,6 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     $encryptedPastebin = base64_encode(pastebinEncrypt($pastebin, $pastebinRealCryptPassword));
     $pastebinAuthor = fidHideIP($_SERVER['REMOTE_ADDR']);
     $encryptedInfo = base64_encode(pastebinEncrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
-    // 写入文件
-    $titleFP = fopen("data/title/$pastebinRealFileName.pb", 'w');
-    fwrite($titleFP, $encryptedTitle . "\n");
-    fclose($titleFP);
-    $pastebinFP = fopen("data/pastebin/$pastebinRealFileName.pb", 'w');
-    fwrite($pastebinFP, $encryptedPastebin . "\n");
-    fclose($pastebinFP);
-    $infoFP = fopen("data/info/$pastebinRealFileName.pb", 'w');
-    fwrite($infoFP, $encryptedInfo . "\n");
-    fclose($infoFP);
     // 写入数据库 -- fn -- exp
     $expire = $expire + date("y") * 366 + date("m") * 31 + date("d");
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
@@ -67,6 +55,16 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     $sql = "INSERT INTO pastebin (filename, expire) VALUES ('$pastebinRealFileName', '$expire')";
     if ($conn->query($sql) === TRUE) {
         mysqli_close($conn);
+        // 写入文件
+        $titleFP = fopen("data/title/$pastebinRealFileName.pb", 'w');
+        fwrite($titleFP, $encryptedTitle . "\n");
+        fclose($titleFP);
+        $pastebinFP = fopen("data/pastebin/$pastebinRealFileName.pb", 'w');
+        fwrite($pastebinFP, $encryptedPastebin . "\n");
+        fclose($pastebinFP);
+        $infoFP = fopen("data/info/$pastebinRealFileName.pb", 'w');
+        fwrite($infoFP, $encryptedInfo . "\n");
+        fclose($infoFP);
         return base64_encode("$" . "$pastebinFileName" . "+" . dechex(crc32("$pastebinCryptPassword")) . "-" . $viewer . "!");
     } else {
         mysqli_close($conn);
