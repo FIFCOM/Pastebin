@@ -106,9 +106,16 @@ ini_set('display_errors', 0);
     <div class="mdui-dialog" id="pastebin-qr">
         <div class="mdui-dialog-title">二维码分享</div>
         <div class="mdui-dialog-content">
-            <div class="center"><img src="<?= $pastebinQR ?>" width="300" height="300" alt=""></div>
+            <div class="center"><img src="<?= $pastebinQR ?>" width="300" height="300" alt="">
+                <?php if ($pastebinURL) echo '<!--'; ?>
+                <div class="mdui-typo-body-2-opacity">扫描二维码可向此页面快速分享Pastebin，对方创建后请刷新此页面</div>
+                <?php if ($pastebinURL) echo '-->'; ?>
+            </div>
         </div>
-        <div class="mdui-dialog-actions mdui-dialog-actions-stacked">
+        <div class="mdui-dialog-actions">
+            <?php if ($pastebinURL) echo '<!--'; ?>
+            <a href="./" class="mdui-btn mdui-ripple">刷新</a>
+            <?php if ($pastebinURL) echo '-->'; ?>
             <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
         </div>
     </div>
@@ -118,6 +125,14 @@ ini_set('display_errors', 0);
             <form action="#" method="post">
                 <div class="mdui-card-primary mdui-typo">
                     <?= $pastebinCardMessage ?>
+                    <label class="mdui-radio"><input type="radio" name="expire" value="8"/><i
+                                class="mdui-radio-icon"></i>一周有效</label>
+                    <label class="mdui-radio"><input type="radio" name="expire" value="31" checked/><i
+                                class="mdui-radio-icon"></i>一个月有效</label>
+                    <label class="mdui-radio"><input type="radio" name="expire" value="181"/><i
+                                class="mdui-radio-icon"></i>半年有效</label>
+                    <label class="mdui-radio"><input type="radio" name="expire" value="366"/><i
+                                class="mdui-radio-icon"></i>一年有效</label>
                 </div>
         </div>
         <br>
