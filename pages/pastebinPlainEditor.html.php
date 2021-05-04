@@ -61,7 +61,7 @@ ini_set('display_errors', 0);
                    class="mdui-list-item mdui-ripple ">Markdown编辑器</a>
             </div>
         </div>
-        <div class="mdui-collapse-item">
+        <!--<div class="mdui-collapse-item">
             <div class="mdui-collapse-item-header mdui-list-item mdui-ripple">
                 <i class="mdui-list-item-icon mdui-icon material-icons mdui-text-color-deep-orange">account_circle</i>
                 <div class="mdui-list-item-content">我的</div>
@@ -73,7 +73,7 @@ ini_set('display_errors', 0);
                 <a href="./fid.php?action=redirect&uri=pages/share.php" class="mdui-list-item mdui-ripple ">我的分享</a>
                 <a href="./fid.php?action=accountInfo" class="mdui-list-item mdui-ripple ">账号管理</a>
             </div>
-        </div>
+        </div>-->
         <div class="mdui-collapse-item">
             <div class="mdui-collapse-item-header mdui-list-item mdui-ripple">
                 <i class="mdui-list-item-icon mdui-icon material-icons mdui-text-color-blue">code</i>
@@ -81,8 +81,7 @@ ini_set('display_errors', 0);
                 <i class="mdui-collapse-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
             </div>
             <div class="mdui-collapse-item-body mdui-list">
-                <a href="./fid.php?action=redirect&uri=api/my-api.php" class="mdui-list-item mdui-ripple ">My API</a>
-                <a href="./api/api-docs.php" class="mdui-list-item mdui-ripple ">API文档</a>
+                <a href="./fid.php?action=redirect&uri=api/open-api.php" class="mdui-list-item mdui-ripple ">Open API</a>
             </div>
         </div>
         <div class="mdui-collapse-item ">
@@ -94,7 +93,6 @@ ini_set('display_errors', 0);
             <div class="mdui-collapse-item-body mdui-list">
                 <a href="./pages/about.html" class="mdui-list-item mdui-ripple ">关于Pastebin</a>
                 <a href="./fid.php?action=redirect&uri=pages/privacy.php" class="mdui-list-item mdui-ripple ">隐私政策</a>
-                <a href="./pages/manual.html" class="mdui-list-item mdui-ripple ">使用说明</a>
             </div>
         </div>
     </div>

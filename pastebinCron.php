@@ -10,18 +10,18 @@ $result = mysqli_query($conn, "SELECT * FROM pastebin WHERE expire < '$expire'")
 while ($row = mysqli_fetch_array($result)) {
     echo $row['filename'] . ".pb expired on " . $row['expire'] . "\n\n";
     if (file_exists("data/pastebin/" . $row['filename'] . ".pb")) {
-        echo "Deleted : data/pastebin/" . $row['filename'] . ".pb\n";
         unlink("data/pastebin/" . $row['filename'] . ".pb");
+        echo "Deleted : data/pastebin/" . $row['filename'] . ".pb\n";
     }
     if (file_exists("data/title/" . $row['filename'] . ".pb")) {
-        echo "Deleted : data/title/" . $row['filename'] . ".pb\n";
         unlink("data/title/" . $row['filename'] . ".pb");
+        echo "Deleted : data/title/" . $row['filename'] . ".pb\n";
     }
     if (file_exists("data/info/" . $row['filename'] . ".pb")) {
-        echo "Deleted : data/info/" . $row['filename'] . ".pb\n\n";
         unlink("data/info/" . $row['filename'] . ".pb");
+        echo "Deleted : data/info/" . $row['filename'] . ".pb\n\n";
     }
     mysqli_query($conn, "DELETE FROM pastebin WHERE filename='" . $row['filename'] . "' AND expire='" . $row['expire'] . "'");
 }
-echo "ALL OK\n";
+echo "COMPLETED!\n";
 mysqli_close($conn);

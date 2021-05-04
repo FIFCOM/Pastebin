@@ -48,14 +48,14 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     $encryptedPastebin = base64_encode(pastebinEncrypt($pastebin, $pastebinRealCryptPassword));
     $pastebinAuthor = fidHideIP($_SERVER['REMOTE_ADDR']);
     $encryptedInfo = base64_encode(pastebinEncrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
-    // 写入数据库 -- fn -- exp
+    // FN & EXP ---> SQL
     $expire = $expire + date("y") * 366 + date("m") * 31 + date("d");
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
     $sql = "INSERT INTO pastebin (filename, expire) VALUES ('$pastebinRealFileName', '$expire')";
     if ($conn->query($sql) === TRUE) {
         mysqli_close($conn);
-        // 写入文件
+        // ED ---> FS
         $titleFP = fopen("data/title/$pastebinRealFileName.pb", 'w');
         fwrite($titleFP, $encryptedTitle . "\n");
         fclose($titleFP);
@@ -65,12 +65,12 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
         $infoFP = fopen("data/info/$pastebinRealFileName.pb", 'w');
         fwrite($infoFP, $encryptedInfo . "\n");
         fclose($infoFP);
+        // link format base64_encode($00000000+00000000-0!)
         return base64_encode("$" . "$pastebinFileName" . "+" . dechex(crc32("$pastebinCryptPassword")) . "-" . $viewer . "!");
     } else {
         mysqli_close($conn);
         return 0;
     }
-    // $00000000+00000000-0!
 }
 
 function pastebinView($fileName, $cryptPassword, $type): string
@@ -95,7 +95,7 @@ function pastebinQRUri($string, $bool)
 
 function pastebinSenderSetID(): string
 {
-    $pastebinSenderID = md5(pastebinRandomToken(32));
+    $pastebinSenderID = md5(pastebinRandomToken(16));
     setcookie("senderid", base64_encode($pastebinSenderID), time() + 3600);
     return $pastebinSenderID;
 }
