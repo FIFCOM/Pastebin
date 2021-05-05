@@ -68,16 +68,20 @@ ini_set('display_errors', 0);
         </div>
 
         <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
-            <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
+            <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
         <div class="mdui-card-primary mdui-typo">
-        <?=$pastebinCardMessage?>
+            <div class="mdui-chip">
+                <span class="mdui-chip-icon mdui-color-theme-accent">R</span>
+                <a href="<?=$pastebinRawLink?>" target="_blank" class="mdui-chip-title">原始内容</a>
+            </div>
+
             </div></div>
             <br>
               <label class="mdui-textfield-label">标题</label>
             <label for="title"></label><input id="title" name="title" class="mdui-textfield-input" type="text" value="<?=$pastebinTitle?>" autocomplete="off" autofocus="" required=""><br>
             <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="25" placeholder=" Nothing to show."><?=$pastebin?></textarea>
           </div>
-          <div style="text-align:center; margin: 0 auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?>.</span></div>
+          <div style="text-align:center; margin: 0 auto;"><span style="color: gray;"><?=$pastebinInfo?> | <?=SITE_NAME?></span></div>
     </div>
     <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" onclick="copyinput()"><i class="mdui-icon material-icons">content_copy</i></button>
 

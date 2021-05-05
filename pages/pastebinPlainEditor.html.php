@@ -117,7 +117,7 @@ ini_set('display_errors', 0);
     </div>
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
-        <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
+        <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
             <form action="#" method="post">
                 <div class="mdui-card-primary mdui-typo">
                     <?= $pastebinCardMessage ?>
@@ -137,10 +137,9 @@ ini_set('display_errors', 0);
                                           value="<?= $pastebinTitle ?>"
                                           autocomplete="off" autofocus="" required=""><br>
         <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
-                                                placeholder=" Enter text..."></textarea>
-    </div>
+                                                placeholder=" Enter text..."></textarea></div>
 </div>
-<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"><i
+<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" id="paste"><i
             class="mdui-icon material-icons">add</i></button>
 </form>
 <script
@@ -152,6 +151,15 @@ ini_set('display_errors', 0);
     var maindrawer = new mdui.Drawer('#mainDrawer');
     document.getElementById('toggle').addEventListener('click', function () {
         maindrawer.toggle();
+    });
+</script>
+<script>
+    const $ = mdui.$;
+
+    $('#paste').on('click', function () {
+        mdui.snackbar({
+            message: '正在创建Pastebin...'
+        });
     });
 </script>
 <script><?= $pastebinConsoleCopy ?></script>

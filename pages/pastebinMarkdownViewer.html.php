@@ -41,9 +41,16 @@ ini_set('display_errors', 0);
 </header>
 <div class="mdui-container doc-container">
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
-        <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
+        <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
             <div class="mdui-card-primary mdui-typo">
-                <?= $pastebinMarkdownCardMessage ?>
+                <div class="mdui-chip">
+                    <span class="mdui-chip-icon mdui-color-theme-accent">P</span>
+                    <a href="<?=$pastebinPlainViewerLink?>" class="mdui-chip-title">查看源代码</a>
+                </div>
+                <div class="mdui-chip">
+                    <span class="mdui-chip-icon mdui-color-theme-accent">R</span>
+                    <a href="<?=$pastebinRawLink?>" target="_blank" class="mdui-chip-title">原始内容</a>
+                </div>
             </div>
         </div>
         <br>
@@ -55,7 +62,7 @@ ini_set('display_errors', 0);
         </div>
     </div>
     <div style="text-align:center; margin: 0 auto;"><span
-                style="color: gray;"><?= $pastebinInfo ?> | <?= SITE_NAME ?>.</span></div>
+                style="color: gray;"><?= $pastebinInfo ?> | <?= SITE_NAME ?></span></div>
 </div>
 
 <script

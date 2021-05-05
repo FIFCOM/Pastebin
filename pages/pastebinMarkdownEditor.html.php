@@ -83,7 +83,8 @@ ini_set('display_errors', 0);
                 <i class="mdui-collapse-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
             </div>
             <div class="mdui-collapse-item-body mdui-list">
-                <a href="./fid.php?action=redirect&uri=api/open-api.php" class="mdui-list-item mdui-ripple ">Open API</a>
+                <a href="./fid.php?action=redirect&uri=api/open-api.php" class="mdui-list-item mdui-ripple ">Open
+                    API</a>
             </div>
         </div>
         <div class="mdui-collapse-item ">
@@ -119,7 +120,7 @@ ini_set('display_errors', 0);
     </div>
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
-        <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
+        <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
             <form action="#" method="post">
                 <div class="mdui-card-primary mdui-typo">
                     <?= $pastebinCardMessage ?>
@@ -140,10 +141,12 @@ ini_set('display_errors', 0);
                                           value="<?= $pastebinTitle ?>" autocomplete="off" autofocus="" required=""><br>
         <div id="pastebin-editormd"><label for="pastebin"></label><textarea name="pastebin" id="pastebin"
                                                                             style="display:none;"></textarea></div>
+
+        <button class="mdui-btn mdui-btn-raised mdui-color-theme-accent mdui-ripple" style="float: right;" type="submit"
+                id="paste">PASTE
+        </button>
     </div>
 </div>
-<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"><i
-            class="mdui-icon material-icons">add</i></button>
 </form>
 
 <script
@@ -183,6 +186,15 @@ ini_set('display_errors', 0);
         document.execCommand("Copy");
     }
 </SCRIPT>
+<script>
+    const $ = mdui.$;
+
+    $('#paste').on('click', function () {
+        mdui.snackbar({
+            message: '正在创建Pastebin...'
+        });
+    });
+</script>
 <script><?= $pastebinConsoleCopy ?></script>
 </body>
 </html>
