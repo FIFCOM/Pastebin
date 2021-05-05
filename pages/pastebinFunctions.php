@@ -73,7 +73,7 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     }
 }
 
-function pastebinView($fileName, $cryptPassword, $type): string
+function pastebinView($fileName, $cryptPassword, $type)
 {
     $dataRealCryptPassword = hash("sha256", "$cryptPassword");
     $dataRealFileName = hash("sha256", "$fileName");
@@ -82,9 +82,9 @@ function pastebinView($fileName, $cryptPassword, $type): string
         $encryptedData = fread($dataFP, filesize("data/$type/$dataRealFileName.pb"));
         fclose($dataFP);
         $decryptedData = pastebinDecrypt(base64_decode($encryptedData), $dataRealCryptPassword);
-        return $decryptedData ?: "Pastebin." . $type . ".key错误，这可能是因为链接无效/被修改/不完整。[PB_ERR_INVALID_KEY]";
+        return $decryptedData ?: 0;
     } else {
-        return "Pastebin." . $type . "无效或已被删除。[PB_ERR_NOT_FOUND]";
+        return 0;
     }
 }
 

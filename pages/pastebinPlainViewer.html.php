@@ -70,6 +70,12 @@ ini_set('display_errors', 0);
         <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
             <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
         <div class="mdui-card-primary mdui-typo">
+            <?php $ref = $_REQUEST['ref'] ?? 0; if (!$ref) echo '<!--'; ?>
+            <div class="mdui-chip">
+                <span class="mdui-chip-icon mdui-color-amber">S</span>
+                <a href="./?select=sender&ref=<?php $ref = $_REQUEST['ref'] ?? 0; echo $ref; ?>" target="_blank" class="mdui-chip-title">快速回传</a>
+            </div>
+            <?php $ref = $_REQUEST['ref'] ?? 0; if (!$ref) echo '-->'; ?>
             <div class="mdui-chip">
                 <span class="mdui-chip-icon mdui-color-theme-accent">R</span>
                 <a href="<?=$pastebinRawLink?>" target="_blank" class="mdui-chip-title">原始内容</a>

@@ -31,12 +31,11 @@ if (isset($_GET['ref'])) {
 
 if (isset($_COOKIE['senderid'])) {
     $pastebinSenderURL = pastebinSenderView(base64_decode($_COOKIE['senderid']));
-    if ($pastebinSenderURL != "0") header('Location: ' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinSenderURL . "&from=pastebinSender");
+    if ($pastebinSenderURL != "0") header('Location: ' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinSenderURL);
 }
 
 if (!$pastebin || !$title) {
     $pastebinCardMessage = '';
-    require_once($fidCookieCallbackURI);
 } else {
     if (strlen($pastebin) <= PASTEBIN_MAX_LENGTH * 1024 && strlen($title) <= TITLE_MAX_LENGTH) {
         if ($fidCookieCallbackURI == "pages/pastebinPlainEditor.html.php") {
@@ -47,12 +46,12 @@ if (!$pastebin || !$title) {
             $type = "4";
         }
         $pastebinURL = pastebinWrite($pastebin, $title, $type, $expire);
-        if ($pastebinRefID) pastebinSenderWrite($pastebinURL, $pastebinRefID);
+        if ($pastebinRefID) pastebinSenderWrite($pastebinURL.'&ref='.$_COOKIE['senderid'], $pastebinRefID);
         $pastebinQR = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . $pastebinURL, '1');
         $pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . $pastebinURL, '0');
         $pastebinCardMessage = '<div style="color:#26A69A">创建成功√  链接: <span><code><a href="' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '" target="_blank"><abbr title="打开链接">' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '</abbr></a></code></span></div><br>';
     } else {
         $pastebinCardMessage = '<div style="color:#e82424">× 标题过长(应不超过' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
     }
-    require_once($fidCookieCallbackURI);
 }
+require_once($fidCookieCallbackURI);
