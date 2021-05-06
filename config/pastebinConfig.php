@@ -18,11 +18,11 @@ const PASTEBIN_DB_NAME = 'pastebin';
 
 // ====== Advanced Settings =======
 const TLS_ENCRYPT = 'disable'; // enable or disable.
-const PASTEBIN_CRYPT_IV = 'pastebin11451419'; // strlen(PASTEBIN_CRYPT_IV) == 16
+const PASTEBIN_CRYPT_IV = 'pastebin11451419'; // random string , strlen(PASTEBIN_CRYPT_IV) == 16
 
 // ====== Others ======
 const PASTEBIN_VERSION = 'v2.0 (Beta 2105)';
-const SITE_URL = ''; // custom site url, '' = default
+const SITE_URL = ''; // custom site url, '' = auto
 
 error_reporting(E_ALL);
 $_ERROR = array();

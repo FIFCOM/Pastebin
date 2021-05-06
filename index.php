@@ -5,7 +5,7 @@ require_once("pages/fidFunctions.php");
 $SvrName = pastebinCustomURL() . str_replace('/index.php', '', $_SERVER['PHP_SELF']);
 if (isset($_COOKIE['senderid'])) {
     $pastebinSenderID = base64_decode($_COOKIE['senderid']);
-    setcookie("senderid", $_COOKIE['senderid'], time() + 3600);
+    setcookie("senderid", $_COOKIE['senderid'], time() + 7200);
 } else {
     $pastebinSenderID = pastebinSenderSetID();
 }
@@ -13,7 +13,7 @@ $pastebinRefID = $_COOKIE['ref'] ?? 0;
 $pastebinTitle = pastebinTitle();
 $pastebin = $_REQUEST['pastebin'] ?? 0;
 $title = $_REQUEST['title'] ?? 0;
-$expire = $_REQUEST['expire'] ?? "2";
+$expire = $_REQUEST['expire'] ?? "1";
 $fidCookieCallbackURI = isset($_COOKIE['uri']) ? base64_decode($_COOKIE['uri']) : "pages/pastebinPlainEditor.html.php";
 $fidCookieToken = isset($_COOKIE['token']) ? base64_decode($_COOKIE['token']) : "0";
 $pastebinQR = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/?ref=' . base64_encode($pastebinSenderID), '1');
@@ -51,7 +51,7 @@ if (!$pastebin || !$title) {
         $pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . $pastebinURL, '0');
         $pastebinCardMessage = '<div style="color:#26A69A">创建成功√  链接: <span><code><a href="' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '" target="_blank"><abbr title="打开链接">' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '</abbr></a></code></span></div><br>';
     } else {
-        $pastebinCardMessage = '<div style="color:#e82424">× 标题过长(应不超过' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
+        $pastebinCardMessage = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
     }
 }
 require_once($fidCookieCallbackURI);

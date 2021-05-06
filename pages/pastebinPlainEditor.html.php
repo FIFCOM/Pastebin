@@ -117,7 +117,7 @@ ini_set('display_errors', 0);
     </div>
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
-        <div class="mdui-card mdui-hoverable" style="margin-top: 15px;border-radius:10px">
+        <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <form action="#" method="post">
                 <div class="mdui-card-primary mdui-typo">
                     <?= $pastebinCardMessage ?>

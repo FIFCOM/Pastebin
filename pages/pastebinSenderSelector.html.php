@@ -31,9 +31,6 @@ ini_set('display_errors', 0);
 <header class="mdui-appbar mdui-appbar-fixed">
     <div class="mdui-toolbar mdui-color-theme">
         <a href="./" class="mdui-typo-headline"><?= SITE_NAME ?></a>
-        <a href="./" style="position: absolute; right: 5px; border-radius: 100%"
-           class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-purple"
-           mdui-tooltip="{content: '新建Pastebin', position: 'bottom'}"><i class="mdui-icon material-icons">add</i></a>
     </div>
     <div class="mdui-toolbar-spacer"></div>
 </header>
@@ -44,7 +41,7 @@ ini_set('display_errors', 0);
                 <b>Pastebin Sender : 请选择模式</b>
                 <br><br><br>
                 <a href="./?ref=<?= $_GET['ref'] ?>&select=sender"
-                   class="mdui-btn mdui-btn-block mdui-color-theme-accent mdui-ripple">向您所扫描二维码的设备发送一次Pastebin</a>
+                   class="mdui-btn mdui-btn-block mdui-color-amber mdui-ripple">向对方页面发送一次Pastebin</a>
                 <br><br><br>
                 <a href="./?ref=<?= $_GET['ref'] ?>&select=plain"
                    class="mdui-btn mdui-btn-block mdui-color-theme-accent mdui-ripple">创建默认的Pastebin</a>
