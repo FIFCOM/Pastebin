@@ -4,7 +4,7 @@ require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
 $pastebinFileName = $_REQUEST['id'] ?? "0";
 $pastebinCryptPassword = $_REQUEST['key'] ?? "0";
-$pastebinRawAccessToken = $_REQUEST['token'] ?? "0";
+//$pastebinRawAccessToken = $_REQUEST['token'] ?? "0";
 $pastebinType = $_REQUEST['type'] ?? "pastebin";
 
 if ($pastebinFileName && $pastebinCryptPassword) {

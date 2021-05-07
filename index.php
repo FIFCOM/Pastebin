@@ -21,7 +21,7 @@ $pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption . $SvrName, '0');
 
 if (isset($_GET['ref'])) {
     if (isset($_GET['select'])) {
-        $_GET['select'] == "sender" ? setcookie("ref", base64_decode($_REQUEST['ref']), time() + 3600) : 0;
+        $_GET['select'] == "sender" ? setcookie("ref", base64_decode($_REQUEST['ref']), time() + 7200) : 0;
         header('Location: ' . $pastebinTLSEncryption . $SvrName . '/');
     } else {
         require_once("pages/pastebinSenderSelector.html.php");
@@ -49,7 +49,7 @@ if (!$pastebin || !$title) {
         if ($pastebinRefID) pastebinSenderWrite($pastebinURL.'&ref='.$_COOKIE['senderid'], $pastebinRefID);
         $pastebinQR = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . $pastebinURL, '1');
         $pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . $pastebinURL, '0');
-        $pastebinCardMessage = '<div style="color:#26A69A">创建成功√  链接: <span><code><a href="' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '" target="_blank"><abbr title="打开链接">' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '</abbr></a></code></span></div><br>';
+        $pastebinCardMessage = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '" target="_blank"><abbr title="打开链接">' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinURL . '</abbr></a></code></span></div><br>';
     } else {
         $pastebinCardMessage = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
     }
