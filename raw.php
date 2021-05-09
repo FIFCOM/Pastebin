@@ -8,7 +8,7 @@ $pastebinRawAccessToken = $_REQUEST['token'] ?? "0000000000000000000000000000000
 $pastebinType = $_REQUEST['type'] ?? "pastebin";
 $pastebinHeaderReferer = $_SERVER["HTTP_REFERER"] ?? 0;
 
-if ($pastebinHeaderReferer && pastebinValidateRawAccessToken($pastebinRawAccessToken) == 0) {
+if ($pastebinHeaderReferer && pastebinValidateRawAccessToken($pastebinRawAccessToken, $pastebinFileName, $pastebinCryptPassword) == 0) {
     header('HTTP/1.0 403 Forbidden');
     exit();
 }

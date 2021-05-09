@@ -7,7 +7,7 @@ if ($pastebinEncodedRequest) {
     $pastebinFileName = pastebinGetSubString($pastebinEncodedRequest, "$", "+");
     $pastebinCryptPassword = dechex(crc32(pastebinGetSubString($pastebinEncodedRequest, "+", "-")));
     $pastebinViewerType = $_REQUEST['viewerType'] ?? pastebinGetSubString($pastebinEncodedRequest, "-", "!");
-    $pastebinRawAccessToken = "0";  // coming soon...
+    $pastebinRawAccessToken = md5(date("y") . date("m") . date("d") . $pastebinFileName . $pastebinCryptPassword . $_SERVER['REMOTE_ADDR'] . PASTEBIN_CRYPT_IV);
 } else {
     header('HTTP/1.0 403 Forbidden');
     exit();

@@ -88,6 +88,12 @@ function pastebinView($fileName, $cryptPassword, $type)
     }
 }
 
+function pastebinValidateRawAccessToken($token, $id, $key): int
+{
+    $tmp = md5(date("y") . date("m") . date("d") . $id . $key . $_SERVER['REMOTE_ADDR'] . PASTEBIN_CRYPT_IV);
+    return $tmp == $token ? 1 : 0;
+}
+
 function pastebinQRUri($string, $bool)
 {
     return $bool ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : $string;

@@ -139,8 +139,10 @@ ini_set('display_errors', 0);
         <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
                                                 placeholder=" Enter text..."></textarea></div>
 </div>
-<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit" id="paste"><i
-            class="mdui-icon material-icons">add</i></button>
+<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"
+        id="paste"><i
+            class="mdui-icon material-icons">add</i>
+</button>
 </form>
 <script
         src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
