@@ -19,12 +19,12 @@ function pastebinRandomToken($strLength): string
 
 function pastebinEncrypt($data, $password)
 {
-    return openssl_encrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_CRYPT_IV);
+    return openssl_encrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
 function pastebinDecrypt($data, $password)
 {
-    return openssl_decrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_CRYPT_IV);
+    return openssl_decrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
 function pastebinGetSubString($string, $start, $end)
@@ -90,7 +90,7 @@ function pastebinView($fileName, $cryptPassword, $type)
 
 function pastebinValidateRawAccessToken($token, $id, $key): int
 {
-    $tmp = md5(date("y") . date("m") . date("d") . $id . $key . $_SERVER['REMOTE_ADDR'] . PASTEBIN_CRYPT_IV);
+    $tmp = md5(date("y") . date("m") . date("d") . $id . $key . $_SERVER['REMOTE_ADDR'] . PASTEBIN_SECURITY_TOKEN);
     return $tmp == $token ? 1 : 0;
 }
 
