@@ -35,7 +35,7 @@ function pastebinGetSubString($string, $start, $end)
 
 function pastebinTitle(): string
 {
-    return '未命名的Pastebin - ID : ' . pastebinRandomToken(8);
+    return '未命名的Pastebin - ID.' . pastebinRandomToken(8);
 }
 
 function pastebinWrite($pastebin, $title, $viewer, $expire): string
@@ -65,7 +65,7 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
         $infoFP = fopen("data/info/$pastebinRealFileName.pb", 'w');
         fwrite($infoFP, $encryptedInfo . "\n");
         fclose($infoFP);
-        // link format base64_encode($00000000+00000000-0!)
+        // link format : base64_encode($00000000+00000000-0!)
         return base64_encode("$" . "$pastebinFileName" . "+" . dechex(crc32("$pastebinCryptPassword")) . "-" . $viewer . "!");
     } else {
         mysqli_close($conn);
@@ -94,9 +94,9 @@ function pastebinValidateRawAccessToken($token, $id, $key): int
     return $tmp == $token ? 1 : 0;
 }
 
-function pastebinQRUri($string, $bool)
+function pastebinQRUri($string, $encode): string
 {
-    return $bool ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : $string;
+    return $encode ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : 'https://www.zhihu.com/qrcode?url=' . $string;
 }
 
 function pastebinSenderSetID(): string

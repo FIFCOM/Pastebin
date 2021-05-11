@@ -18,7 +18,8 @@ const PASTEBIN_DB_NAME = 'pastebin';
 
 // ====== Advanced Settings =======
 const TLS_ENCRYPT = 'disable'; // enable or disable.
-const PASTEBIN_SECURITY_TOKEN = 'pastebin11451419'; // any string , strlen(PASTEBIN_CRYPT_IV) == 16
+const PASTEBIN_SECURITY_TOKEN = 'pastebin11451419'; // any string , strlen(PASTEBIN_SECURITY_TOKEN) == 16
+const PASTEBIN_CRON_TOKEN = 'pastebin11451419'; // any string , strlen(PASTEBIN_CRON_TOKEN) <= 1024
 
 // ====== Others ======
 const PASTEBIN_VERSION = 'v2.0 (Beta 2105)';
