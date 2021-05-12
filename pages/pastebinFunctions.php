@@ -35,7 +35,7 @@ function pastebinGetSubString($string, $start, $end)
 
 function pastebinTitle(): string
 {
-    return '未命名的Pastebin - ID.' . pastebinRandomToken(8);
+    return '未命名的Pastebin-ID.' . pastebinRandomToken(8);
 }
 
 function pastebinWrite($pastebin, $title, $viewer, $expire): string

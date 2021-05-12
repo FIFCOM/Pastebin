@@ -50,12 +50,12 @@ ini_set('display_errors', 0);
                 </div>
                 <?php $ref = $_REQUEST['ref'] ?? 0; if (!$ref) echo '-->'; ?>
                 <div class="mdui-chip mdui-hoverable">
-                    <span class="mdui-chip-icon mdui-color-theme-accent">P</span>
-                    <a href="<?=$pastebinPlainViewerLink?>" class="mdui-chip-title">查看源代码</a>
+                    <span class="mdui-chip-icon mdui-color-teal">D</span>
+                    <a href="<?=$pastebinDownloadLink?>&type=md" class="mdui-chip-title">下载</a>
                 </div>
                 <div class="mdui-chip mdui-hoverable">
-                    <span class="mdui-chip-icon mdui-color-theme-accent">R</span>
-                    <a href="<?=$pastebinRawLink?>" target="_blank" class="mdui-chip-title">原始内容</a>
+                    <span class="mdui-chip-icon mdui-color-theme-accent">P</span>
+                    <a href="<?=$pastebinPlainViewerLink?>" class="mdui-chip-title">查看源代码</a>
                 </div>
             </div>
         </div>

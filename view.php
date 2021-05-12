@@ -15,7 +15,7 @@ if ($pastebinEncodedRequest) {
 $SvrName = pastebinCustomURL() . str_replace('/view.php', '', $_SERVER['PHP_SELF']);
 $pastebinInfo = pastebinView($pastebinFileName, $pastebinCryptPassword, "info");
 $pastebinPlainViewerLink = "" . $pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest) . '&viewerType=1';
-$pastebinRawLink = "" . $pastebinTLSEncryption . $SvrName . '/raw.php?id=' . $pastebinFileName . '&key=' . $pastebinCryptPassword . '&token=' . $pastebinRawAccessToken;
+$pastebinDownloadLink = "" . $pastebinTLSEncryption . $SvrName . '/download.php?id=' . $pastebinFileName . '&key=' . $pastebinCryptPassword . '&token=' . $pastebinRawAccessToken;
 $pastebinTitle = pastebinView($pastebinFileName, $pastebinCryptPassword, "title");
 $pastebin = pastebinView($pastebinFileName, $pastebinCryptPassword, "pastebin");
 $pastebinQR = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest), '1');
