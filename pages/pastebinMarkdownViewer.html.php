@@ -88,7 +88,7 @@ ini_set('display_errors', 0);
 <script type="text/javascript">
     $(function () {
         pastebinEditormdViewer = editormd.markdownToHTML("pastebin-editormd", {
-            htmlDecode: true, //htmlDecode      : "style,script,iframe", <---filter
+            htmlDecode: "script,iframe", //htmlDecode      : "style,script,iframe" / true / false, <--- example
             tocm: true,
             emoji: true,
             taskList: true,
