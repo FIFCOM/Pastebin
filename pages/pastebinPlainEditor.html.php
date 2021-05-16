@@ -157,7 +157,6 @@ ini_set('display_errors', 0);
 </script>
 <script>
     const $ = mdui.$;
-
     $('#paste').on('click', function () {
         mdui.snackbar({
             message: '正在创建Pastebin...'

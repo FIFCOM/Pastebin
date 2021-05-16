@@ -1,4 +1,7 @@
 <?php
-require_once("config/pastebinConfig.php");
-require_once("pages/pastebinFunctions.php");
-require_once("pages/fidFunctions.php");
+if (!defined('PASTEBIN_VERSION')) {
+    header('HTTP/1.0 403 Forbidden');
+    exit();
+}
+ini_set('display_errors', 0);
+?>
