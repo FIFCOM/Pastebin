@@ -166,7 +166,7 @@ ini_set('display_errors', 0);
 <script src="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/lib/prettify.min.js"></script>
 <script type="text/javascript">
     $(function () {
-        var editor = editormd("pastebin-editormd", {
+        const editor = editormd("pastebin-editormd", {
             width: "100%",
             height: 540,
             markdown: "",
@@ -181,7 +181,7 @@ ini_set('display_errors', 0);
 </script>
 <SCRIPT LANGUAGE="JavaScript">
     function copyqr() {
-        var input = document.getElementById("pastebin-qr");
+        const input = document.getElementById("pastebin-qr");
         input.select();
         document.execCommand("Copy");
     }

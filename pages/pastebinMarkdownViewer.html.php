@@ -87,7 +87,7 @@ ini_set('display_errors', 0);
 <script src="https://cdn.jsdelivr.net/gh/FIFCOM/editor.md@master/lib/jquery.flowchart.min.js"></script>
 <script type="text/javascript">
     $(function () {
-        pastebinEditormdViewer = editormd.markdownToHTML("pastebin-editormd", {
+        const pastebinEditormdViewer = editormd.markdownToHTML("pastebin-editormd", {
             htmlDecode: "script,iframe", //htmlDecode      : "style,script,iframe" / true / false, <--- example
             tocm: true,
             emoji: true,

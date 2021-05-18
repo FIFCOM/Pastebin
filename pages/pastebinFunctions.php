@@ -13,6 +13,7 @@ function pastebinRandomToken($strLength): string
     for ($it = 0; $it < $strLength; $it++) try {
         $token .= $str[random_int(0, strlen($str) - 1)];
     } catch (Exception $e) {
+
     }
     return $token;
 }
@@ -48,14 +49,12 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     $encryptedPastebin = base64_encode(pastebinEncrypt($pastebin, $pastebinRealCryptPassword));
     $pastebinAuthor = fidHideIP($_SERVER['REMOTE_ADDR']);
     $encryptedInfo = base64_encode(pastebinEncrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
-    // FN & EXP ---> SQL
     $expire = $expire + date("y") * 366 + date("m") * 31 + date("d");
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
     $sql = "INSERT INTO pastebin (filename, expire) VALUES ('$pastebinRealFileName', '$expire')";
     if ($conn->query($sql) === TRUE) {
         mysqli_close($conn);
-        // ED ---> FS
         $titleFP = fopen("data/title/$pastebinRealFileName.pb", 'w');
         fwrite($titleFP, $encryptedTitle . "\n");
         fclose($titleFP);
@@ -135,8 +134,8 @@ function pastebinCustomURL()
     return $url ?: $_SERVER['HTTP_HOST'];
 }
 
-$pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%chttps://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
-$pastebinIcon = ICON_URL ?: "https://q.qlogo.cn/headimg_dl?dst_uin=1280874899&spec=640";
+$pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%c https://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
+$pastebinIcon = ICON_URL ?: "https://fifcom.cn/avatar/?transparent=1";
 $pastebinTLSEncryption = TLS_ENCRYPT == "enable" ? "https://" : "http://";
 $pastebinPrimaryTheme = $_REQUEST['pastebinPrimaryTheme'] ?? PRIMARY_THEME;
 $pastebinAccentTheme = $_REQUEST['pastebinAccentTheme'] ?? ACCENT_THEME;

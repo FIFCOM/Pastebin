@@ -104,9 +104,9 @@ ini_set('display_errors', 0);
     </script>
     <SCRIPT LANGUAGE="JavaScript"> 
     function copyinput() 
-    { 
-    var input=document.getElementById("pastebin");
-    input.select();
+    {
+        const input = document.getElementById("pastebin");
+        input.select();
     document.execCommand("Copy");
     } 
     </SCRIPT>
