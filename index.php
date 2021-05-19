@@ -1,4 +1,5 @@
 <?php
+// 摸了 x1
 require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
