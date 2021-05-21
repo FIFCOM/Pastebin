@@ -1,5 +1,5 @@
 <?php
-// 摸了 x2
+// 摸了 x3
 require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
