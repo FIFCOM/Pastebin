@@ -1,5 +1,5 @@
 <?php
-// 摸了 x3
+// 幸福往往是摸得透彻,而敬业的心却常常隐藏  ---  摸了 x4
 require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
