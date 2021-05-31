@@ -3,10 +3,10 @@ require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
 
-$mode = $_REQUEST['mode'] ?? 0;
+$pastebinMode = $_REQUEST['mode'] ?? 0;
 $pastebinLink = $_REQUEST['pb'] ?? 0;
 
-if ($mode == "raw" && $pastebinLink) pastebinRawJson($pastebinLink);
+if ($pastebinMode == "raw" && $pastebinLink) pastebinRawJson($pastebinLink);
 
 function pastebinRawJson($pb) {
     $id = pastebinGetSubString(base64_decode($pb), "$", "+");
