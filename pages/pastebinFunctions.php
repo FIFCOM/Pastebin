@@ -136,6 +136,9 @@ function pastebinCustomURL()
 
 $pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%c https://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
 $pastebinIcon = ICON_URL ?: "https://fifcom.cn/avatar/?transparent=1";
-$pastebinTLSEncryption = TLS_ENCRYPT == "enable" ? "https://" : "http://";
+//$pastebinTLSEncryption = TLS_ENCRYPT == "enable" ? "https://" : "http://";
+if (TLS_ENCRYPT == 'auto' || TLS_ENCRYPT == '') {
+    $pastebinTLSEncryption = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') )? 'https://' : 'http://';
+} else if (TLS_ENCRYPT == 'disable') $pastebinTLSEncryption = 'http://'; else if (TLS_ENCRYPT == 'enable') $pastebinTLSEncryption = 'https://';
 $pastebinPrimaryTheme = $_REQUEST['pastebinPrimaryTheme'] ?? PRIMARY_THEME;
 $pastebinAccentTheme = $_REQUEST['pastebinAccentTheme'] ?? ACCENT_THEME;

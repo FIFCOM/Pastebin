@@ -17,13 +17,13 @@ const PASTEBIN_DB_PASSWORD = 'localhost';
 const PASTEBIN_DB_NAME = 'pastebin';
 
 // ====== Advanced Settings =======
-const TLS_ENCRYPT = 'disable'; // enable or disable.
+const TLS_ENCRYPT = 'auto'; // enable or disable or auto.
 const PASTEBIN_SECURITY_TOKEN = 'pastebin11451419'; // any string , strlen(PASTEBIN_SECURITY_TOKEN) == 16
 const PASTEBIN_CRON_TOKEN = '123456'; // any string , strlen(PASTEBIN_CRON_TOKEN) <= 1024
 
 // ====== Others ======
 const PASTEBIN_VERSION = 'v2.0 (Beta 2106)';
-const SITE_URL = ''; // custom site url, '' = auto
+const SITE_URL = '';
 
 error_reporting(E_ALL);
 $_ERROR = array();
