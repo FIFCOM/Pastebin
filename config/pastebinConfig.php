@@ -10,7 +10,7 @@ const ACCENT_THEME = 'indigo';
 const ICON_URL = 'https://fifcom.cn/avatar/?transparent=1';
 const TITLE_MAX_LENGTH = '100'; // default 100 byte
 const PASTEBIN_MAX_LENGTH = '100'; // default 100kb
-const FILE_MAX_SIZE = '10240'; // default 10240kb == 10mb
+// const FILE_MAX_SIZE = '10240'; // deprecated
 const PASTEBIN_DB_HOSTNAME = 'localhost';
 const PASTEBIN_DB_USERNAME = 'root';
 const PASTEBIN_DB_PASSWORD = 'localhost';
