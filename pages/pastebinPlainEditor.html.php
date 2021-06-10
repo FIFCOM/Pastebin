@@ -156,13 +156,49 @@ ini_set('display_errors', 0);
     });
 </script>
 <script>
-    const $ = mdui.$;
+    let $ = mdui.$;
     $('#paste').on('click', function () {
         mdui.snackbar({
             message: '正在创建Pastebin...'
         });
     });
+    function autosave() {
+        let data = {}
+        if ($('#pastebin').val()) {
+            data['r18'] = $('#r18_i').val()
+        }
+        if ($('#title').val()) {
+            data['keyword'] = $('#keyword').val()
+        }
+        $.ajax({
+            method: 'POST',
+            url: '<?=$scheme?>_____/api.php?action=autosave&uuid=' + getCookie("uuid"),
+            data: data,
+            complete: function (data) {
+                let json = JSON.parse(data);
+                if (json["code"] === 1) {
+                    document.getElementById('autosave').innerHTML = "已保存"
+                } else {
+                    document.getElementById('autosave').innerHTML = ""
+                }
+                mdui.mutation()
+            }
+        })
+    }
+    function getCookie(name) {
+        let prefix = name + "="
+        let start = document.cookie.indexOf(prefix)
+        if (start === -1) {
+            return null;
+        }
+        let end = document.cookie.indexOf(";", start + prefix.length)
+        if (end === -1) {
+            end = document.cookie.length;
+        }
+        let value = document.cookie.substring(start + prefix.length, end)
+        return unescape(value);
+    }
 </script>
-<script><?= $pastebinConsoleCopy ?></script>
+<script><?= $consoleCopyright ?></script>
 </body>
 </html>

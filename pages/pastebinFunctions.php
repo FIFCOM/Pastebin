@@ -47,7 +47,7 @@ function write($pastebin, $title, $viewer, $expire): string
     $pastebinRealFileName = hash("sha256", "$pastebinFileName");
     $encryptedTitle = base64_encode(encrypt($title, $pastebinRealCryptPassword));
     $encryptedPastebin = base64_encode(encrypt($pastebin, $pastebinRealCryptPassword));
-    $pastebinAuthor = fidHideIP($_SERVER['REMOTE_ADDR']);
+    $pastebinAuthor = hideIP($_SERVER['REMOTE_ADDR']);
     $encryptedInfo = base64_encode(encrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
     $expire = $expire + date("y") * 366 + date("m") * 31 + date("d");
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
@@ -156,7 +156,8 @@ function checkTargetUUIDAlive($uuid) {
     //uuid_cache : uuid time
 }
 
-function updateUUIDAlive($uuid) {
+function updateUUIDAlive($uuid): int
+{
     //uuid_cache : uuid time
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
@@ -172,10 +173,15 @@ function updateUUIDAlive($uuid) {
     return 1;
 }
 
-$pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%c https://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
+function hideIP($ip)
+{
+    return preg_replace('/((?:\d+\.){2})\d+/', "\\1*", $ip);
+}
+
+$consoleCopyright = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%c https://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
 $pastebinIcon = ICON_URL ?: "https://fifcom.cn/avatar/?transparent=1";
 if (TLS_ENCRYPT == 'auto' || TLS_ENCRYPT == '') {
-    $pastebinTLSEncryption = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') )? 'https://' : 'http://';
-} else if (TLS_ENCRYPT == 'disable') $pastebinTLSEncryption = 'http://'; else if (TLS_ENCRYPT == 'enable') $pastebinTLSEncryption = 'https://';
+    $scheme = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') )? 'https://' : 'http://';
+} else if (TLS_ENCRYPT == 'disable') $scheme = 'http://'; else if (TLS_ENCRYPT == 'enable') $scheme = 'https://';
 $pastebinPrimaryTheme = $_REQUEST['pastebinPrimaryTheme'] ?? PRIMARY_THEME;
 $pastebinAccentTheme = $_REQUEST['pastebinAccentTheme'] ?? ACCENT_THEME;

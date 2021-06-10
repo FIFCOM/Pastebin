@@ -110,6 +110,6 @@ ini_set('display_errors', 0);
     document.execCommand("Copy");
     } 
     </SCRIPT>
-    <script><?=$pastebinConsoleCopy?></script>
+    <script><?=$consoleCopyright?></script>
 </body>
 </html>

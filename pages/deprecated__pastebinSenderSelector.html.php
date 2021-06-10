@@ -1,4 +1,5 @@
 <?php
+//deprecated
 if (!defined('PASTEBIN_VERSION')) {
     header('HTTP/1.0 403 Forbidden');
     exit();
@@ -57,6 +58,6 @@ ini_set('display_errors', 0);
         integrity="sha384-gCMZcshYKOGRX9r6wbDrvF+TcCCswSHFucUzUPwka+Gr+uHgjlYvkABr95TCOz3A"
         crossorigin="anonymous"
 ></script>
-<script><?= $pastebinConsoleCopy ?></script>
+<script><?= $consoleCopyright ?></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <?php
 require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
-require_once("pages/fidFunctions.php");
+require_once("pages/deprecated__fidFunctions.php");
 $SvrName = customURL() . str_replace('/index.php', '', $_SERVER['PHP_SELF']);
 if (isset($_COOKIE['uuid'])) {
     $UUID = $_COOKIE['uuid'];
@@ -17,24 +17,21 @@ $pastebin = $_REQUEST['pastebin'] ?? 0;
 $title = $_REQUEST['title'] ?? 0;
 $expire = $_REQUEST['expire'] ?? "1";
 $fidCookieCallbackURI = isset($_COOKIE['uri']) ? base64_decode($_COOKIE['uri']) : "pages/pastebinPlainEditor.html.php";
-$fidCookieToken = isset($_COOKIE['token']) ? base64_decode($_COOKIE['token']) : "0";
-$pastebinQR = QRUri($pastebinTLSEncryption . $SvrName . '/?ref=' . base64_encode($pastebinSenderID), '1');
+// $fidCookieToken = isset($_COOKIE['token']) ? base64_decode($_COOKIE['token']) : "0";  // deprecated
+$pastebinQR = QRUri($pastebinTLSEncryption . $SvrName . '/?ref=' . $UUID, '1');
 $pastebinQRRawURL = QRUri($pastebinTLSEncryption . $SvrName, '0');
 
 if (isset($_GET['ref'])) {
-    if (isset($_GET['select'])) {
-        $_GET['select'] == "sender" ? setcookie("ref", base64_decode($_REQUEST['ref']), time() + 7200) : 0;
-        header('Location: ' . $pastebinTLSEncryption . $SvrName . '/');
-    } else {
-        require_once("pages/pastebinSenderSelector.html.php");
-        exit;
-    }
+    require_once("pages/pastebinConnect.html.php");
+    exit();
 }
-
-if (isset($_COOKIE['senderid'])) {
-    $pastebinSenderURL = connectView(base64_decode($_COOKIE['senderid']));
+/*
+if (isset($_COOKIE['uuid'])) {
+    $pastebinSenderURL = connectView(base64_decode($_COOKIE['uuid']));
     if ($pastebinSenderURL != "0") header('Location: ' . $pastebinTLSEncryption . $SvrName . '/' . $pastebinSenderURL);
 }
+deprecated
+*/
 
 if (!$pastebin || !$title) {
     $pastebinCardMessage = '';
@@ -44,7 +41,7 @@ if (!$pastebin || !$title) {
             $type = "1";
         } elseif ($fidCookieCallbackURI == "pages/pastebinMarkdownEditor.html.php") {
             $type = "2";
-        } elseif ($fidCookieCallbackURI == "pages/pastebinFileUploader.html.php") {
+        } elseif ($fidCookieCallbackURI == "pages/deprecated__pastebinFileUploader.html.php") {
             $type = "4";
         }
         $pastebinURL = write($pastebin, $title, $type, $expire);

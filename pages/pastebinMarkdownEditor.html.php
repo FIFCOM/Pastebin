@@ -195,6 +195,6 @@ ini_set('display_errors', 0);
         });
     });
 </script>
-<script><?= $pastebinConsoleCopy ?></script>
+<script><?= $consoleCopyright ?></script>
 </body>
 </html>
