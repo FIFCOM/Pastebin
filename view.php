@@ -4,22 +4,22 @@ require_once("pages/pastebinFunctions.php");
 require_once("pages/fidFunctions.php");
 $pastebinEncodedRequest = (isset($_REQUEST['pb']) && strlen(base64_decode($_REQUEST['pb'])) >= 19 && strlen(base64_decode($_REQUEST['pb'])) <= 21) ? base64_decode($_REQUEST['pb']) : "0";
 if ($pastebinEncodedRequest) {
-    $pastebinFileName = pastebinGetSubString($pastebinEncodedRequest, "$", "+");
-    $pastebinCryptPassword = dechex(crc32(pastebinGetSubString($pastebinEncodedRequest, "+", "-")));
-    $pastebinViewerType = $_REQUEST['viewerType'] ?? pastebinGetSubString($pastebinEncodedRequest, "-", "!");
+    $pastebinFileName = getSubString($pastebinEncodedRequest, "$", "+");
+    $pastebinCryptPassword = dechex(crc32(getSubString($pastebinEncodedRequest, "+", "-")));
+    $pastebinViewerType = $_REQUEST['viewerType'] ?? getSubString($pastebinEncodedRequest, "-", "!");
     $pastebinRawAccessToken = md5(date("y") . date("m") . date("d") . $pastebinFileName . $pastebinCryptPassword . $_SERVER['REMOTE_ADDR'] . PASTEBIN_SECURITY_TOKEN);
 } else {
     header('HTTP/1.0 403 Forbidden');
     exit();
 }
-$SvrName = pastebinCustomURL() . str_replace('/view.php', '', $_SERVER['PHP_SELF']);
-$pastebinInfo = pastebinView($pastebinFileName, $pastebinCryptPassword, "info");
+$SvrName = customURL() . str_replace('/view.php', '', $_SERVER['PHP_SELF']);
+$pastebinInfo = view($pastebinFileName, $pastebinCryptPassword, "info");
 $pastebinPlainViewerLink = "" . $pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest) . '&viewerType=1';
 $pastebinDownloadLink = "" . $pastebinTLSEncryption . $SvrName . '/download.php?id=' . $pastebinFileName . '&key=' . $pastebinCryptPassword . '&token=' . $pastebinRawAccessToken;
-$pastebinTitle = pastebinView($pastebinFileName, $pastebinCryptPassword, "title");
-$pastebin = pastebinView($pastebinFileName, $pastebinCryptPassword, "pastebin");
-$pastebinQR = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest), '1');
-$pastebinQRRawURL = pastebinQRUri($pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest), '0');
+$pastebinTitle = view($pastebinFileName, $pastebinCryptPassword, "title");
+$pastebin = view($pastebinFileName, $pastebinCryptPassword, "pastebin");
+$pastebinQR = QRUri($pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest), '1');
+$pastebinQRRawURL = QRUri($pastebinTLSEncryption . $SvrName . '/' . base64_encode($pastebinEncodedRequest), '0');
 if ($pastebinViewerType == "1") {
     require_once("pages/pastebinPlainViewer.html.php");
     exit();

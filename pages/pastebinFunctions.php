@@ -4,7 +4,7 @@ if (!defined('PASTEBIN_VERSION')) {
     exit();
 }
 
-function pastebinRandomToken($strLength): string
+function randomToken($strLength) : string
 {
     $str = 'qwertyuiopasdfghjklzxcvbnm';
     $str .= 'QWERTYUIOPASDFGHJKLZXCVBNM';
@@ -18,17 +18,17 @@ function pastebinRandomToken($strLength): string
     return $token;
 }
 
-function pastebinEncrypt($data, $password)
+function encrypt($data, $password)
 {
     return openssl_encrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
-function pastebinDecrypt($data, $password)
+function decrypt($data, $password)
 {
     return openssl_decrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
-function pastebinGetSubString($string, $start, $end)
+function getSubString($string, $start, $end)
 {
     return substr($string, strlen($start) + strpos($string, $start),
         (strlen($string) - strpos($string, $end)) * (-1));
@@ -36,19 +36,19 @@ function pastebinGetSubString($string, $start, $end)
 
 function pastebinTitle(): string
 {
-    return '未命名的Pastebin-ID.' . pastebinRandomToken(8);
+    return '未命名的Pastebin-ID.' . randomToken(8);
 }
 
-function pastebinWrite($pastebin, $title, $viewer, $expire): string
+function write($pastebin, $title, $viewer, $expire): string
 {
-    $pastebinCryptPassword = pastebinRandomToken(8);
-    $pastebinFileName = pastebinRandomToken(8);
+    $pastebinCryptPassword = randomToken(8);
+    $pastebinFileName = randomToken(8);
     $pastebinRealCryptPassword = hash("sha256", dechex(crc32(dechex(crc32("$pastebinCryptPassword")))));
     $pastebinRealFileName = hash("sha256", "$pastebinFileName");
-    $encryptedTitle = base64_encode(pastebinEncrypt($title, $pastebinRealCryptPassword));
-    $encryptedPastebin = base64_encode(pastebinEncrypt($pastebin, $pastebinRealCryptPassword));
+    $encryptedTitle = base64_encode(encrypt($title, $pastebinRealCryptPassword));
+    $encryptedPastebin = base64_encode(encrypt($pastebin, $pastebinRealCryptPassword));
     $pastebinAuthor = fidHideIP($_SERVER['REMOTE_ADDR']);
-    $encryptedInfo = base64_encode(pastebinEncrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
+    $encryptedInfo = base64_encode(encrypt('Paste from ' . $pastebinAuthor . ' at ' . '20' . date("y/m/d H:i"), $pastebinRealCryptPassword));
     $expire = $expire + date("y") * 366 + date("m") * 31 + date("d");
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
@@ -72,7 +72,7 @@ function pastebinWrite($pastebin, $title, $viewer, $expire): string
     }
 }
 
-function pastebinView($fileName, $cryptPassword, $type)
+function view($fileName, $cryptPassword, $type)
 {
     $dataRealCryptPassword = hash("sha256", "$cryptPassword");
     $dataRealFileName = hash("sha256", "$fileName");
@@ -80,32 +80,32 @@ function pastebinView($fileName, $cryptPassword, $type)
         $dataFP = fopen("data/$type/$dataRealFileName.pb", "r");
         $encryptedData = fread($dataFP, filesize("data/$type/$dataRealFileName.pb"));
         fclose($dataFP);
-        $decryptedData = pastebinDecrypt(base64_decode($encryptedData), $dataRealCryptPassword);
+        $decryptedData = decrypt(base64_decode($encryptedData), $dataRealCryptPassword);
         return $decryptedData ?: 0;
     } else {
         return 0;
     }
 }
 
-function pastebinValidateRawAccessToken($token, $id, $key): int
+function validateRawAccessToken($token, $id, $key): int
 {
     $tmp = md5(date("y") . date("m") . date("d") . $id . $key . $_SERVER['REMOTE_ADDR'] . PASTEBIN_SECURITY_TOKEN);
     return $tmp == $token ? 1 : 0;
 }
 
-function pastebinQRUri($string, $encode): string
+function QRUri($string, $encode): string
 {
     return $encode ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : 'https://www.zhihu.com/qrcode?url=' . $string;
 }
 
-function pastebinSenderSetID(): string
+function connectSetUUID(): string
 {
-    $pastebinSenderID = md5(pastebinRandomToken(16));
-    setcookie("senderid", base64_encode($pastebinSenderID), time() + 3600);
-    return $pastebinSenderID;
+    $pastebinUUID = md5(randomToken(16));
+    setcookie("uuid", $pastebinUUID, time() + 3600);
+    return $pastebinUUID;
 }
 
-function pastebinSenderWrite($pastebinURL, $pastebinRefID)
+function connectWrite($pastebinURL, $pastebinRefID)
 {
     $pastebinRealFileName = hash("sha256", "$pastebinRefID");
     $senderFP = fopen("data/sender/$pastebinRealFileName.pb", 'w');
@@ -114,7 +114,7 @@ function pastebinSenderWrite($pastebinURL, $pastebinRefID)
     setcookie("ref", "", time() - 3600);
 }
 
-function pastebinSenderView($senderid)
+function connectView($senderid)
 {
     $dataRealFileName = hash("sha256", "$senderid");
     if (file_exists("data/sender/$dataRealFileName.pb")) {
@@ -128,15 +128,52 @@ function pastebinSenderView($senderid)
     }
 }
 
-function pastebinCustomURL()
+function customURL()
 {
     $url = SITE_URL ?: 0;
     return $url ?: $_SERVER['HTTP_HOST'];
 }
 
+function rawJson($pb) {
+    $id = getSubString(base64_decode($pb), "$", "+");
+    $key = dechex(crc32(getSubString(base64_decode($pb), "+", "-")));
+    if (view($id, $key, 'title')) {
+        $json['code'] = "1";
+        $json['id'] = "$id";
+        $json['title'] = view($id, $key, 'title') ? : "null";
+        $json['content'] = view($id, $key, 'pastebin') ? : "null";
+    } else {
+        $json['code'] = "0";
+        $json['id'] = "$id";
+        $json['title'] = "null";
+        $json['content'] = "null";
+    }
+    header("Content-type:text/plain;charset=utf-8;");
+    echo json_encode($json, JSON_UNESCAPED_UNICODE);
+}
+
+function checkTargetUUIDAlive($uuid) {
+    //uuid_cache : uuid time
+}
+
+function updateUUIDAlive($uuid) {
+    //uuid_cache : uuid time
+    $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
+    if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
+    $time = time();
+    $result = mysqli_query($conn, "SELECT uuid FROM uuid_cache WHERE uuid = '$uuid'");
+    if (mysqli_fetch_array($result) == '')
+    {
+        mysqli_query($conn, "INSERT INTO uuid_cache (uuid, time) VALUES ('$uuid', '$time')");
+    } else {
+        mysqli_query($conn, "UPDATE uuid_cache SET time='$time' WHERE uuid='$uuid'");
+    }
+    mysqli_close($conn);
+    return 1;
+}
+
 $pastebinConsoleCopy = 'console.log(\'%cFIFCOM Pastebin  %c  ' . PASTEBIN_VERSION . '%cGNU LGPL v2.1\', \'color: #fff; background: #0D47A1; font-size: 15px;border-radius:5px 0 0 5px;padding:10px 0 10px 20px;\',\'color: #fff; background: #42A5F5; font-size: 15px;border-radius:0;padding:10px 15px 10px 0px;\',\'color: #fff; background: #00695C; font-size: 15px;border-radius:0 5px 5px 0;padding:10px 20px 10px 15px;\');console.log(\'%c https://github.com/FIFCOM/Pastebin\', \'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #00695C;\');';
 $pastebinIcon = ICON_URL ?: "https://fifcom.cn/avatar/?transparent=1";
-//$pastebinTLSEncryption = TLS_ENCRYPT == "enable" ? "https://" : "http://";
 if (TLS_ENCRYPT == 'auto' || TLS_ENCRYPT == '') {
     $pastebinTLSEncryption = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') )? 'https://' : 'http://';
 } else if (TLS_ENCRYPT == 'disable') $pastebinTLSEncryption = 'http://'; else if (TLS_ENCRYPT == 'enable') $pastebinTLSEncryption = 'https://';
