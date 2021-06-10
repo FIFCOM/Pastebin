@@ -120,14 +120,14 @@ ini_set('display_errors', 0);
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <form action="#" method="post">
                 <div class="mdui-card-primary mdui-typo">
-                    <?= $pastebinCardMessage ?>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="8"/><i
+                    <div class="mdui-typo" id="msg"></div>
+                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="8"/><i
                                 class="mdui-radio-icon"></i>一周有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="31" checked/><i
+                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="31" checked/><i
                                 class="mdui-radio-icon"></i>一个月有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="181"/><i
+                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="181"/><i
                                 class="mdui-radio-icon"></i>半年有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="366"/><i
+                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="366"/><i
                                 class="mdui-radio-icon"></i>一年有效</label>
                 </div>
         </div>
@@ -139,9 +139,7 @@ ini_set('display_errors', 0);
         <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
                                                 placeholder=" Enter text..."></textarea></div>
 </div>
-<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" type="submit"
-        id="paste"><i
-            class="mdui-icon material-icons">add</i>
+<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" onclick="createPastebin(1)" id="paste" type="button"><i class="mdui-icon material-icons">add</i>
 </button>
 </form>
 <script
@@ -162,26 +160,35 @@ ini_set('display_errors', 0);
             message: '正在创建Pastebin...'
         });
     });
-    function autosave() {
+    function createPastebin(type) {
         let data = {}
         if ($('#pastebin').val()) {
-            data['r18'] = $('#r18_i').val()
+            data['pastebin'] = $('#pastebin').val()
         }
         if ($('#title').val()) {
-            data['keyword'] = $('#keyword').val()
+            data['title'] = $('#title').val()
         }
+        if ($('#expire').val()) {
+            data['expire'] = $('#expire').val()
+        }
+        data['type'] = type
         $.ajax({
             method: 'POST',
-            url: '<?=$scheme?>_____/api.php?action=autosave&uuid=' + getCookie("uuid"),
+            url: '<?=$scheme?><?=$SvrName?>/api.php?action=createPastebin&uuid=' + getCookie("uuid"),
             data: data,
-            complete: function (data) {
+            success: function (data) {
                 let json = JSON.parse(data);
-                if (json["code"] === 1) {
-                    document.getElementById('autosave').innerHTML = "已保存"
-                } else {
-                    document.getElementById('autosave').innerHTML = ""
+                if (json['code'] === '1') {
+                    document.getElementById('msg').innerHTML = json['msg']
+                    $('#title').val('未命名的Pastebin-ID.' + randomString(8))
+                    $('#pastebin').val('')
+                    console.log("code : 1 url : " + json['url'])
+                } else if (json['code'] === '0') {
+                    document.getElementById('msg').innerHTML = json['msg']
+                    console.log("code : 0 url : " + json['url'])
+
                 }
-                mdui.mutation()
+                //mdui.mutation()
             }
         })
     }
@@ -197,6 +204,16 @@ ini_set('display_errors', 0);
         }
         let value = document.cookie.substring(start + prefix.length, end)
         return unescape(value);
+    }
+    function randomString(len) {
+        len = len || 16;
+        let $chars = 'QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890';
+        let maxPos = $chars.length;
+        let pwd = '';
+        for (let i = 0; i < len; i++) {
+            pwd += $chars.charAt(Math.floor(Math.random() * maxPos));
+        }
+        return pwd;
     }
 </script>
 <script><?= $consoleCopyright ?></script>

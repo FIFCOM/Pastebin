@@ -10,7 +10,7 @@
         $SvrName = $_SERVER['HTTP_HOST'].str_replace('/fid.php','',$_SERVER['PHP_SELF']);
         setcookie("uri", "$fidCookieCallbackURI", time()+3600);
         setcookie("token", "$fidCookieToken", time()+3600);
-        header('Location: '.$pastebinTLSEncryption.$SvrName.'/');
+        header('Location: '.$scheme.$SvrName.'/');
     } elseif (!$fidAction) {
         header('HTTP/1.0 403 Forbidden');
         exit();
