@@ -41,7 +41,7 @@ if (!$pastebin || !$title) {
             $type = "4";
         }
         $pastebinURL = write($pastebin, $title, $type, $expire);
-        if ($refUUID) connectWrite($pastebinURL.'&ref='.$_COOKIE['senderid'], $refUUID);
+        if ($refUUID) deprecated__connectWrite($pastebinURL.'&ref='.$_COOKIE['senderid'], $refUUID);
         $pastebinQR = QRUri($scheme . $SvrName . '/' . $pastebinURL, '1');
         $pastebinQRRawURL = QRUri($scheme . $SvrName . '/' . $pastebinURL, '0');
         $pastebinCardMessage = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $scheme . $SvrName . '/' . $pastebinURL . '" target="_blank"><abbr title="打开链接">' . $scheme . $SvrName . '/' . $pastebinURL . '</abbr></a></code></span></div><br>';

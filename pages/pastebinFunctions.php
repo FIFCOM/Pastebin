@@ -105,7 +105,7 @@ function setUUID(): string
     return $pastebinUUID;
 }
 
-function connectWrite($pastebinURL, $pastebinRefID)
+function deprecated__connectWrite($pastebinURL, $pastebinRefID)
 {
     $pastebinRealFileName = hash("sha256", "$pastebinRefID");
     $senderFP = fopen("data/sender/$pastebinRealFileName.pb", 'w');
@@ -114,7 +114,7 @@ function connectWrite($pastebinURL, $pastebinRefID)
     setcookie("ref", "", time() - 3600);
 }
 
-function connectView($senderid)
+function deprecated__connectView($senderid)
 {
     $dataRealFileName = hash("sha256", "$senderid");
     if (file_exists("data/sender/$dataRealFileName.pb")) {
@@ -126,6 +126,24 @@ function connectView($senderid)
     } else {
         return "0";
     }
+}
+
+function connectQueryCache($uuid): string
+{
+
+    return '';
+}
+
+function connectQueryList($uuid, $col)
+{
+    $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
+    if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
+    $result = mysqli_query($conn, "SELECT * FROM connect_url_list WHERE target = '$uuid'");
+    $row = mysqli_fetch_array($result);
+    if ($col == 'displayed' && $row['displayed'] == '1') return false;
+    if ($col == 'from') return $row['from'];
+    if ($col == 'url') return $row['url'];
+    return true;
 }
 
 function customURL()
