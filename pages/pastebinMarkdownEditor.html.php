@@ -176,13 +176,48 @@ ini_set('display_errors', 0);
 
     window.onload = function () {
         //$('#title').val('未命名的Pastebin-ID.' + randomToken(8))
-        let qr=document.getElementById('qr-img')
+        let qr = document.getElementById('qr-img')
         qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
-        window.setInterval(uuidAlive, 3000);
+        window.setInterval(pastebinConnect, 5000);
     }
 
-    function uuidAlive(){
-
+    function pastebinConnect() {
+        $.ajax({
+            method: 'POST',
+            url: '<?=$scheme?><?=$SvrName?>/api.php?action=connect&uuid=' + getCookie("uuid"),
+            //data: getCookie("uuid"),
+            success: function (data) {
+                let json = JSON.parse(data);
+                if (json['code'] === '1') {
+                    document.getElementById('msg').innerHTML = json['msg']
+                    $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
+                    $('#pastebin').val('')
+                    let qr = document.getElementById('qr-img')
+                    qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI(json['url'])
+                    console.log("code : 1 url : " + json['url'])
+                } else if (json['code'] === '2') {
+                    mdui.snackbar({
+                        message: json['user'] + '已连接'
+                    });
+                } else if (json['code'] === '3') {
+                    mdui.dialog({
+                        title: json['user'] + '向你发送了一个Pastebin',
+                        content: "链接 : " + json['url'],
+                        buttons: [
+                            {
+                                text: '关闭'
+                            },
+                            {
+                                text: '查看',
+                                onClick: function () {
+                                    window.open(json['url'])
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
+        })
     }
 
     function createPastebin(type) {
@@ -208,7 +243,7 @@ ini_set('display_errors', 0);
                     document.getElementById('msg').innerHTML = json['msg']
                     $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
                     $('#pastebin').val('')
-                    let qr=document.getElementById('qr-img')
+                    let qr = document.getElementById('qr-img')
                     qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI(json['url'])
                     console.log("code : 1 url : " + json['url'])
                 } else if (json['code'] === '0') {

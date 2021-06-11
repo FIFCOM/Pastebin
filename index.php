@@ -4,12 +4,12 @@ require_once("pages/pastebinFunctions.php");
 
 $SvrName = customURL() . str_replace('/index.php', '', $_SERVER['PHP_SELF']);
 if (isset($_COOKIE['uuid'])) {
-    $UUID = $_COOKIE['uuid'];
+    $uuid = $_COOKIE['uuid'];
     setcookie("uuid", $_COOKIE['uuid'], time() + 3600);
 } else {
-    $UUID = setUUID();
+    $uuid = setUUID();
 }
-updateUUIDAlive($UUID);
+updateUUIDAlive($uuid);
 
 $refUUID = $_COOKIE['ref'] ?? 0;
 $pastebinTitle = pastebinTitle();

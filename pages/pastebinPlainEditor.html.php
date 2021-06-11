@@ -142,8 +142,7 @@ ini_set('display_errors', 0);
 <button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" onclick="createPastebin('1')" id="paste"
         type="button"><i class="mdui-icon material-icons">add</i>
 </button>
-<script
-        src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
+<script src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
         integrity="sha384-gCMZcshYKOGRX9r6wbDrvF+TcCCswSHFucUzUPwka+Gr+uHgjlYvkABr95TCOz3A"
         crossorigin="anonymous"
 ></script>

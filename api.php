@@ -34,3 +34,36 @@ if ($action == 'createPastebin') {
     echo json_encode($json, JSON_UNESCAPED_UNICODE);
     exit();
 }
+
+if ($action == 'connect') {
+    if ($uuid) {
+        updateUUIDAlive($uuid);
+        if (connectQueryCache($uuid) != '')
+        {
+            $json['code'] = '2';
+            $json['user'] = connectQueryCache($uuid);
+            $json['url'] = null;
+            $json['title'] = null;
+        } else if (connectQueryList($uuid, 'displayed')) {
+            $json['code'] = '3';
+            $json['user'] = connectQueryList($uuid, 'from');
+            $pb = connectQueryList($uuid, 'url');
+            $id = getSubString(base64_decode($pb), "$", "+");
+            $key = dechex(crc32(getSubString(base64_decode($pb), "+", "-")));
+            $json['url'] = $scheme . $SvrName . '/' . $pb;
+            $json['title'] = view($id, $key, 'title');
+        } else {
+            $json['code'] = '1';
+            $json['user'] = null;
+            $json['url'] = null;
+            $json['title'] = null;
+        }
+    }else {
+        $json['code'] = '0';
+        $json['user'] = null;
+        $json['url'] = null;
+        $json['title'] = null;
+    }
+    echo json_encode($json, JSON_UNESCAPED_UNICODE);
+    exit();
+}
