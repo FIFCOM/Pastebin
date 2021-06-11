@@ -81,7 +81,8 @@ ini_set('display_errors', 0);
                 <i class="mdui-collapse-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
             </div>
             <div class="mdui-collapse-item-body mdui-list">
-                <a href="./fid.php?action=redirect&uri=api/open-api.php" class="mdui-list-item mdui-ripple ">Open API</a>
+                <a href="./fid.php?action=redirect&uri=api/open-api.php" class="mdui-list-item mdui-ripple ">Open
+                    API</a>
             </div>
         </div>
         <div class="mdui-collapse-item ">
@@ -118,18 +119,17 @@ ini_set('display_errors', 0);
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
-            <form action="#" method="post">
-                <div class="mdui-card-primary mdui-typo">
-                    <div class="mdui-typo" id="msg"></div>
-                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="8"/><i
-                                class="mdui-radio-icon"></i>一周有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="31" checked/><i
-                                class="mdui-radio-icon"></i>一个月有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="181"/><i
-                                class="mdui-radio-icon"></i>半年有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" id="expire" value="366"/><i
-                                class="mdui-radio-icon"></i>一年有效</label>
-                </div>
+            <div class="mdui-card-primary mdui-typo">
+                <div class="mdui-typo" id="msg"></div>
+                <label class="mdui-radio"><input type="radio" name="expire" value="8"/><i
+                            class="mdui-radio-icon"></i>一周有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="31" checked/><i
+                            class="mdui-radio-icon"></i>一个月有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="181"/><i
+                            class="mdui-radio-icon"></i>半年有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="366"/><i
+                            class="mdui-radio-icon"></i>一年有效</label>
+            </div>
         </div>
         <br>
         <label class="mdui-textfield-label">标题</label>
@@ -139,28 +139,25 @@ ini_set('display_errors', 0);
         <label for="pastebin"></label><textarea class="mdui-textfield-input" name="pastebin" id="pastebin" rows="24"
                                                 placeholder=" Enter text..."></textarea></div>
 </div>
-<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" onclick="createPastebin(1)" id="paste" type="button"><i class="mdui-icon material-icons">add</i>
+<button class="mdui-fab mdui-fab-fixed mdui-color-theme-accent mdui-ripple" onclick="createPastebin('1')" id="paste"
+        type="button"><i class="mdui-icon material-icons">add</i>
 </button>
-</form>
 <script
         src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
         integrity="sha384-gCMZcshYKOGRX9r6wbDrvF+TcCCswSHFucUzUPwka+Gr+uHgjlYvkABr95TCOz3A"
         crossorigin="anonymous"
 ></script>
 <script type="text/javascript">
-    var maindrawer = new mdui.Drawer('#mainDrawer');
+    let maindrawer = new mdui.Drawer('#mainDrawer');
     document.getElementById('toggle').addEventListener('click', function () {
         maindrawer.toggle();
     });
 </script>
 <script>
     let $ = mdui.$;
-    $('#paste').on('click', function () {
-        mdui.snackbar({
-            message: '正在创建Pastebin...'
-        });
-    });
+
     function createPastebin(type) {
+        document.getElementById('msg').innerHTML = '正在创建...'
         let data = {}
         if ($('#pastebin').val()) {
             data['pastebin'] = $('#pastebin').val()
@@ -168,8 +165,8 @@ ini_set('display_errors', 0);
         if ($('#title').val()) {
             data['title'] = $('#title').val()
         }
-        if ($('#expire').val()) {
-            data['expire'] = $('#expire').val()
+        if ($("input[name='expire']:checked").val()) {
+            data['expire'] = $("input[name='expire']:checked").val()
         }
         data['type'] = type
         $.ajax({
@@ -180,18 +177,19 @@ ini_set('display_errors', 0);
                 let json = JSON.parse(data);
                 if (json['code'] === '1') {
                     document.getElementById('msg').innerHTML = json['msg']
-                    $('#title').val('未命名的Pastebin-ID.' + randomString(8))
+                    $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
                     $('#pastebin').val('')
-                    console.log("code : 1 url : " + json['url'])
+                    // console.log("code : 1 url : " + json['url'])
                 } else if (json['code'] === '0') {
                     document.getElementById('msg').innerHTML = json['msg']
-                    console.log("code : 0 url : " + json['url'])
+                    // console.log("code : 0 msg : " + json['msg'])
 
                 }
-                //mdui.mutation()
+                // mdui.mutation()
             }
         })
     }
+
     function getCookie(name) {
         let prefix = name + "="
         let start = document.cookie.indexOf(prefix)
@@ -205,7 +203,8 @@ ini_set('display_errors', 0);
         let value = document.cookie.substring(start + prefix.length, end)
         return unescape(value);
     }
-    function randomString(len) {
+
+    function randomToken(len) {
         len = len || 16;
         let $chars = 'QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890';
         let maxPos = $chars.length;

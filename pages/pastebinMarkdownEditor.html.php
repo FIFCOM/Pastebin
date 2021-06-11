@@ -121,18 +121,17 @@ ini_set('display_errors', 0);
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
-            <form action="#" method="post">
-                <div class="mdui-card-primary mdui-typo">
-                    <?= $pastebinCardMessage ?>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="8"/><i
-                                class="mdui-radio-icon"></i>一周有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="31" checked/><i
-                                class="mdui-radio-icon"></i>一个月有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="181"/><i
-                                class="mdui-radio-icon"></i>半年有效</label>
-                    <label class="mdui-radio"><input type="radio" name="expire" value="366"/><i
-                                class="mdui-radio-icon"></i>一年有效</label>
-                </div>
+            <div class="mdui-card-primary mdui-typo">
+                <div class="mdui-typo" id="msg"></div>
+                <label class="mdui-radio"><input type="radio" name="expire" value="8"/><i
+                            class="mdui-radio-icon"></i>一周有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="31" checked/><i
+                            class="mdui-radio-icon"></i>一个月有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="181"/><i
+                            class="mdui-radio-icon"></i>半年有效</label>
+                <label class="mdui-radio"><input type="radio" name="expire" value="366"/><i
+                            class="mdui-radio-icon"></i>一年有效</label>
+            </div>
         </div>
         <br>
 
@@ -142,12 +141,11 @@ ini_set('display_errors', 0);
         <div id="pastebin-editormd"><label for="pastebin"></label><textarea name="pastebin" id="pastebin"
                                                                             style="display:none;"></textarea></div>
 
-        <button class="mdui-btn mdui-btn-raised mdui-color-theme-accent mdui-ripple" style="float: right;" type="submit"
-                id="paste">PASTE
+        <button class="mdui-btn mdui-btn-raised mdui-color-theme-accent mdui-ripple" style="float: right;" type="button"
+                id="paste" onclick="createPastebin(2)">PASTE
         </button>
     </div>
 </div>
-</form>
 
 <script
         src="https://cdn.jsdelivr.net/npm/mdui@1.0.1/dist/js/mdui.min.js"
@@ -187,13 +185,65 @@ ini_set('display_errors', 0);
     }
 </SCRIPT>
 <script>
-    const $ = mdui.$;
+    let $ = mdui.$;
 
-    $('#paste').on('click', function () {
-        mdui.snackbar({
-            message: '正在创建Pastebin...'
-        });
-    });
+    function createPastebin(type) {
+        document.getElementById('msg').innerHTML = '正在创建...'
+        let data = {}
+        if ($('#pastebin').val()) {
+            data['pastebin'] = $('#pastebin').val()
+        }
+        if ($('#title').val()) {
+            data['title'] = $('#title').val()
+        }
+        if ($("input[name='expire']:checked").val()) {
+            data['expire'] = $("input[name='expire']:checked").val()
+        }
+        data['type'] = type
+        $.ajax({
+            method: 'POST',
+            url: '<?=$scheme?><?=$SvrName?>/api.php?action=createPastebin&uuid=' + getCookie("uuid"),
+            data: data,
+            success: function (data) {
+                let json = JSON.parse(data);
+                if (json['code'] === '1') {
+                    document.getElementById('msg').innerHTML = json['msg']
+                    $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
+                    $('#pastebin').val('')
+                    // console.log("code : 1 url : " + json['url'])
+                } else if (json['code'] === '0') {
+                    document.getElementById('msg').innerHTML = json['msg']
+                    // console.log("code : 0 msg : " + json['msg'])
+                }
+                // mdui.mutation()
+            }
+        })
+    }
+
+    function getCookie(name) {
+        let prefix = name + "="
+        let start = document.cookie.indexOf(prefix)
+        if (start === -1) {
+            return null;
+        }
+        let end = document.cookie.indexOf(";", start + prefix.length)
+        if (end === -1) {
+            end = document.cookie.length;
+        }
+        let value = document.cookie.substring(start + prefix.length, end)
+        return unescape(value);
+    }
+
+    function randomToken(len) {
+        len = len || 16;
+        let $chars = 'QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890';
+        let maxPos = $chars.length;
+        let pwd = '';
+        for (let i = 0; i < len; i++) {
+            pwd += $chars.charAt(Math.floor(Math.random() * maxPos));
+        }
+        return pwd;
+    }
 </script>
 <script><?= $consoleCopyright ?></script>
 </body>

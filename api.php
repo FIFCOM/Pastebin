@@ -18,7 +18,7 @@ if ($action == 'createPastebin')
         $json['code'] = '1';
         if (strlen($_REQUEST['pastebin']) <= PASTEBIN_MAX_LENGTH * 1024 && strlen($_REQUEST['title']) <= TITLE_MAX_LENGTH) {
             $json['url'] = write($_REQUEST['pastebin'], $_REQUEST['title'], $_REQUEST['type'], $_REQUEST['expire']);
-            $json['msg'] = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $scheme . $SvrName . '/' . $json['url'] . '" target="_blank"><abbr title="打开链接">' . $scheme . $SvrName . '/' . $json['url'] . '</abbr></a></code></span></div>';
+            $json['msg'] = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $scheme . $SvrName . '/' . $json['url'] . '" target="_blank"><abbr title="打开链接">' . $scheme . $SvrName . '/' . $json['url'] .'</abbr></a></code></span></div>';
         } else {
             $json['url'] = '';
             $json['msg'] = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
@@ -26,7 +26,7 @@ if ($action == 'createPastebin')
     } else {
         $json['code'] = '0';
         $json['url'] = '';
-        $json['msg'] = '';
+        $json['msg'] = 'ERROR';
     }
     echo json_encode($json, JSON_UNESCAPED_UNICODE);
 }
