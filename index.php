@@ -1,13 +1,13 @@
 <?php
 require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
-require_once("pages/deprecated__fidFunctions.php");
+
 $SvrName = customURL() . str_replace('/index.php', '', $_SERVER['PHP_SELF']);
 if (isset($_COOKIE['uuid'])) {
     $UUID = $_COOKIE['uuid'];
     setcookie("uuid", $_COOKIE['uuid'], time() + 3600);
 } else {
-    $UUID = connectSetUUID();
+    $UUID = setUUID();
 }
 updateUUIDAlive($UUID);
 
@@ -17,22 +17,18 @@ $pastebin = $_REQUEST['pastebin'] ?? 0;
 $title = $_REQUEST['title'] ?? 0;
 $expire = $_REQUEST['expire'] ?? "1";
 $fidCookieCallbackURI = isset($_COOKIE['uri']) ? base64_decode($_COOKIE['uri']) : "pages/pastebinPlainEditor.html.php";
-// $fidCookieToken = isset($_COOKIE['token']) ? base64_decode($_COOKIE['token']) : "0";  // deprecated
+/*
 $pastebinQR = QRUri($scheme . $SvrName . '/?ref=' . $UUID, '1');
 $pastebinQRRawURL = QRUri($scheme . $SvrName, '0');
+deprecated
+*/
 
 if (isset($_GET['ref'])) {
     require_once("pages/pastebinConnect.html.php");
     exit();
 }
-/*
-if (isset($_COOKIE['uuid'])) {
-    $pastebinSenderURL = connectView(base64_decode($_COOKIE['uuid']));
-    if ($pastebinSenderURL != "0") header('Location: ' . $scheme . $SvrName . '/' . $pastebinSenderURL);
-}
-deprecated
-*/
 
+/*
 if (!$pastebin || !$title) {
     $pastebinCardMessage = '';
 } else {
@@ -53,4 +49,6 @@ if (!$pastebin || !$title) {
         $pastebinCardMessage = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
     }
 }
+deprecated
+*/
 require_once($fidCookieCallbackURI);

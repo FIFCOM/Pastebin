@@ -63,19 +63,6 @@ ini_set('display_errors', 0);
                 <a href="./" class="mdui-list-item mdui-ripple mdui-list-item-active">Markdown编辑器</a>
             </div>
         </div>
-        <!--<div class="mdui-collapse-item ">
-            <div class="mdui-collapse-item-header mdui-list-item mdui-ripple">
-                <i class="mdui-list-item-icon mdui-icon material-icons mdui-text-color-deep-orange">account_circle</i>
-                <div class="mdui-list-item-content">我的</div>
-                <i class="mdui-collapse-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
-            </div>
-            <div class="mdui-collapse-item-body mdui-list">
-                <a href="./fid.php?action=redirect&uri=pages/my-pb.php"
-                   class="mdui-list-item mdui-ripple ">我的Pastebin</a>
-                <a href="./fid.php?action=redirect&uri=pages/share.php" class="mdui-list-item mdui-ripple ">我的分享</a>
-                <a href="./fid.php?action=accountInfo" class="mdui-list-item mdui-ripple ">账号管理</a>
-            </div>
-        </div>-->
         <div class="mdui-collapse-item ">
             <div class="mdui-collapse-item-header mdui-list-item mdui-ripple">
                 <i class="mdui-list-item-icon mdui-icon material-icons mdui-text-color-blue">code</i>
@@ -105,7 +92,7 @@ ini_set('display_errors', 0);
     <div class="mdui-dialog" id="pastebin-qr">
         <div class="mdui-dialog-title">二维码分享</div>
         <div class="mdui-dialog-content">
-            <div class="center"><img src="<?= $pastebinQR ?>" width="300" height="300" alt="">
+            <div class="center"><img id="qr-img" src="" width="300" height="300" alt="">
                 <?php if ($pastebinURL) echo '<!--'; ?>
                 <div class="mdui-typo-body-2-opacity">扫描二维码可向此页面快速分享Pastebin，对方创建后请刷新此页面</div>
                 <?php if ($pastebinURL) echo '-->'; ?>
@@ -187,6 +174,17 @@ ini_set('display_errors', 0);
 <script>
     let $ = mdui.$;
 
+    window.onload = function () {
+        //$('#title').val('未命名的Pastebin-ID.' + randomToken(8))
+        let qr=document.getElementById('qr-img')
+        qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
+        window.setInterval(uuidAlive, 3000);
+    }
+
+    function uuidAlive(){
+
+    }
+
     function createPastebin(type) {
         document.getElementById('msg').innerHTML = '正在创建...'
         let data = {}
@@ -210,12 +208,14 @@ ini_set('display_errors', 0);
                     document.getElementById('msg').innerHTML = json['msg']
                     $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
                     $('#pastebin').val('')
-                    // console.log("code : 1 url : " + json['url'])
+                    let qr=document.getElementById('qr-img')
+                    qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI(json['url'])
+                    console.log("code : 1 url : " + json['url'])
                 } else if (json['code'] === '0') {
                     document.getElementById('msg').innerHTML = json['msg']
                     // console.log("code : 0 msg : " + json['msg'])
                 }
-                // mdui.mutation()
+                mdui.mutation()
             }
         })
     }

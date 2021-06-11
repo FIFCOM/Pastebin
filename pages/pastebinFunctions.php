@@ -98,7 +98,7 @@ function QRUri($string, $encode): string
     return $encode ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : 'https://www.zhihu.com/qrcode?url=' . $string;
 }
 
-function connectSetUUID(): string
+function setUUID(): string
 {
     $pastebinUUID = md5(randomToken(16));
     setcookie("uuid", $pastebinUUID, time() + 3600);
