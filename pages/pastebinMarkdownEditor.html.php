@@ -93,20 +93,16 @@ ini_set('display_errors', 0);
         <div class="mdui-dialog-title">二维码分享</div>
         <div class="mdui-dialog-content">
             <div class="center"><img id="qr-img" src="" width="300" height="300" alt="">
-                <?php if ($pastebinURL) echo '<!--'; ?>
                 <div class="mdui-typo-body-2-opacity">扫描二维码可向此页面快速分享Pastebin，对方创建后请刷新此页面</div>
-                <?php if ($pastebinURL) echo '-->'; ?>
             </div>
         </div>
         <div class="mdui-dialog-actions">
-            <?php if ($pastebinURL) echo '<!--'; ?>
-            <a href="./" class="mdui-btn mdui-ripple">刷新</a>
-            <?php if ($pastebinURL) echo '-->'; ?>
             <button class="mdui-btn mdui-ripple" mdui-dialog-close>取消</button>
         </div>
     </div>
 
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
+
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <div class="mdui-card-primary mdui-typo">
                 <div class="mdui-typo" id="msg"></div>
@@ -121,7 +117,7 @@ ini_set('display_errors', 0);
             </div>
         </div>
         <br>
-
+        <div id="connect_card"></div>
         <label class="mdui-textfield-label">标题</label>
         <label for="title"></label><input id="title" name="title" class="mdui-textfield-input" type="text"
                                           value="<?= $pastebinTitle ?>" autocomplete="off" autofocus="" required=""><br>
@@ -175,9 +171,15 @@ ini_set('display_errors', 0);
     let $ = mdui.$;
 
     window.onload = function () {
-        //$('#title').val('未命名的Pastebin-ID.' + randomToken(8))
         let qr = document.getElementById('qr-img')
         qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
+        if (document.cookie.indexOf("connect_target_uuid=") !== -1) {
+            document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
+                + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
+                + '<input type="checkbox" name="target" value="'
+                + getCookie('connect_target_uuid') + '"/><i class="mdui-checkbox-icon"></i>'
+                + '发送给' + getCookie('connect_target_uuid').substr(0,6)  + '</label></div></div><br>'
+        }
         window.setInterval(pastebinConnect, 5000);
     }
 
@@ -192,6 +194,12 @@ ini_set('display_errors', 0);
                 if (json['code'] === '1') {
 
                 } else if (json['code'] === '2' && json['user'] != null) {
+                    document.cookie="connect_target_uuid=" + json['user']
+                    document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
+                    + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
+                    + '<input type="checkbox" name="target" value="'
+                    + json['user'] + '"/><i class="mdui-checkbox-icon"></i>'
+                    + '发送给' + json['user'].substr(0,6) + '</label></div></div><br>'
                     mdui.snackbar({
                         message: json['user'] + '已连接'
                     });
@@ -228,6 +236,9 @@ ini_set('display_errors', 0);
         if ($("input[name='expire']:checked").val()) {
             data['expire'] = $("input[name='expire']:checked").val()
         }
+        if ($("input[name='target']:checked").val()) {
+            data['target'] = $("input[name='target']:checked").val()
+        }
         data['type'] = type
         $.ajax({
             method: 'POST',
@@ -244,7 +255,6 @@ ini_set('display_errors', 0);
                     console.log("code : 1 url : " + json['url'])
                 } else if (json['code'] === '0') {
                     document.getElementById('msg').innerHTML = json['msg']
-                    // console.log("code : 0 msg : " + json['msg'])
                 }
                 mdui.mutation()
             }
@@ -264,7 +274,6 @@ ini_set('display_errors', 0);
         let value = document.cookie.substring(start + prefix.length, end)
         return unescape(value);
     }
-
     function randomToken(len) {
         len = len || 16;
         let $chars = 'QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890';

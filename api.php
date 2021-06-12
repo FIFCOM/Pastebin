@@ -20,7 +20,9 @@ if ($action == 'createPastebin') {
         && isset($_REQUEST['expire']) && $_REQUEST['expire'] != '') {
         $json['code'] = '1';
         if (strlen($_REQUEST['pastebin']) <= PASTEBIN_MAX_LENGTH * 1024 && strlen($_REQUEST['title']) <= TITLE_MAX_LENGTH) {
-            $json['url'] = "" . $scheme . $SvrName . '/' . write($_REQUEST['pastebin'], $_REQUEST['title'], $_REQUEST['type'], $_REQUEST['expire']);
+            $url = write($_REQUEST['pastebin'], $_REQUEST['title'], $_REQUEST['type'], $_REQUEST['expire']);
+            if (isset($_REQUEST['target']) && $_REQUEST['target'] != '') {connectWrite($_COOKIE['uuid'], $_REQUEST['target'], $url);}
+            $json['url'] = $scheme . $SvrName . '/' . $url;
             $json['msg'] = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $json['url'] . '" target="_blank"><abbr title="打开链接">' . $json['url'] . '</abbr></a></code></span></div>';
         } else {
             $json['url'] = null;
@@ -38,10 +40,11 @@ if ($action == 'createPastebin') {
 if ($action == 'connect') {
     if ($uuid) {
         updateUUIDAlive($uuid);
-        if (connectQueryCache($uuid) != '')
+        $queryCacheUser = connectQueryCache($uuid);
+        if ($queryCacheUser != '')
         {
             $json['code'] = '2';
-            $json['user'] = connectQueryCache($uuid);
+            $json['user'] = $queryCacheUser;
         } else if (connectQueryList($uuid, 'displayed')) {
             $json['code'] = '3';
             $json['user'] = connectQueryList($uuid, 'from');

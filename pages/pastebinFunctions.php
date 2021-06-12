@@ -112,7 +112,11 @@ function connectQueryCache($uuid): string
     $time = time() - 10000;
     $result = mysqli_query($conn, "SELECT * FROM connect_cache WHERE target = '$uuid' AND time > '$time'");
     $row = mysqli_fetch_array($result);
-    if ($row) return $row['from'];
+    if ($row) {
+        $user = $row['from'];
+        mysqli_query($conn, "DELETE FROM `connect_cache` WHERE `target`='$uuid' AND `from`='$user'");
+        return $user;
+    }
     return '';
 }
 
@@ -121,16 +125,32 @@ function connectNew($uuid, $target): int
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
     $time = time();
-    $result = mysqli_query($conn, "SELECT * FROM connect_cache WHERE from = '$uuid' AND target = '$target'");
-
+    $result = mysqli_query($conn, "SELECT * FROM `connect_cache` WHERE `from`='$uuid' AND `target`='$target'");
     if (mysqli_fetch_array($result) == '') {
-        mysqli_query($conn, "INSERT INTO connect_cache (target,from,time) VALUES ('$target', '$from','$time')");
+        mysqli_query($conn, "INSERT INTO `connect_cache` (`target`, `from`, `time`) VALUES ('$target', '$uuid', '$time')");
+        mysqli_close($conn);
         return 1;
     } else {
-        mysqli_query($conn, "UPDATE connect_cache SET time='$time' WHERE from='$uuid'");
+        mysqli_query($conn, "UPDATE `connect_cache` SET `time`='$time' WHERE `from`='$uuid' AND `target`='$target'");
+        mysqli_close($conn);
         return 0;
     }
+}
 
+function connectWrite($uuid, $target, $url): int
+{
+    $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
+    if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
+    $result = mysqli_query($conn, "SELECT * FROM `connect_url_list` WHERE `url`='$url'");
+    $time = time();
+    if (mysqli_fetch_array($result) == '') {
+        mysqli_query($conn, "INSERT INTO `connect_url_list` (`url`, `target`, `from`, `time`, `displayed`) VALUES ('$url', '$target', '$uuid', '$time', '0')");
+        mysqli_close($conn);
+        return 1;
+    } else {
+        mysqli_close($conn);
+        return 0;
+    }
 }
 
 function connectQueryList($uuid, $col)
