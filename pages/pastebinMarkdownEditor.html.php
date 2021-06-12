@@ -188,21 +188,17 @@ ini_set('display_errors', 0);
             //data: getCookie("uuid"),
             success: function (data) {
                 let json = JSON.parse(data);
+                console.log(json['code'])
                 if (json['code'] === '1') {
-                    document.getElementById('msg').innerHTML = json['msg']
-                    $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
-                    $('#pastebin').val('')
-                    let qr = document.getElementById('qr-img')
-                    qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI(json['url'])
-                    console.log("code : 1 url : " + json['url'])
-                } else if (json['code'] === '2') {
+
+                } else if (json['code'] === '2' && json['user'] != null) {
                     mdui.snackbar({
                         message: json['user'] + '已连接'
                     });
-                } else if (json['code'] === '3') {
+                } else if (json['code'] === '3' && json['user'] != null && json['url'] != null) {
                     mdui.dialog({
                         title: json['user'] + '向你发送了一个Pastebin',
-                        content: "链接 : " + json['url'],
+                        content: "链接 : " + json['url'] + "<br> 标题 : " + json['title'],
                         buttons: [
                             {
                                 text: '关闭'
