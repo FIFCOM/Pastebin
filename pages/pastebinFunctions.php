@@ -153,7 +153,7 @@ function connectWrite($uuid, $target, $url): int
     }
 }
 
-function connectQueryList($uuid, $col)
+function connectQueryList($uuid, $displayed)
 {
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
@@ -163,11 +163,19 @@ function connectQueryList($uuid, $col)
     } else {
         $result = mysqli_query($conn, "SELECT * FROM connect_url_list WHERE target = '$uuid' AND displayed = '0' AND time > '$time'");
     }
-    while ($row = mysqli_fetch_array($result)) {
-        if (!$row) return 0;
-        if ($col == 'from') return $row['from'];
-        if ($col == 'url') return $row['url'];
+    $json['code'] = $displayed;
+    if (mysqli_fetch_array($result) == '') $json['code'] = '-1';
+    if ($displayed == '1') {
+        for ($i = 0;$row = mysqli_fetch_array($result);$i++) {
+            $json['url'][$i] = $row['url'];
+            $json['from'][$i] = $row['from'];
+        }
+    } else {
+        $row = mysqli_fetch_array($result);
+        $json['url'][0] = $row['url'];
+        $json['from'][0] = $row['from'];
     }
+    return json_encode($json, JSON_UNESCAPED_UNICODE);
 }
 
 function customURL()

@@ -8,12 +8,12 @@ $apikey = $_REQUEST['key'] ?? 0;
 
 // if (!checkApiPermission($uuid, $apikey)) {header('HTTP/1.0 403 Forbidden'); exit();}
 
-if ($action == "raw" && isset($_REQUEST['pb']) && $_REQUEST['pb'] != '') {
+if ($action === "raw" && isset($_REQUEST['pb']) && $_REQUEST['pb'] != '') {
     rawJson($_REQUEST['pb']);
     exit();
 }
 
-if ($action == 'createPastebin') {
+if ($action === 'createPastebin') {
     if (isset($_REQUEST['title']) && $_REQUEST['title'] != ''
         && isset($_REQUEST['pastebin']) && $_REQUEST['pastebin'] != ''
         && isset($_REQUEST['type']) && $_REQUEST['type'] != ''
@@ -37,7 +37,7 @@ if ($action == 'createPastebin') {
     exit();
 }
 
-if ($action == 'connect') {
+if ($action === 'connect') {
     if ($uuid) {
         updateUUIDAlive($uuid);
         $queryCacheUser = connectQueryCache($uuid);

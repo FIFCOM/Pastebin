@@ -194,7 +194,8 @@ ini_set('display_errors', 0);
                 if (json['code'] === '1') {
 
                 } else if (json['code'] === '2' && json['user'] != null) {
-                    document.cookie="connect_target_uuid=" + json['user']
+                    //document.cookie="connect_target_uuid=" + json['user']
+                    setCookie("connect_target_uuid", json['user'], 3600)
                     document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
                     + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
                     + '<input type="checkbox" name="target" value="'
@@ -273,6 +274,12 @@ ini_set('display_errors', 0);
         }
         let value = document.cookie.substring(start + prefix.length, end)
         return unescape(value);
+    }
+    function setCookie(name, val, time) {
+        let d = new Date();
+        d.setTime(d.getTime() + time*1000);
+        let expires = "expires="+d.toUTCString();
+        document.cookie = name + "=" + val + "; " + expires;
     }
     function randomToken(len) {
         len = len || 16;
