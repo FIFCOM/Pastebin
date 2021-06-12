@@ -41,14 +41,15 @@ if ($action === 'connect') {
     if ($uuid) {
         updateUUIDAlive($uuid);
         $queryCacheUser = connectQueryCache($uuid);
+        $connectQueryListJson = json_decode(connectQueryList($uuid, '0'), true);
         if ($queryCacheUser != '')
         {
             $json['code'] = '2';
             $json['user'] = $queryCacheUser;
-        } else if (connectQueryList($uuid, 'displayed')) {
+        } else if ($connectQueryListJson['code'] !== '-1') {
             $json['code'] = '3';
-            $json['user'] = connectQueryList($uuid, 'from');
-            $pb = connectQueryList($uuid, 'url');
+            $json['user'] = $connectQueryListJson['from'][0];
+            $pb = $connectQueryListJson['url'][0];
             $id = getSubString(base64_decode($pb), "$", "+");
             $key = dechex(crc32(getSubString(base64_decode($pb), "+", "-")));
             $json['host'] = $scheme . $SvrName . '/' ;

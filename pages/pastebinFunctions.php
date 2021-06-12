@@ -158,15 +158,15 @@ function connectQueryList($uuid, $displayed)
     $conn = mysqli_connect(PASTEBIN_DB_HOSTNAME, PASTEBIN_DB_USERNAME, PASTEBIN_DB_PASSWORD, PASTEBIN_DB_NAME);
     if (mysqli_connect_errno()) echo "FIFCOM Pastebin MySQL Connect Error : " . mysqli_connect_error();
     $time = time() - 10000;
-    if ($col == 'displayed') {
+    if ($displayed == '1') {
         $result = mysqli_query($conn, "SELECT * FROM connect_url_list WHERE target = '$uuid' AND time > '$time'");
     } else {
         $result = mysqli_query($conn, "SELECT * FROM connect_url_list WHERE target = '$uuid' AND displayed = '0' AND time > '$time'");
     }
     $json['code'] = $displayed;
-    if (mysqli_fetch_array($result) == '') $json['code'] = '-1';
     if ($displayed == '1') {
         for ($i = 0;$row = mysqli_fetch_array($result);$i++) {
+            //if (mysqli_fetch_array($result) == '') $json['code'] = '-1';
             $json['url'][$i] = $row['url'];
             $json['from'][$i] = $row['from'];
         }
