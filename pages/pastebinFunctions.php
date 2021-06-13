@@ -164,9 +164,9 @@ function connectQueryList($uuid, $displayed)
         $result = mysqli_query($conn, "SELECT * FROM connect_url_list WHERE target = '$uuid' AND displayed = '0' AND time > '$time'");
     }
     $json['code'] = $displayed;
+    if (!mysqli_num_rows($result)) $json['code'] = '-1';
     if ($displayed == '1') {
         for ($i = 0;$row = mysqli_fetch_array($result);$i++) {
-            //if (mysqli_fetch_array($result) == '') $json['code'] = '-1';
             $json['url'][$i] = $row['url'];
             $json['from'][$i] = $row['from'];
         }
@@ -174,7 +174,10 @@ function connectQueryList($uuid, $displayed)
         $row = mysqli_fetch_array($result);
         $json['url'][0] = $row['url'];
         $json['from'][0] = $row['from'];
+        $url = $row['url'];
+        mysqli_query($conn, "UPDATE `connect_url_list` SET `displayed`='1' WHERE `url`='$url'");
     }
+    mysqli_close($conn);
     return json_encode($json, JSON_UNESCAPED_UNICODE);
 }
 

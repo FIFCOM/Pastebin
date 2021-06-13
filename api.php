@@ -42,6 +42,7 @@ if ($action === 'connect') {
         updateUUIDAlive($uuid);
         $queryCacheUser = connectQueryCache($uuid);
         $connectQueryListJson = json_decode(connectQueryList($uuid, '0'), true);
+        //echo $connectQueryListJson['code'];
         if ($queryCacheUser != '')
         {
             $json['code'] = '2';

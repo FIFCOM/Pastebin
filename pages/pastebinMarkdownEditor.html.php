@@ -187,14 +187,12 @@ ini_set('display_errors', 0);
         $.ajax({
             method: 'POST',
             url: '<?=$scheme?><?=$SvrName?>/api.php?action=connect&uuid=' + getCookie("uuid"),
-            //data: getCookie("uuid"),
             success: function (data) {
                 let json = JSON.parse(data);
                 console.log(json['code'])
                 if (json['code'] === '1') {
 
                 } else if (json['code'] === '2' && json['user'] != null) {
-                    //document.cookie="connect_target_uuid=" + json['user']
                     setCookie("connect_target_uuid", json['user'], 3600)
                     document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
                     + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
@@ -206,8 +204,8 @@ ini_set('display_errors', 0);
                     });
                 } else if (json['code'] === '3' && json['user'] != null && json['url'] != null) {
                     mdui.dialog({
-                        title: json['user'] + '向你发送了一个Pastebin',
-                        content: "链接 : " + json['url'] + "<br> 标题 : " + json['title'],
+                        title: json['user'].substr(0,6) + '向你发送了一个Pastebin',
+                        content: "链接 : " + json['host'] + json['url'] + "<br> 标题 : " + json['title'],
                         buttons: [
                             {
                                 text: '关闭'
