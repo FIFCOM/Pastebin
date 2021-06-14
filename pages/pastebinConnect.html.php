@@ -38,13 +38,12 @@ ini_set('display_errors', 0);
 </header>
 
 <div class="mdui-container doc-container">
-
-
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <div class="mdui-card-primary mdui-typo">
-                <div class="mdui-typo" id="msg"></div>
+
             </div>
+            <div class="mdui-typo" id="msg"></div>
         </div>
 </div>
 
@@ -54,16 +53,48 @@ ini_set('display_errors', 0);
 ></script>
 <script>
     let $ = mdui.$;
-
     window.onload = function () {
-        if (document.cookie.indexOf("connect_target_uuid=") !== -1) {
-            document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
-                + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
-                + '<input type="checkbox" name="target" value="'
-                + getCookie('connect_target_uuid') + '"/><i class="mdui-checkbox-icon"></i>'
-                + '发送给' + getCookie('connect_target_uuid').substr(0,6)  + '</label></div></div><br>'
+        document.getElementById('msg').innerHTML = '<div class="mdui-spinner mdui-spinner-colorful center"></div><br><div class="center">正在连接...</div><br>'
+        let reg = new RegExp("(^|&)" + 'ref' + "=([^&]*)(&|$)", "i")
+        let r = window.location.search.substr(1).match(reg)
+        let target
+        if (r != null) target =  unescape(r[2])
+        console.log(target)
+        if (document.cookie.indexOf("connect_target_uuid=") !== -1 && document.cookie.indexOf("connect_target_uuid=") === target) {
+            window.location.href = '<?=$scheme?><?=$SvrName?>'
         }
         window.setInterval(pastebinConnectNew, 2000);
+    }
+
+    function pastebinConnectNew() {
+        let reg = new RegExp("(^|&)" + 'ref' + "=([^&]*)(&|$)", "i")
+        let r = window.location.search.substr(1).match(reg)
+        let target
+        if (r != null) target =  unescape(r[2])
+        let data = {}
+        data['target'] = target
+        console.log(target)
+        $.ajax({
+            method: 'POST',
+            url: '<?=$scheme?><?=$SvrName?>/api.php?action=connectNew&uuid=' + getCookie("uuid"),
+            data: data,
+            complete: function (data) {
+                //console.log(data.responseText)
+                let json = JSON.parse(data.responseText);
+                console.log(json['code'])
+                if (json['code'] === 2) {
+                    // connected , write cookie and redirect
+                    setCookie("connect_target_uuid", target, 3600)
+                    window.location.href = '<?=$scheme?><?=$SvrName?>'
+                } else if (json['code'] === 1) {
+                    // waiting
+                    document.getElementById('msg').innerHTML = '<div class="mdui-spinner mdui-spinner-colorful center"></div><br><div class="center">正在连接...</div><br>'
+                } else if (json['code'] === 0) {
+                    // connect error , end
+                    document.getElementById('msg').innerHTML = '<div class="center mdui-typo">对方可能不在线</div><br>'
+                }
+            }
+        })
     }
 
 

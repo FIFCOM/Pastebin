@@ -65,3 +65,13 @@ if ($action === 'connect') {
     echo json_encode($json, JSON_UNESCAPED_UNICODE);
     exit();
 }
+
+if ($action === 'connectNew') {
+    if (isset($_REQUEST['target']) && $_REQUEST['target'] != '' && checkTargetUUIDAlive($_REQUEST['target'])) {
+        $json['code'] = connectNew($uuid, $_REQUEST['target']) + 1;   // code = 1 : update, code = 2 : new
+    } else {
+        $json['code'] = 0;
+    }
+    echo json_encode($json, JSON_UNESCAPED_UNICODE);
+    exit();
+}
