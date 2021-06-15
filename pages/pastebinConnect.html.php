@@ -41,9 +41,10 @@ ini_set('display_errors', 0);
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <div class="mdui-card-primary mdui-typo">
-
+                <div id="msg"><div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>正在连接...<br></div>
+                </div>
             </div>
-            <div class="mdui-typo" id="msg"></div>
+
         </div>
 </div>
 
@@ -54,7 +55,6 @@ ini_set('display_errors', 0);
 <script>
     let $ = mdui.$;
     window.onload = function () {
-        document.getElementById('msg').innerHTML = '<div class="mdui-spinner mdui-spinner-colorful center"></div><br><div class="center">正在连接...</div><br>'
         let reg = new RegExp("(^|&)" + 'ref' + "=([^&]*)(&|$)", "i")
         let r = window.location.search.substr(1).match(reg)
         let target
@@ -63,6 +63,20 @@ ini_set('display_errors', 0);
         if (document.cookie.indexOf("connect_target_uuid=") !== -1 && document.cookie.indexOf("connect_target_uuid=") === target) {
             window.location.href = '<?=$scheme?><?=$SvrName?>'
         }
+        let data = {}
+        data['target'] = target
+        $.ajax({
+            method: 'POST',
+            url: '<?=$scheme?><?=$SvrName?>/api.php?action=connectNew&uuid=' + getCookie("uuid"),
+            data: data,
+            complete: function (data) {
+                let json = JSON.parse(data.responseText);
+                console.log(json['code'])
+                if (json['code'] === 0) {
+                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>对方可能不在线,重连中...<br></div>'
+                }
+            }
+        })
         window.setInterval(pastebinConnectNew, 2000);
     }
 
@@ -88,10 +102,10 @@ ini_set('display_errors', 0);
                     window.location.href = '<?=$scheme?><?=$SvrName?>'
                 } else if (json['code'] === 1) {
                     // waiting
-                    document.getElementById('msg').innerHTML = '<div class="mdui-spinner mdui-spinner-colorful center"></div><br><div class="center">正在连接...</div><br>'
+                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>正在连接...<br></div>'
                 } else if (json['code'] === 0) {
                     // connect error , end
-                    document.getElementById('msg').innerHTML = '<div class="center mdui-typo">对方可能不在线</div><br>'
+                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>对方可能不在线,重连中...<br></div>'
                 }
             }
         })
