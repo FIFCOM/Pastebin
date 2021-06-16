@@ -41,8 +41,15 @@ ini_set('display_errors', 0);
     <div class="mdui-textfield mdui-textfield-floating-label mdui-textfield-not-empty">
         <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
             <div class="mdui-card-primary mdui-typo">
-                <div id="msg"><div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>正在连接...<br></div>
+                <div id="msg"><div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br><strong>正在连接...</strong><br></div>
                 </div>
+            </div>
+
+        </div>
+
+        <div class="mdui-card" style="margin-top: 15px;border-radius:10px">
+            <div class="mdui-card-primary mdui-typo">
+                <a href="./" class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent mdui-btn-block"><strong>返回主页</strong></a>
             </div>
 
         </div>
@@ -60,24 +67,25 @@ ini_set('display_errors', 0);
         let target
         if (r != null) target =  unescape(r[2])
         console.log(target)
-        if (document.cookie.indexOf("connect_target_uuid=") !== -1 && document.cookie.indexOf("connect_target_uuid=") === target) {
+        if (getCookie("uuid") === target) {
             window.location.href = '<?=$scheme?><?=$SvrName?>'
-        }
-        let data = {}
-        data['target'] = target
-        $.ajax({
-            method: 'POST',
-            url: '<?=$scheme?><?=$SvrName?>/api.php?action=connectNew&uuid=' + getCookie("uuid"),
-            data: data,
-            complete: function (data) {
-                let json = JSON.parse(data.responseText);
-                console.log(json['code'])
-                if (json['code'] === 0) {
-                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>对方可能不在线,重连中...<br></div>'
+        } else {
+            let data = {}
+            data['target'] = target
+            $.ajax({
+                method: 'POST',
+                url: '<?=$scheme?><?=$SvrName?>/api.php?action=connectNew&uuid=' + getCookie("uuid"),
+                data: data,
+                complete: function (data) {
+                    let json = JSON.parse(data.responseText);
+                    console.log(json['code'])
+                    if (json['code'] === 0) {
+                        document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br><strong>对方可能不在线,重连中...</strong><br></div>'
+                    }
                 }
-            }
-        })
-        window.setInterval(pastebinConnectNew, 2000);
+            })
+            window.setInterval(pastebinConnectNew, 2000);
+        }
     }
 
     function pastebinConnectNew() {
@@ -102,10 +110,10 @@ ini_set('display_errors', 0);
                     window.location.href = '<?=$scheme?><?=$SvrName?>'
                 } else if (json['code'] === 1) {
                     // waiting
-                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>正在连接...<br></div>'
+                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br><strong>正在连接...</strong><br></div>'
                 } else if (json['code'] === 0) {
                     // connect error , end
-                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br>对方可能不在线,重连中...<br></div>'
+                    document.getElementById('msg').innerHTML = '<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div><div class="center mdui-typo"><br><strong>对方可能不在线,重连中...</strong><br></div>'
                 }
             }
         })

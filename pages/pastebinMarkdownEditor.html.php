@@ -192,15 +192,15 @@ ini_set('display_errors', 0);
                 console.log(json['code'])
                 if (json['code'] === '1') {
 
-                } else if (json['code'] === '2' && json['user'] != null) {
+                } else if (json['code'] === '2' && json['user'] != null && getCookie("connect_target_uuid") !== json['user']) {
                     setCookie("connect_target_uuid", json['user'], 3600)
                     document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
-                    + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
-                    + '<input type="checkbox" name="target" value="'
-                    + json['user'] + '"/><i class="mdui-checkbox-icon"></i>'
-                    + '发送给' + json['user'].substr(0,6) + '</label></div></div><br>'
+                        + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
+                        + '<input type="checkbox" name="target" value="'
+                        + json['user'] + '"/><i class="mdui-checkbox-icon"></i>'
+                        + '发送给' + json['user'].substr(0,6) + '</label></div></div><br>'
                     mdui.snackbar({
-                        message: json['user'] + '已连接'
+                        message: json['user'].substr(0,6) + '已连接'
                     });
                 } else if (json['code'] === '3' && json['user'] != null && json['url'] != null) {
                     mdui.dialog({
