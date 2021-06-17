@@ -40,7 +40,7 @@ if ($action === 'createPastebin') {
 if ($action === 'connect') {
     if ($uuid) {
         updateUUIDAlive($uuid);
-        $queryCacheUser = connectQueryCache($uuid);
+        $queryCacheUser = connectQueryCache($uuid); // BUG
         $connectQueryListJson = json_decode(connectQueryList($uuid, '0'), true);
         //echo $connectQueryListJson['code'];
         if ($queryCacheUser != '')
