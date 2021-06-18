@@ -164,7 +164,7 @@ ini_set('display_errors', 0);
         window.setInterval(pastebinConnect, 5000);
     }
 
-    function pastebinConnect() {
+    function pastebinConnect() { // bug
         $.ajax({
             method: 'POST',
             url: '<?=$scheme?><?=$SvrName?>/api.php?action=connect&uuid=' + getCookie("uuid"),
