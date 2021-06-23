@@ -151,7 +151,7 @@ ini_set('display_errors', 0);
 <script>
     let $ = mdui.$;
 
-    window.onload = function () {
+    window.onload = function () { //
         let qr = document.getElementById('qr-img')
         qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
         if (document.cookie.indexOf("connect_target_uuid=") !== -1) {
