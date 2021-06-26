@@ -171,7 +171,7 @@ ini_set('display_errors', 0);
             success: function (data) {
                 let json = JSON.parse(data);
                 console.log(json['code'])
-                if (json['code'] === '1') { //
+                if (json['code'] === '1') {
 
                 } else if (json['code'] === '2' && json['user'] != null && getCookie("connect_target_uuid") !== json['user']) {
                     setCookie("connect_target_uuid", json['user'], 3600)
