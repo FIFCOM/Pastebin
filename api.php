@@ -23,8 +23,7 @@ if ($action === 'createPastebin') {
             $url = write($_REQUEST['pastebin'], $_REQUEST['title'], $_REQUEST['type'], $_REQUEST['expire']);
             if (isset($_REQUEST['target']) && $_REQUEST['target'] != '') {connectWrite($_COOKIE['uuid'], $_REQUEST['target'], $url);}
             $json['url'] = $scheme . $SvrName . '/' . $url;
-            $json['msg'] = '<div style="color:#26A69A">√ 创建成功 链接: <span><code><a href="' . $json['url'] . '" target="_blank"><abbr title="打开链接">' . $json['url'] . '</abbr></a></code></span></div>';
-            // 改: 输出raw链，样式由js决定
+            $json['msg'] = $json['url']; // 输出raw链，样式由js决定
         } else {
             $json['url'] = null;
             $json['msg'] = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
