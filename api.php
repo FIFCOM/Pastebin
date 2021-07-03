@@ -14,20 +14,27 @@ if ($action === "raw" && isset($_REQUEST['pb']) && $_REQUEST['pb'] != '') {
 }
 
 if ($action === 'createPastebin') {
+    /*
+     * ['code'] : String
+     * '0'  : Incomplete param.
+     * '-1' : Param is too long.
+     * '1'  : Created successfully!
+     */
     if (isset($_REQUEST['title']) && $_REQUEST['title'] != ''
         && isset($_REQUEST['pastebin']) && $_REQUEST['pastebin'] != ''
         && isset($_REQUEST['type']) && $_REQUEST['type'] != ''
         && isset($_REQUEST['expire']) && $_REQUEST['expire'] != '') {
-        $json['code'] = '1';
+
         if (strlen($_REQUEST['pastebin']) <= PASTEBIN_MAX_LENGTH * 1024 && strlen($_REQUEST['title']) <= TITLE_MAX_LENGTH) {
             $url = write($_REQUEST['pastebin'], $_REQUEST['title'], $_REQUEST['type'], $_REQUEST['expire']);
             if (isset($_REQUEST['target']) && $_REQUEST['target'] != '') {connectWrite($_COOKIE['uuid'], $_REQUEST['target'], $url);}
+            $json['code'] = '1';
             $json['url'] = $scheme . $SvrName . '/' . $url;
             $json['msg'] = $json['url']; // 输出raw链，样式由js决定
         } else {
+            $json['code'] = '-1';
             $json['url'] = null;
-            $json['msg'] = '<div style="color:#e82424">× 标题过长(应少于' . TITLE_MAX_LENGTH . '字)或内容过大(应小于' . PASTEBIN_MAX_LENGTH . 'KB)[PB_TOO_BIG]</div>';
-            // 改: 输出错误代码，样式由js决定
+            $json['msg'] = null; // 输出错误代码，样式由js决定
         }
     } else {
         $json['code'] = '0';
