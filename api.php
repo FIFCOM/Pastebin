@@ -19,6 +19,7 @@ if ($action === 'createPastebin') {
      * '0'  : Incomplete param.
      * '-1' : Param is too long.
      * '1'  : Created successfully!
+     *
      */
     if (isset($_REQUEST['title']) && $_REQUEST['title'] != ''
         && isset($_REQUEST['pastebin']) && $_REQUEST['pastebin'] != ''
