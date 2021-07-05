@@ -4,6 +4,11 @@ if (!defined('PASTEBIN_VERSION')) {
     exit();
 }
 
+/**
+ * 生成指定长度的随机字符串
+ * @param $strLength
+ * @return string
+ */
 function randomToken($strLength): string
 {
     $str = 'qwertyuiopasdfghjklzxcvbnm';
@@ -18,27 +23,57 @@ function randomToken($strLength): string
     return $token;
 }
 
+/**
+ * 使用 aes-128-cbc 加密数据
+ * @param $data
+ * @param $password
+ * @return false|string
+ */
 function encrypt($data, $password)
 {
     return openssl_encrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
+/**
+ * 使用 aes-128-cbc 解密数据
+ * @param $data
+ * @param $password
+ * @return false|string
+ */
 function decrypt($data, $password)
 {
     return openssl_decrypt($data, 'aes-128-cbc', $password, OPENSSL_RAW_DATA, PASTEBIN_SECURITY_TOKEN);
 }
 
+/**
+ * @param $string
+ * @param $start
+ * @param $end
+ * @return false|string
+ */
 function getSubString($string, $start, $end)
 {
     return substr($string, strlen($start) + strpos($string, $start),
         (strlen($string) - strpos($string, $end)) * (-1));
 }
 
+/**
+ * 生成随机的Pastebin标题
+ * @return string
+ */
 function pastebinTitle(): string
 {
     return '未命名的Pastebin-ID.' . randomToken(8);
 }
 
+/**
+ * 写入 Pastebin
+ * @param $pastebin
+ * @param $title
+ * @param $viewer
+ * @param $expire
+ * @return string
+ */
 function write($pastebin, $title, $viewer, $expire): string
 {
     $pastebinCryptPassword = randomToken(8);
@@ -72,6 +107,13 @@ function write($pastebin, $title, $viewer, $expire): string
     }
 }
 
+/**
+ * 读取 Pastebin
+ * @param $fileName
+ * @param $cryptPassword
+ * @param $type
+ * @return false|int|string
+ */
 function view($fileName, $cryptPassword, $type)
 {
     $dataRealCryptPassword = hash("sha256", "$cryptPassword");
