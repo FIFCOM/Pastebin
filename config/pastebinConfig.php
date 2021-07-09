@@ -22,7 +22,7 @@ const PASTEBIN_SECURITY_TOKEN = 'pastebin11451419'; // any string , strlen(PASTE
 const PASTEBIN_CRON_TOKEN = '123456'; // any string , strlen(PASTEBIN_CRON_TOKEN) <= 1024
 
 // ====== Others ======
-const PASTEBIN_VERSION = 'v2.0 (Beta 2106)';
+const PASTEBIN_VERSION = 'v2.0 (Beta 2107)';
 const SITE_URL = '';
 
 error_reporting(E_ALL);
