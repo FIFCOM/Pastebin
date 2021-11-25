@@ -172,7 +172,7 @@ ini_set('display_errors', 0);
 
     window.onload = function () {
         let qr = document.getElementById('qr-img')
-        qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
+        qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
         if (document.cookie.indexOf("connect_target_uuid=") !== -1) {
             document.getElementById('connect_card').innerHTML = '<div class="mdui-card" style="margin-top: 15px;border-radius:10px">'
                 + '<div class="mdui-card-primary mdui-typo"><label class="mdui-checkbox">'
