@@ -250,7 +250,7 @@ ini_set('display_errors', 0);
                     $('#title').val('未命名的Pastebin-ID.' + randomToken(8))
                     $('#pastebin').val('')
                     let qr = document.getElementById('qr-img')
-                    qr.src = "https://www.zhihu.com/qrcode?url=" + encodeURI(json['url'])
+                    qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURI("<?=$scheme?><?=$SvrName?>/?ref=" + getCookie("uuid"))
                     console.log("code : 1 url : " + json['url'])
                 } else if (json['code'] === '0') {
                     document.getElementById('msg').innerHTML = json['msg']

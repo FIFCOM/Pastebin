@@ -137,7 +137,8 @@ function validateRawAccessToken($token, $id, $key): int
 
 function QRUri($string, $encode): string
 {
-    return $encode ? 'https://www.zhihu.com/qrcode?url=' . urlencode($string) : 'https://www.zhihu.com/qrcode?url=' . $string;
+    return $encode ? "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($string) :
+        "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . $string;
 }
 
 function setUUID(): string
