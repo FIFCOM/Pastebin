@@ -1,5 +1,7 @@
 <?php
+require_once("config/pastebinConfig.php");
 require_once("pages/pastebinFunctions.php");
+
 $pastebinFileName = $_REQUEST['id'] ?? "0";
 $pastebinCryptPassword = $_REQUEST['key'] ?? "0";
 $pastebinRawAccessToken = $_REQUEST['token'] ?? 0;
