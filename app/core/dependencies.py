@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import verify_token
 from app.schemas.user import UserResponse
+from app.services.api_key_service import ApiKeyService
 from app.services.user_service import UserService
 
 # HTTP Bearer 安全方案
@@ -22,6 +23,10 @@ async def get_current_user(
     """
     获取当前用户
 
+    支持两种认证方式：
+    1. Session Token (JWT)
+    2. API Key (以 pk_ 开头)
+
     Args:
         credentials: HTTP Bearer 凭据
         db: 数据库会话
@@ -32,8 +37,21 @@ async def get_current_user(
     Raises:
         HTTPException: 当token无效或用户不存在时
     """
-    # 验证token
-    payload = verify_token(credentials.credentials)
+    token = credentials.credentials
+
+    # 检查是否为API Key（以pk_开头）
+    if token.startswith("pk_"):
+        user = ApiKeyService.authenticate_api_key(db, token)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的API密钥",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+
+    # 否则作为Session Token处理
+    payload = verify_token(token)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,6 +86,10 @@ async def get_optional_user(
 ) -> UserResponse | None:
     """
     获取可选的当前用户（可以为空）
+
+    支持两种认证方式：
+    1. Session Token (JWT)
+    2. API Key (以 pk_ 开头)
 
     Args:
         credentials: HTTP Bearer 凭据（可选）

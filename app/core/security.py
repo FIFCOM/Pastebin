@@ -176,6 +176,44 @@ def generate_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def generate_api_key() -> str:
+    """
+    生成API密钥
+
+    Returns:
+        格式为 'pk_' + 32字符随机字符串的API密钥
+    """
+    random_part = secrets.token_urlsafe(24)  # 生成32个字符的随机部分
+    return f"pk_{random_part}"
+
+
+def hash_api_key(api_key: str) -> str:
+    """
+    哈希API密钥
+
+    Args:
+        api_key: API密钥明文
+
+    Returns:
+        哈希后的API密钥
+    """
+    return pwd_context.hash(api_key)
+
+
+def verify_api_key(plain_api_key: str, hashed_api_key: str) -> bool:
+    """
+    验证API密钥
+
+    Args:
+        plain_api_key: 明文API密钥
+        hashed_api_key: 哈希后的API密钥
+
+    Returns:
+        API密钥是否正确
+    """
+    return pwd_context.verify(plain_api_key, hashed_api_key)
+
+
 def bytes_to_str(data: bytes) -> str:
     """将字节转换为base64字符串"""
     return base64.b64encode(data).decode()

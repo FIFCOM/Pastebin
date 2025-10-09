@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.controllers import health_router, user_router
+from app.controllers import api_key_router, health_router, user_router
 from app.core.init_db import init_database
 from config.config import settings, validate_config
 
@@ -69,6 +69,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(health_router)
 app.include_router(user_router)
+app.include_router(api_key_router)
 
 
 # 全局异常处理

@@ -82,7 +82,7 @@ class UserService:
         db.commit()
         db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
     def authenticate_user(db: Session, login_data: UserLoginRequest) -> User | None:
@@ -100,7 +100,7 @@ class UserService:
         if not user:
             return None
 
-        if not verify_password(login_data.password, str(user.password_hash)):
+        if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
 
         return user
@@ -126,8 +126,8 @@ class UserService:
 
         # 恢复用户密钥
         try:
-            salt = str_to_bytes(str(user.salt))
-            encrypted_user_key = str_to_bytes(str(user.encrypted_user_key))
+            salt = str_to_bytes(user.salt)  # type: ignore
+            encrypted_user_key = str_to_bytes(user.encrypted_user_key)  # type: ignore
             user_key = recover_user_key(login_data.password, salt, encrypted_user_key)
         except Exception as e:
             raise ValueError(f"密钥恢复失败: {str(e)}") from e
@@ -144,7 +144,7 @@ class UserService:
             minutes=settings.access_token_expire_minutes
         )
         session = UserSession(
-            user_id=user.id,
+            user_id=user.id,  # type: ignore
             session_token=session_token,
             encrypted_session_key=bytes_to_str(encrypted_session_key),
             expires_at=expires_at,
@@ -161,26 +161,26 @@ class UserService:
         return LoginResponse(
             access_token=access_token,
             token_type="bearer",
-            user=UserResponse.model_validate(user),
+            user=UserResponse.model_validate(user),  # type: ignore
         )
 
     @staticmethod
     def get_user_by_id(db: Session, user_id: int) -> UserResponse | None:
         """根据ID获取用户"""
         user = db.query(User).filter(User.id == user_id).first()
-        return UserResponse.model_validate(user) if user else None
+        return UserResponse.model_validate(user) if user else None  # type: ignore
 
     @staticmethod
     def get_user_by_username(db: Session, username: str) -> UserResponse | None:
         """根据用户名获取用户"""
         user = db.query(User).filter(User.username == username).first()
-        return UserResponse.model_validate(user) if user else None
+        return UserResponse.model_validate(user) if user else None  # type: ignore
 
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> UserResponse | None:
         """根据邮箱获取用户"""
         user = db.query(User).filter(User.email == email).first()
-        return UserResponse.model_validate(user) if user else None
+        return UserResponse.model_validate(user) if user else None  # type: ignore
 
     @staticmethod
     def update_user(
@@ -230,7 +230,7 @@ class UserService:
         db.commit()
         db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
     def delete_user(db: Session, user_id: int) -> bool:
@@ -275,7 +275,7 @@ class UserService:
         total = db.query(User).count()
 
         return UserListResponse(
-            users=[UserResponse.model_validate(user) for user in users],
+            users=[UserResponse.model_validate(user) for user in users],  # type: ignore
             total=total,
             page=page,
             size=size,
@@ -333,13 +333,13 @@ class UserService:
         db.commit()
         db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
     def get_user_sessions(db: Session, user_id: int) -> list[SessionResponse]:
         """获取用户的所有会话"""
         sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
-        return [SessionResponse.model_validate(session) for session in sessions]
+        return [SessionResponse.model_validate(session) for session in sessions]  # type: ignore
 
     @staticmethod
     def revoke_session(
