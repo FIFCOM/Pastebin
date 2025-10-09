@@ -1,0 +1,56 @@
+[project]
+name = "material-bin"
+version = "0.1.0"
+description = "An open-source Pastebin with Material Design, data encrypted with AES-256-GCM, and enhanced features including file upload and sharing."
+authors = [{name = "FIFCOM"}]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "cryptography>=46.0.2",
+    "email-validator>=2.3.0",
+    "fastapi>=0.118.2",
+    "passlib[bcrypt]>=1.7.4",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.11.0",
+    "pymysql>=1.1.2",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.43",
+    "uvicorn>=0.37.0",
+]
+
+# dependency 需要通过uv命令来更新和安装
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13.2",
+]
+
+[tool.ruff]
+line-length = 88
+
+target-version = "py312"
+
+exclude = [
+    ".git",
+    ".venv",
+    "__pypackages__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+ignore = ["E501", "B008"]
+
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+indent-style = "space"
