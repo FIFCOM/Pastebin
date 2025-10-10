@@ -11,9 +11,13 @@ from app.schemas.common import MessageResponse
 from app.schemas.user import (
     LoginResponse,
     SessionResponse,
+    TotpSetupResponse,
+    TotpStatusResponse,
+    TotpVerifyRequest,
     UserCreateRequest,
     UserListResponse,
     UserLoginRequest,
+    UserLoginWithTotpRequest,
     UserRegisterRequest,
     UserResponse,
     UserUpdateRequest,
@@ -53,6 +57,28 @@ async def login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)
     """
     try:
         login_response = UserService.login_user(db, login_data)
+        return login_response
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+
+@router.post("/login-totp", response_model=LoginResponse)
+async def login_user_with_totp(
+    login_data: UserLoginWithTotpRequest, db: Session = Depends(get_db)
+):
+    """
+    用户TOTP登录
+
+    - **username**: 用户名
+    - **password**: SHA256哈希后的密码
+    - **totp_code**: 6位TOTP验证码
+    """
+    try:
+        login_response = UserService.login_user_with_totp(db, login_data)
         return login_response
     except ValueError as e:
         raise HTTPException(
@@ -216,3 +242,84 @@ async def cleanup_expired_sessions(
     """清理过期会话（管理功能）"""
     count = UserService.cleanup_expired_sessions(db)
     return MessageResponse(message=f"已清理 {count} 个过期会话")
+
+
+@router.get("/me/totp", response_model=TotpStatusResponse)
+async def get_totp_status(
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    获取当前用户的TOTP状态
+    """
+    try:
+        return UserService.get_totp_status(db, current_user.id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from None
+
+
+@router.post("/me/totp", response_model=TotpSetupResponse)
+async def setup_totp(
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    设置TOTP两步验证
+
+    返回TOTP密钥和二维码，用户需要用验证器应用扫描后调用verify接口验证启用
+    """
+    try:
+        return UserService.setup_totp(db, current_user.id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
+@router.post("/me/totp/verify", response_model=MessageResponse)
+async def verify_totp(
+    totp_data: TotpVerifyRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    验证并启用TOTP
+
+    - **totp_code**: 6位TOTP验证码
+    """
+    try:
+        success = UserService.verify_and_enable_totp(db, current_user.id, totp_data)
+        if success:
+            return MessageResponse(message="TOTP验证成功，两步验证已启用")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="TOTP验证码错误"
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
+@router.delete("/me/totp", response_model=MessageResponse)
+async def disable_totp(
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    禁用TOTP两步验证
+    """
+    try:
+        success = UserService.disable_totp(db, current_user.id)
+        if success:
+            return MessageResponse(message="TOTP两步验证已禁用")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="禁用TOTP失败"
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from None

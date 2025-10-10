@@ -42,12 +42,37 @@ class UserLoginRequest(BaseModel):
         return v.lower()
 
 
+class UserLoginWithTotpRequest(BaseModel):
+    """用户TOTP登录请求"""
+
+    username: str = Field(..., description="用户名")
+    password: str = Field(
+        ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
+    )
+    totp_code: str = Field(..., min_length=6, max_length=6, description="6位TOTP验证码")
+
+    @validator("password")
+    def validate_password_hash(cls, v):
+        """验证密码是否为有效的SHA256哈希"""
+        if not all(c in "0123456789abcdefABCDEF" for c in v):
+            raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
+        return v.lower()
+
+    @validator("totp_code")
+    def validate_totp_code(cls, v):
+        """验证TOTP代码格式"""
+        if not v.isdigit():
+            raise ValueError("TOTP代码必须是6位数字")
+        return v
+
+
 class UserResponse(BaseModel):
     """用户响应"""
 
     id: int
     username: str
     email: str | None
+    totp_enabled: bool = False  # 是否启用TOTP
     created_at: datetime
 
     class Config:
@@ -116,3 +141,30 @@ class UserCreateRequest(BaseModel):
         if not all(c in "0123456789abcdefABCDEF" for c in v):
             raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
         return v.lower()
+
+
+class TotpSetupResponse(BaseModel):
+    """TOTP设置响应"""
+
+    secret: str = Field(..., description="TOTP密钥")
+    qr_code_url: str = Field(..., description="二维码图片的base64编码")
+
+
+class TotpVerifyRequest(BaseModel):
+    """TOTP验证请求"""
+
+    totp_code: str = Field(..., min_length=6, max_length=6, description="6位TOTP验证码")
+
+    @validator("totp_code")
+    def validate_totp_code(cls, v):
+        """验证TOTP代码格式"""
+        if not v.isdigit():
+            raise ValueError("TOTP代码必须是6位数字")
+        return v
+
+
+class TotpStatusResponse(BaseModel):
+    """TOTP状态响应"""
+
+    enabled: bool = Field(..., description="是否已启用TOTP")
+    setup_required: bool = Field(default=False, description="是否需要设置TOTP")

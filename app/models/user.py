@@ -26,6 +26,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)  # bcrypt加密的密码
     salt = Column(String(255), nullable=False)  # 用于派生 master_key
     encrypted_user_key = Column(Text, nullable=False)  # 加密的用户密钥
+    totp_secret = Column(String(255), nullable=True)  # 加密的TOTP密钥，空值表示未启用
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # 关系

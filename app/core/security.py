@@ -7,7 +7,10 @@ import os
 import secrets
 import string
 from datetime import datetime, timedelta
+from io import BytesIO
 
+import pyotp
+import qrcode
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -266,3 +269,70 @@ def recover_user_key(password: str, salt: bytes, encrypted_user_key: bytes) -> b
     user_key = decrypt_with_key(encrypted_user_key, master_key)
 
     return user_key
+
+
+def generate_totp_secret() -> str:
+    """
+    生成TOTP密钥
+
+    Returns:
+        32个字符的Base32编码的TOTP密钥
+    """
+    return pyotp.random_base32()
+
+
+def verify_totp_code(secret: str, token: str, window: int = 1) -> bool:
+    """
+    验证TOTP代码
+
+    Args:
+        secret: TOTP密钥
+        token: 用户输入的6位数字代码
+        window: 时间窗口容忍度，1表示允许前后各30秒的偏差
+
+    Returns:
+        验证是否成功
+    """
+    try:
+        totp = pyotp.TOTP(secret)
+        return totp.verify(token, valid_window=window)
+    except Exception:
+        return False
+
+
+def generate_totp_qr_code_url(
+    secret: str, username: str, app_name: str = "MaterialBin"
+) -> str:
+    """
+    生成TOTP二维码URL
+
+    Args:
+        secret: TOTP密钥
+        username: 用户名
+        app_name: 应用名称
+
+    Returns:
+        二维码图片的base64编码字符串
+    """
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(name=username, issuer_name=app_name)
+
+    # 生成二维码
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(provisioning_uri)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # 转换为base64字符串
+    buffer = BytesIO()
+    img.save(buffer, "PNG")
+    buffer.seek(0)
+
+    img_base64 = base64.b64encode(buffer.read()).decode()
+    return f"data:image/png;base64,{img_base64}"

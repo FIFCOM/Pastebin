@@ -13,20 +13,27 @@ from app.core.security import (
     encrypt_with_key,
     generate_session_key,
     generate_session_token,
+    generate_totp_qr_code_url,
+    generate_totp_secret,
     generate_username,
     hash_password,
     prepare_user_keys,
     recover_user_key,
     str_to_bytes,
     verify_password,
+    verify_totp_code,
 )
 from app.models.user import User, UserSession
 from app.schemas.user import (
     LoginResponse,
     SessionResponse,
+    TotpSetupResponse,
+    TotpStatusResponse,
+    TotpVerifyRequest,
     UserCreateRequest,
     UserListResponse,
     UserLoginRequest,
+    UserLoginWithTotpRequest,
     UserRegisterRequest,
     UserResponse,
     UserUpdateRequest,
@@ -118,11 +125,15 @@ class UserService:
             登录响应（包含token和用户信息）
 
         Raises:
-            ValueError: 当用户名或密码错误时
+            ValueError: 当用户名或密码错误，或需要TOTP验证时
         """
         user = UserService.authenticate_user(db, login_data)
         if not user:
             raise ValueError("用户名或密码错误")
+
+        # 检查用户是否启用了TOTP
+        if user.totp_secret:  # type: ignore
+            raise ValueError("此账户启用了两步验证，请使用TOTP代码登录")
 
         # 恢复用户密钥
         try:
@@ -378,3 +389,207 @@ class UserService:
         expired_sessions.delete()
         db.commit()
         return count
+
+    @staticmethod
+    def get_totp_status(db: Session, user_id: int) -> TotpStatusResponse:
+        """
+        获取用户TOTP状态
+
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+
+        Returns:
+            TOTP状态信息
+
+        Raises:
+            ValueError: 当用户不存在时
+        """
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("用户不存在")
+
+        return TotpStatusResponse(
+            enabled=bool(user.totp_secret),  # type: ignore
+            setup_required=not bool(user.totp_secret),  # type: ignore
+        )
+
+    @staticmethod
+    def setup_totp(db: Session, user_id: int) -> TotpSetupResponse:
+        """
+        设置用户TOTP
+
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+
+        Returns:
+            TOTP设置信息（包含密钥和二维码）
+
+        Raises:
+            ValueError: 当用户不存在时
+        """
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("用户不存在")
+
+        # 生成新的TOTP密钥
+        totp_secret = generate_totp_secret()
+
+        # 生成二维码
+        qr_code_url = generate_totp_qr_code_url(totp_secret, user.username)  # type: ignore
+
+        # 保存TOTP密钥到数据库（但不启用，需要验证后才启用）
+        user.totp_secret = totp_secret  # type: ignore
+        db.commit()
+
+        return TotpSetupResponse(secret=totp_secret, qr_code_url=qr_code_url)
+
+    @staticmethod
+    def verify_and_enable_totp(
+        db: Session, user_id: int, totp_data: TotpVerifyRequest
+    ) -> bool:
+        """
+        验证并启用TOTP
+
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+            totp_data: TOTP验证数据
+
+        Returns:
+            是否验证成功
+
+        Raises:
+            ValueError: 当用户不存在或TOTP密钥未设置时
+        """
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("用户不存在")
+
+        if not user.totp_secret:  # type: ignore
+            raise ValueError("TOTP密钥未设置")
+
+        # 验证TOTP代码
+        is_valid = verify_totp_code(user.totp_secret, totp_data.totp_code)  # type: ignore
+
+        if is_valid:
+            # 验证成功，TOTP已经启用（密钥已保存）
+            db.commit()
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def disable_totp(db: Session, user_id: int) -> bool:
+        """
+        禁用用户TOTP
+
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+
+        Returns:
+            是否禁用成功
+
+        Raises:
+            ValueError: 当用户不存在时
+        """
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("用户不存在")
+
+        # 清空TOTP密钥
+        user.totp_secret = None  # type: ignore
+        db.commit()
+        return True
+
+    @staticmethod
+    def authenticate_user_with_totp(
+        db: Session, login_data: UserLoginWithTotpRequest
+    ) -> User | None:
+        """
+        用户认证（包含TOTP验证）
+
+        Args:
+            db: 数据库会话
+            login_data: 登录数据（包含TOTP代码）
+
+        Returns:
+            认证成功的用户或None
+        """
+        user = db.query(User).filter(User.username == login_data.username).first()
+        if not user:
+            return None
+
+        # 验证密码
+        if not verify_password(login_data.password, user.password_hash):  # type: ignore
+            return None
+
+        # 验证TOTP代码
+        if user.totp_secret:  # type: ignore
+            if not verify_totp_code(user.totp_secret, login_data.totp_code):  # type: ignore
+                return None
+
+        return user
+
+    @staticmethod
+    def login_user_with_totp(
+        db: Session, login_data: UserLoginWithTotpRequest
+    ) -> LoginResponse:
+        """
+        用户登录（包含TOTP验证）
+
+        Args:
+            db: 数据库会话
+            login_data: 登录数据（包含TOTP代码）
+
+        Returns:
+            登录响应（包含token和用户信息）
+
+        Raises:
+            ValueError: 当用户名、密码或TOTP代码错误时
+        """
+        user = UserService.authenticate_user_with_totp(db, login_data)
+        if not user:
+            raise ValueError("用户名、密码或TOTP代码错误")
+
+        # 恢复用户密钥
+        try:
+            salt = str_to_bytes(user.salt)  # type: ignore
+            encrypted_user_key = str_to_bytes(user.encrypted_user_key)  # type: ignore
+            user_key = recover_user_key(login_data.password, salt, encrypted_user_key)
+        except Exception as e:
+            raise ValueError(f"密钥恢复失败: {str(e)}") from e
+
+        # 生成会话
+        session_token = generate_session_token()
+        session_key = generate_session_key()
+
+        # 使用用户密钥加密会话密钥
+        encrypted_session_key = encrypt_with_key(session_key, user_key)
+
+        # 创建会话记录
+        expires_at = datetime.utcnow() + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
+        session = UserSession(
+            user_id=user.id,
+            session_token=session_token,
+            encrypted_session_key=bytes_to_str(encrypted_session_key),
+            expires_at=expires_at,
+        )
+
+        db.add(session)
+        db.commit()
+
+        # 创建JWT token
+        access_token = create_access_token(
+            data={"sub": user.username, "session_id": session.id}
+        )
+
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse.model_validate(user),
+        )
