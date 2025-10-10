@@ -76,6 +76,9 @@ class Settings:
     host: str
     port: int
 
+    # 数据存储配置
+    data_dir: str
+
 
 def load_config() -> Settings:
     """
@@ -107,6 +110,8 @@ def load_config() -> Settings:
         # 服务器配置
         host=os.getenv("HOST", "0.0.0.0"),
         port=_int_env("PORT", 8000),
+        # 数据存储配置
+        data_dir=os.getenv("DATA_DIR", "./data"),
     )
 
 

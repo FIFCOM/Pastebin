@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.controllers import api_key_router, health_router, user_router
+from app.controllers import api_key_router, health_router, paste_router, user_router
 from app.core.init_db import init_database
 from config.config import settings, validate_config
 
@@ -18,7 +18,7 @@ from config.config import settings, validate_config
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
-    print("正在启动 Material Bin 用户认证 API...")
+    print("正在启动 Material Bin...")
 
     # 验证配置
     try:
@@ -42,8 +42,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时执行
-    print("正在关闭 Material Bin 用户认证 API...")
-    print("👋 应用已关闭")
+    print("👋 Material Bin已关闭")
 
 
 # 创建 FastAPI 应用
@@ -70,6 +69,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
+app.include_router(paste_router)
 
 
 # 全局异常处理
