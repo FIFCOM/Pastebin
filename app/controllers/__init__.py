@@ -3,6 +3,7 @@ Controllers层 - 路由控制器
 """
 
 from .api_key_controller import router as api_key_router
+from .cleanup_controller import router as cleanup_router
 from .collab_room_controller import router as collab_room_router
 from .health_controller import router as health_router
 from .paste_controller import router as paste_router
@@ -16,4 +17,5 @@ __all__ = [
     "paste_router",
     "user_paste_router",
     "collab_room_router",
+    "cleanup_router",
 ]

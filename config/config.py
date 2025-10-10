@@ -79,6 +79,9 @@ class Settings:
     # 数据存储配置
     data_dir: str
 
+    # 内部服务配置
+    internal_token: str
+
 
 def load_config() -> Settings:
     """
@@ -112,6 +115,10 @@ def load_config() -> Settings:
         port=_int_env("PORT", 8000),
         # 数据存储配置
         data_dir=os.getenv("DATA_DIR", "./data"),
+        # 内部服务配置
+        internal_token=os.getenv(
+            "INTERNAL_TOKEN", "change-this-internal-token-in-production"
+        ),
     )
 
 
@@ -125,6 +132,9 @@ def validate_config(config: Settings) -> None:
 
     if not config.database_url:
         missing.append("DATABASE_URL")
+
+    if config.internal_token == "change-this-internal-token-in-production":
+        missing.append("INTERNAL_TOKEN (using default, change for production)")
 
     if missing:
         raise RuntimeError(

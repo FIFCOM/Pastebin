@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.controllers import (
     api_key_router,
+    cleanup_router,
     collab_room_router,
     health_router,
     paste_router,
@@ -79,6 +80,7 @@ app.include_router(api_key_router)
 app.include_router(paste_router)
 app.include_router(user_paste_router)
 app.include_router(collab_room_router)
+app.include_router(cleanup_router)
 
 
 # 全局异常处理

@@ -2,6 +2,12 @@
 Schemas层 - Pydantic模型定义（Views层）
 """
 
+from .cleanup import (
+    CleanupRequest,
+    CleanupResponse,
+    CleanupTaskResult,
+    InternalAuthRequest,
+)
 from .collab_room import (
     MemberInfo,
     MemberTokenPayload,
@@ -40,6 +46,11 @@ from .user import (
 )
 
 __all__ = [
+    # 清理任务相关
+    "CleanupRequest",
+    "CleanupResponse",
+    "CleanupTaskResult",
+    "InternalAuthRequest",
     # 协作房间相关
     "MemberTokenResponse",
     "MemberInfo",
