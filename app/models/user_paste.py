@@ -29,7 +29,10 @@ class UserPaste(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     paste_id = Column(
-        String(32), ForeignKey("pastes.id", ondelete="CASCADE"), nullable=False, index=True
+        String(32),
+        ForeignKey("pastes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # 加密的paste密钥
@@ -45,9 +48,7 @@ class UserPaste(Base):
     paste = relationship("Paste")
 
     # 索引和约束定义
-    __table_args__ = (
-        UniqueConstraint("user_id", "paste_id", name="uq_user_paste"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "paste_id", name="uq_user_paste"),)
 
     def __repr__(self):
         return f"<UserPaste(id={self.id}, user_id={self.user_id}, paste_id={self.paste_id}, is_starred={self.is_starred})>"

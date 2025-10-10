@@ -147,7 +147,7 @@ async def get_current_user_with_key(
     username: str | None = payload.get("sub")
     session_id: str | None = payload.get("session_id")
     session_key_str: str | None = payload.get("session_key")
-    
+
     if username is None or session_id is None or session_key_str is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -165,10 +165,11 @@ async def get_current_user_with_key(
         )
 
     # 获取会话信息
-    session = db.query(UserSession).filter(
-        UserSession.id == session_id,
-        UserSession.user_id == user.id
-    ).first()
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.id == session_id, UserSession.user_id == user.id)
+        .first()
+    )
     if session is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -178,6 +179,7 @@ async def get_current_user_with_key(
 
     # 检查会话是否过期
     from datetime import datetime
+
     if session.expires_at < datetime.utcnow():  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -169,7 +169,7 @@ class UserService:
             data={
                 "sub": user.username,
                 "session_id": session.id,
-                "session_key": bytes_to_str(session_key)
+                "session_key": bytes_to_str(session_key),
             }
         )
 
@@ -592,7 +592,7 @@ class UserService:
             data={
                 "sub": user.username,
                 "session_id": session.id,
-                "session_key": bytes_to_str(session_key)
+                "session_key": bytes_to_str(session_key),
             }
         )
 

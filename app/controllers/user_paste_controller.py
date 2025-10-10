@@ -22,8 +22,6 @@ from app.services.user_paste_service import UserPasteService
 router = APIRouter(prefix="/api/user/pastes", tags=["用户Paste管理"])
 
 
-
-
 @router.get("", response_model=UserPasteListResponse)
 async def get_user_pastes(
     page: int = Query(1, ge=1, description="页码"),
@@ -45,7 +43,7 @@ async def get_user_pastes(
     - **search**: 搜索关键词，搜索title
     """
     current_user, user_key = user_and_key
-    
+
     search_params = UserPasteSearchParams(
         page=page,
         limit=limit,
@@ -79,7 +77,7 @@ async def save_paste_to_user(
     - **admin_key**: 管理权限令牌，用于验证权限
     """
     current_user, user_key = user_and_key
-    
+
     try:
         UserPasteService.save_paste_to_user(
             db, current_user.id, paste_id, user_key, save_request
@@ -114,7 +112,7 @@ async def get_user_paste(
     获取单个用户Paste信息
     """
     current_user, user_key = user_and_key
-    
+
     try:
         user_paste_info = UserPasteService.get_user_paste(
             db, current_user.id, paste_id, user_key

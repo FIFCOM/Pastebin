@@ -150,11 +150,12 @@ class UserPasteService:
         paste_infos = []
         for user_paste in user_pastes:
             paste = user_paste.paste
-            
+
             # 解密paste密钥
             try:
                 decrypted_paste_key = UserPasteService._decrypt_paste_key_for_user(
-                    str(user_paste.encrypted_paste_key), user_key  # type: ignore
+                    str(user_paste.encrypted_paste_key),
+                    user_key,  # type: ignore
                 )
             except Exception:
                 # 如果解密失败，跳过这个paste或使用空字符串
@@ -277,7 +278,8 @@ class UserPasteService:
         # 解密paste密钥
         try:
             decrypted_paste_key = UserPasteService._decrypt_paste_key_for_user(
-                str(user_paste.encrypted_paste_key), user_key  # type: ignore
+                str(user_paste.encrypted_paste_key),
+                user_key,  # type: ignore
             )
         except Exception:
             decrypted_paste_key = ""
