@@ -147,8 +147,8 @@ class UserService:
         session_token = generate_session_token()
         session_key = generate_session_key()
 
-        # 使用用户密钥加密会话密钥
-        encrypted_session_key = encrypt_with_key(session_key, user_key)
+        # 使用会话密钥加密用户密钥
+        encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
 
         # 创建会话记录
         expires_at = datetime.utcnow() + timedelta(
@@ -157,16 +157,20 @@ class UserService:
         session = UserSession(
             user_id=user.id,  # type: ignore
             session_token=session_token,
-            encrypted_session_key=bytes_to_str(encrypted_session_key),
+            encrypted_session_key=bytes_to_str(encrypted_user_key_for_session),
             expires_at=expires_at,
         )
 
         db.add(session)
         db.commit()
 
-        # 创建JWT token
+        # 创建JWT token（包含session_key以支持用户密钥恢复）
         access_token = create_access_token(
-            data={"sub": user.username, "session_id": session.id}
+            data={
+                "sub": user.username,
+                "session_id": session.id,
+                "session_key": bytes_to_str(session_key)
+            }
         )
 
         return LoginResponse(
@@ -566,8 +570,8 @@ class UserService:
         session_token = generate_session_token()
         session_key = generate_session_key()
 
-        # 使用用户密钥加密会话密钥
-        encrypted_session_key = encrypt_with_key(session_key, user_key)
+        # 使用会话密钥加密用户密钥（修复循环依赖）
+        encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
 
         # 创建会话记录
         expires_at = datetime.utcnow() + timedelta(
@@ -576,16 +580,20 @@ class UserService:
         session = UserSession(
             user_id=user.id,
             session_token=session_token,
-            encrypted_session_key=bytes_to_str(encrypted_session_key),
+            encrypted_session_key=bytes_to_str(encrypted_user_key_for_session),
             expires_at=expires_at,
         )
 
         db.add(session)
         db.commit()
 
-        # 创建JWT token
+        # 创建JWT token（包含session_key以支持用户密钥恢复）
         access_token = create_access_token(
-            data={"sub": user.username, "session_id": session.id}
+            data={
+                "sub": user.username,
+                "session_id": session.id,
+                "session_key": bytes_to_str(session_key)
+            }
         )
 
         return LoginResponse(
