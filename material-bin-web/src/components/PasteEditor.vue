@@ -67,7 +67,7 @@ import 'mdui/components/card.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
 import Cookies from 'js-cookie'
-import { useTheme } from '../composables/useTheme'
+import { useTheme } from '@/composables/useTheme'
 
 // 生成随机ID的函数
 const generateRandomId = () => {
