@@ -1,0 +1,29 @@
+{
+  "name": "material-bin-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mdui/icons": "^1.0.3",
+    "js-cookie": "^3.0.5",
+    "material-icons": "^1.13.14",
+    "mdui": "^2.1.4",
+    "vditor": "^3.11.2",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
+    "@types/node": "^24.6.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "vite-plugin-static-copy": "^3.1.4",
+    "vue-tsc": "^3.1.0"
+  }
+}
