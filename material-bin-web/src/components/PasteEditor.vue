@@ -66,8 +66,8 @@ import 'mdui/components/button.js'
 import 'mdui/components/card.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
-import { getTheme } from 'mdui/functions/getTheme.js'
 import Cookies from 'js-cookie'
+import { useTheme } from '../composables/useTheme'
 
 // 生成随机ID的函数
 const generateRandomId = () => {
@@ -80,7 +80,7 @@ const generateRandomId = () => {
 }
 
 // 数据定义
-const title = ref(`未命名的Pastebin.ID-${generateRandomId()}`)
+const title = ref(`未命名的Paste.ID-${generateRandomId()}`)
 const contentType = ref<'plain' | 'markdown'>('plain') // 初始值会在 onMounted 中从 Cookie 读取
 const plainContent = ref('')
 const markdownContent = ref('') // 添加响应式markdown内容
@@ -88,6 +88,9 @@ const vditorRef = ref<HTMLElement | null>(null)
 const titleInputRef = ref<any>(null)
 const contentInputRef = ref<any>(null)
 let vditorInstance: Vditor | null = null
+
+// 从 composable 获取实际主题
+const { actualTheme } = useTheme()
 
 // 使用响应式变量存储主题
 const vditorTheme = ref<'classic' | 'dark'>('classic')
@@ -109,7 +112,7 @@ const checkMobile = () => {
 
 // 获取当前主题
 const updateTheme = () => {
-  vditorTheme.value = getTheme() === 'dark' ? 'dark' : 'classic'
+  vditorTheme.value = actualTheme.value === 'dark' ? 'dark' : 'classic'
 }
 
 // Emit事件定义
@@ -267,7 +270,7 @@ watch(contentType, (newType, oldType) => {
 })
 
 // 监听主题变化，使用Vditor的setTheme API动态切换（无需重建）
-watch(vditorTheme, (newTheme, oldTheme) => {
+watch(vditorTheme, () => {
   // console.log('Theme changing from', oldTheme, 'to', newTheme)
 
   // 无论当前是什么模式，都更新Vditor主题（因为使用v-show，实例一直存在）
@@ -277,7 +280,7 @@ watch(vditorTheme, (newTheme, oldTheme) => {
 })
 
 // 监听设备类型变化，这个需要重建因为要切换编辑模式
-watch(isMobile, async (newValue, oldValue) => {
+watch(isMobile, async () => {
   // console.log('Device type changing from', oldValue ? 'mobile' : 'desktop', 'to', newValue ? 'mobile' : 'desktop')
 
   if (contentType.value === 'markdown' && vditorInstance) {
@@ -388,10 +391,9 @@ onMounted(() => {
   if (savedContentType === 'markdown' || savedContentType === 'plain') {
     contentType.value = savedContentType
   } else {
-    // 如果没有保存的偏好，默认使用 markdown
-    contentType.value = 'markdown'
+    // 如果没有保存的偏好，默认使用 plain
+    contentType.value = 'plain'
   }
-  // console.log('Loaded content type from cookie:', contentType.value)
   
   // 初始化设备检测
   checkMobile()
