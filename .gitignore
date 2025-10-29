@@ -266,3 +266,5 @@ local/
 
 # pipx
 .local/pipx/
+
+data/
