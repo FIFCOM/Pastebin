@@ -154,7 +154,7 @@ const initVditor = async () => {
   if (vditorRef.value) {
     // console.log('Initializing Vditor...')
     vditorInstance = new Vditor(vditorRef.value, {
-      height: '540px',
+      height: '536px',
       mode: isMobile.value ? 'ir' : 'sv', // 移动设备使用即时渲染模式(ir)，电脑使用分屏模式(sv)
       placeholder: '请输入Markdown...',
       theme: vditorTheme.value, // 根据MDUI主题动态设置
@@ -298,7 +298,7 @@ watch(isMobile, async () => {
 const handleTitleTabKey = (e: KeyboardEvent) => {
   if (e.key === 'Tab') {
     e.preventDefault()
-    insertTabInMduiField(titleInputRef, title)
+    insertTabInMduiField(titleInputRef, title, e.shiftKey)
   }
 }
 
@@ -306,12 +306,12 @@ const handleTitleTabKey = (e: KeyboardEvent) => {
 const handleContentTabKey = (e: KeyboardEvent) => {
   if (e.key === 'Tab') {
     e.preventDefault()
-    insertTabInMduiField(contentInputRef, plainContent)
+    insertTabInMduiField(contentInputRef, plainContent, e.shiftKey)
   }
 }
 
-// 在 mdui-text-field 中插入 Tab 字符
-const insertTabInMduiField = (fieldRef: any, model: any) => {
+// 在 mdui-text-field 中插入 Tab 字符或取消缩进
+const insertTabInMduiField = (fieldRef: any, model: any, isUnindent: boolean = false) => {
   if (!fieldRef.value) return
   
   // 获取 mdui-text-field 内部的输入元素（可能在 Shadow DOM 中）
@@ -331,22 +331,84 @@ const insertTabInMduiField = (fieldRef: any, model: any) => {
   }
   
   if (input) {
+    input.focus() // 确保输入框处于激活状态
     const start = input.selectionStart || 0
     const end = input.selectionEnd || 0
     const value = input.value
-    
-    // 在光标位置插入 Tab 字符
-    const newValue = value.substring(0, start) + '\t' + value.substring(end)
-    input.value = newValue
-    
-    // 更新响应式变量
-    model.value = newValue
-    
-    // 设置光标位置
-    const newPosition = start + 1
-    input.setSelectionRange(newPosition, newPosition)
-    
-    // 触发 input 事件
+
+    // 只在 TEXTAREA 中处理缩进/取消缩进
+    if (input.tagName === 'TEXTAREA') {
+      // 找到选区所涉及的行范围
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1
+      const lineEnd = end === start ? value.indexOf('\n', end) : value.indexOf('\n', end - 1)
+      const actualLineEnd = lineEnd === -1 ? value.length : lineEnd
+      
+      const selectionText = value.substring(lineStart, actualLineEnd)
+      const lines = selectionText.split('\n')
+      
+      let processedText: string
+      let newStart: number
+      let newEnd: number
+      
+      if (isUnindent) {
+        // Shift+Tab: 取消缩进，移除每行开头的一个 Tab
+        processedText = lines.map(line => {
+          if (line.startsWith('\t')) {
+            return line.substring(1)
+          }
+          return line
+        }).join('\n')
+        
+        // 计算新的选区位置
+        newStart = lineStart
+        newEnd = lineStart + processedText.length
+      } else {
+        // Tab: 缩进，为每行添加一个 Tab
+        processedText = lines.map(line => '\t' + line).join('\n')
+        
+        // 计算新的选区位置
+        newStart = lineStart
+        newEnd = lineStart + processedText.length
+      }
+      
+      const newValue = value.substring(0, lineStart) + processedText + value.substring(actualLineEnd)
+      
+      // 更新input值和Vue模型
+      input.value = newValue
+      model.value = newValue
+      
+      // 重新选中处理后的文本（如果原本有选区）或将光标放在合适位置
+      if (start !== end) {
+        input.setSelectionRange(newStart, newEnd)
+      } else {
+        // 单行情况：保持光标在同一行的相对位置
+        const cursorOffset = start - lineStart
+        if (isUnindent) {
+          const firstLine = lines[0] || ''
+          const removed = firstLine.startsWith('\t') ? 1 : 0
+          const newCursorPos = lineStart + Math.max(0, cursorOffset - removed)
+          input.setSelectionRange(newCursorPos, newCursorPos)
+        } else {
+          const newCursorPos = lineStart + cursorOffset + 1
+          input.setSelectionRange(newCursorPos, newCursorPos)
+        }
+      }
+    } else {
+      // 单行输入框（input）：只处理 Tab，不处理 Shift+Tab
+      if (!isUnindent) {
+        const newValue = value.substring(0, start) + '\t' + value.substring(end)
+        
+        // 更新input值和Vue模型
+        input.value = newValue
+        model.value = newValue
+
+        // 将光标移动到Tab之后
+        const newPosition = start + 1
+        input.setSelectionRange(newPosition, newPosition)
+      }
+    }
+
+    // 触发input事件，以确保v-model和mdui组件状态同步
     input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
   }
 }

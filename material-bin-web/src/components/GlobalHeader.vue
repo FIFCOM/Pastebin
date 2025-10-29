@@ -80,7 +80,7 @@ onUnmounted(() => {
 .dark-icon,
 .auto-icon {
   opacity: 0;
-  transform: scale(0.8);
+  transform: rotate(-180deg) scale(0.8); /* 点击时旋转，初始缩小 */
 }
 
 /* auto 模式：显示 auto 图标 */
