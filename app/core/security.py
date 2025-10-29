@@ -9,18 +9,16 @@ import string
 from datetime import datetime, timedelta
 from io import BytesIO
 
+import bcrypt
 import pyotp
 import qrcode
-from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from config.config import settings
-
-# bcrypt密码上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def generate_username() -> str:
@@ -68,36 +66,47 @@ def derive_master_key(password: str, salt: bytes) -> bytes:
 
 def encrypt_with_key(data: bytes, key: bytes) -> bytes:
     """
-    使用AES加密数据
+    使用AES-GCM加密数据（与前端Web Crypto API兼容）
 
     Args:
         data: 要加密的数据
-        key: 加密密钥
+        key: 加密密钥（32字节）
 
     Returns:
-        加密后的数据
+        加密后的数据（IV + 密文，12字节IV + 密文）
     """
-    # 使用Fernet进行AES加密（内部使用AES-128 CBC + HMAC SHA256）
-    fernet_key = base64.urlsafe_b64encode(key)
-    fernet = Fernet(fernet_key)
-    return fernet.encrypt(data)
+    # 生成随机IV（12字节用于GCM）
+    iv = os.urandom(12)
+    
+    # 使用AES-GCM加密
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, data, None)
+    
+    # 返回 IV + 密文
+    return iv + ciphertext
 
 
 def decrypt_with_key(encrypted_data: bytes, key: bytes) -> bytes:
     """
-    使用AES解密数据
+    使用AES-GCM解密数据（与前端Web Crypto API兼容）
 
     Args:
-        encrypted_data: 加密的数据
-        key: 解密密钥
+        encrypted_data: 加密的数据（IV + 密文）
+        key: 解密密钥（32字节）
 
     Returns:
         解密后的数据
     """
     try:
-        fernet_key = base64.urlsafe_b64encode(key)
-        fernet = Fernet(fernet_key)
-        return fernet.decrypt(encrypted_data)
+        # 提取IV和密文
+        iv = encrypted_data[:12]
+        ciphertext = encrypted_data[12:]
+        
+        # 使用AES-GCM解密
+        aesgcm = AESGCM(key)
+        plaintext = aesgcm.decrypt(iv, ciphertext, None)
+        
+        return plaintext
     except Exception as e:
         raise ValueError(f"解密失败: {str(e)}") from e
 
@@ -107,12 +116,18 @@ def hash_password(password: str) -> str:
     使用bcrypt哈希密码
 
     Args:
-        password: SHA256哈希后的密码
+        password: SHA256哈希后的密码或明文密码
 
     Returns:
         bcrypt哈希后的密码
     """
-    return pwd_context.hash(password)
+    # 将密码转换为字节
+    password_bytes = password.encode('utf-8')
+    # 生成盐并哈希密码
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    # 返回字符串形式
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -120,13 +135,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     验证密码
 
     Args:
-        plain_password: 明文密码（SHA256哈希）
+        plain_password: 明文密码（SHA256哈希或明文）
         hashed_password: bcrypt哈希后的密码
 
     Returns:
         密码是否正确
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        password_bytes = plain_password.encode('utf-8')
+        hashed_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -200,7 +220,7 @@ def hash_api_key(api_key: str) -> str:
     Returns:
         哈希后的API密钥
     """
-    return pwd_context.hash(api_key)
+    return hash_password(api_key)
 
 
 def verify_api_key(plain_api_key: str, hashed_api_key: str) -> bool:
@@ -214,7 +234,7 @@ def verify_api_key(plain_api_key: str, hashed_api_key: str) -> bool:
     Returns:
         API密钥是否正确
     """
-    return pwd_context.verify(plain_api_key, hashed_api_key)
+    return verify_password(plain_api_key, hashed_api_key)
 
 
 def bytes_to_str(data: bytes) -> str:

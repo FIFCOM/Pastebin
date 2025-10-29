@@ -44,13 +44,13 @@ class PasteService:
     @staticmethod
     def _generate_paste_id() -> str:
         """生成8位随机Paste ID"""
-        chars = string.ascii_lowercase + string.digits
+        chars = string.ascii_letters + string.digits
         return "".join(secrets.choice(chars) for _ in range(8))
 
     @staticmethod
     def _generate_admin_key() -> str:
-        """生成32位随机管理密钥"""
-        return secrets.token_urlsafe(24)  # 生成32字符的URL安全字符串
+        """生成16位随机管理密钥"""
+        return secrets.token_urlsafe(12)  # 生成16字符的URL安全字符串
 
     @staticmethod
     def _generate_paste_key() -> str:
@@ -563,6 +563,7 @@ class PasteService:
                 response.content = decrypted_bytes.decode()
             except Exception:
                 # 解密失败，只返回加密内容
+                print("解密失败，返回加密内容")
                 pass
 
         return response

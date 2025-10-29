@@ -8,6 +8,7 @@ import io
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     HTTPException,
     Query,
     UploadFile,
@@ -80,7 +81,7 @@ async def create_paste(paste_data: PasteCreateRequest, db: Session = Depends(get
 async def update_paste_title(
     paste_id: str,
     title_data: PasteTitleUpdateRequest,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -112,7 +113,7 @@ async def update_paste_title(
 async def update_paste_content(
     paste_id: str,
     content_data: PasteContentUpdateRequest,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -147,7 +148,7 @@ async def update_paste_content(
 async def upload_file_json(
     paste_id: str,
     file_data: FileUploadRequest,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -181,7 +182,7 @@ async def upload_file_json(
 async def upload_file_multipart(
     paste_id: str,
     file: UploadFile = FastAPIFile(...),
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -224,7 +225,7 @@ async def upload_file_multipart(
 async def delete_file(
     paste_id: str,
     file_id: str,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -256,7 +257,7 @@ async def delete_file(
 async def publish_paste(
     paste_id: str,
     publish_data: PastePublishRequest,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -449,7 +450,7 @@ async def get_file(
 async def update_paste(
     paste_id: str,
     update_data: PasteUpdateRequest,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -485,7 +486,7 @@ async def update_paste(
 @router.delete("/{paste_id}", response_model=MessageResponse)
 async def delete_paste(
     paste_id: str,
-    authorization: str | None = Depends(lambda: None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """

@@ -68,13 +68,20 @@ class PastePublishSettings(BaseModel):
     max_views: int = Field(
         ..., ge=1, description="最大查看次数，1表示阅后即焚，-1表示无限制"
     )
-    access_key: str | None = Field(None, description="访问密钥（可选）")
+    access_key: str | None = Field(None, max_length=72, description="访问密钥（可选，最多72字符）")
 
     @validator("max_views")
     def validate_max_views(cls, v):
         """验证max_views"""
         if v != -1 and v < 1:
             raise ValueError("max_views必须是-1（无限制）或大于0的正整数")
+        return v
+    
+    @validator("access_key")
+    def validate_access_key(cls, v):
+        """验证access_key长度"""
+        if v and len(v.encode('utf-8')) > 72:
+            raise ValueError("access_key不能超过72字节")
         return v
 
 
