@@ -16,7 +16,9 @@ from app.core.security import (
     encrypt_with_key,
     generate_encryption_key,
     hash_password,
+    key_to_urlsafe_str,
     str_to_bytes,
+    urlsafe_str_to_key,
     verify_password,
 )
 from app.models.paste import File, Paste, PasteKey
@@ -31,7 +33,6 @@ from app.schemas.paste import (
     PastePublishRequest,
     PastePublishResponse,
     PasteResponse,
-    PasteTitleUpdateRequest,
     PasteUpdateRequest,
     get_expire_datetime,
 )
@@ -54,8 +55,8 @@ class PasteService:
 
     @staticmethod
     def _generate_paste_key() -> str:
-        """生成Paste加密密钥"""
-        return bytes_to_str(generate_encryption_key())
+        """生成Paste加密密钥（URL-safe格式）"""
+        return key_to_urlsafe_str(generate_encryption_key())
 
     @staticmethod
     def _verify_admin_key(paste: Paste, admin_key: str) -> bool:
@@ -161,39 +162,6 @@ class PasteService:
         )
 
     @staticmethod
-    def update_paste_title(
-        db: Session, paste_id: str, admin_key: str, title_data: PasteTitleUpdateRequest
-    ) -> None:
-        """
-        更新Paste标题
-
-        Args:
-            db: 数据库会话
-            paste_id: Paste ID
-            admin_key: 管理密钥
-            title_data: 标题更新数据
-
-        Raises:
-            ValueError: 当Paste不存在或权限验证失败时
-        """
-        paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste:
-            raise ValueError("Paste不存在")
-
-        if not PasteService._verify_admin_key(paste, admin_key):
-            raise ValueError("管理密钥错误")
-
-        # 更新标题
-        paste.title = title_data.title  # type: ignore
-
-        # 如果是已发布状态，更新为编辑状态
-        if str(paste.status) == "published":  # type: ignore
-            paste.status = "edited"  # type: ignore
-
-        paste.updated_at = datetime.utcnow()  # type: ignore
-        db.commit()
-
-    @staticmethod
     def update_paste_content(
         db: Session,
         paste_id: str,
@@ -236,7 +204,7 @@ class PasteService:
                 raise ValueError("服务端加密密钥不存在")
 
             # 使用服务端密钥加密内容
-            paste_key = str_to_bytes(str(paste_key_record.paste_key))  # type: ignore
+            paste_key = urlsafe_str_to_key(str(paste_key_record.paste_key))  # type: ignore
             encrypted_content = encrypt_with_key(
                 content_data.content.encode(), paste_key
             )
@@ -393,10 +361,13 @@ class PasteService:
         # 验证必要字段
         if not paste.content_path:  # type: ignore
             raise ValueError("Paste内容不能为空")
-        if not paste.title:  # type: ignore
-            raise ValueError("Paste标题不能为空")
 
         settings_data = publish_data.settings
+
+        # 设置标题
+        if not settings_data.title or not settings_data.title.strip():
+            raise ValueError("Paste标题不能为空")
+        paste.title = settings_data.title  # type: ignore
 
         # 设置过期时间
         expire_at = get_expire_datetime(settings_data.expire_time)
@@ -470,16 +441,6 @@ class PasteService:
         if paste_expire_at is not None and datetime.utcnow() > paste_expire_at:
             raise ValueError("Paste已过期")
 
-        # 检查查看次数限制
-        paste_max_views = int(paste.max_views or -1)  # type: ignore
-        paste_view_count = int(paste.view_count or 0)  # type: ignore
-        if paste_max_views > 0 and paste_view_count >= paste_max_views:
-            raise ValueError("Paste已达到最大查看次数")
-
-        # 增加查看次数
-        paste.view_count = paste_view_count + 1  # type: ignore
-        db.commit()
-
         # 获取文件列表
         files = db.query(File).filter(File.paste_id == paste_id).all()
         file_infos = [
@@ -543,6 +504,16 @@ class PasteService:
         if paste_expire_at is not None and datetime.utcnow() > paste_expire_at:
             raise ValueError("Paste已过期")
 
+        # 检查查看次数限制并增加计数
+        paste_max_views = int(paste.max_views or -1)  # type: ignore
+        paste_view_count = int(paste.view_count or 0)  # type: ignore
+        if paste_max_views > 0 and paste_view_count >= paste_max_views:
+            raise ValueError("Paste已达到最大查看次数")
+
+        # 增加查看次数
+        paste.view_count = paste_view_count + 1  # type: ignore
+        db.commit()
+
         content_path = paste.content_path  # type: ignore
         if content_path is None or str(content_path).strip() == "":
             raise ValueError("Paste内容为空")
@@ -557,7 +528,7 @@ class PasteService:
         # 如果提供了解密密钥，尝试解密
         if encryption_key:
             try:
-                key_bytes = str_to_bytes(encryption_key)
+                key_bytes = urlsafe_str_to_key(encryption_key)
                 content_bytes = str_to_bytes(encrypted_content)
                 decrypted_bytes = decrypt_with_key(content_bytes, key_bytes)
                 response.content = decrypted_bytes.decode()

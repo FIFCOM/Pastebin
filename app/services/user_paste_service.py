@@ -8,7 +8,9 @@ from app.core.security import (
     bytes_to_str,
     decrypt_with_key,
     encrypt_with_key,
+    key_to_urlsafe_str,
     str_to_bytes,
+    urlsafe_str_to_key,
 )
 from app.models.paste import Paste
 from app.models.user_paste import UserPaste
@@ -27,17 +29,17 @@ class UserPasteService:
 
     @staticmethod
     def _encrypt_paste_key_for_user(paste_key: str, user_key: bytes) -> str:
-        """使用用户密钥加密paste密钥"""
-        paste_key_bytes = str_to_bytes(paste_key)
+        """使用用户密钥加密paste密钥（paste_key是URL-safe格式）"""
+        paste_key_bytes = urlsafe_str_to_key(paste_key)
         encrypted_paste_key = encrypt_with_key(paste_key_bytes, user_key)
         return bytes_to_str(encrypted_paste_key)
 
     @staticmethod
     def _decrypt_paste_key_for_user(encrypted_paste_key: str, user_key: bytes) -> str:
-        """使用用户密钥解密paste密钥"""
+        """使用用户密钥解密paste密钥（返回URL-safe格式）"""
         encrypted_paste_key_bytes = str_to_bytes(encrypted_paste_key)
         decrypted_paste_key = decrypt_with_key(encrypted_paste_key_bytes, user_key)
-        return bytes_to_str(decrypted_paste_key)
+        return key_to_urlsafe_str(decrypted_paste_key)
 
     @staticmethod
     def save_paste_to_user(

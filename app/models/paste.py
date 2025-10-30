@@ -51,7 +51,7 @@ class Paste(Base):
 
     # 时间戳
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
     published_at = Column(DateTime)  # 发布时间
     expire_at = Column(DateTime)  # 既可以表示draft的过期时间，也可以表示paste的过期时间
 

@@ -19,12 +19,6 @@ class PasteCreateRequest(BaseModel):
     )
 
 
-class PasteTitleUpdateRequest(BaseModel):
-    """更新Paste标题请求"""
-
-    title: str = Field(..., max_length=255, description="Paste标题")
-
-
 class PasteContentUpdateRequest(BaseModel):
     """更新Paste内容请求"""
 
@@ -60,6 +54,7 @@ class PastePublishRequest(BaseModel):
 class PastePublishSettings(BaseModel):
     """Paste发布设置"""
 
+    title: str = Field(..., max_length=255, description="Paste标题")
     expire_time: str = Field(
         ...,
         pattern="^(7d|30d|1y|never)$",

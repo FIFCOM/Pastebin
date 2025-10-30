@@ -69,7 +69,7 @@
           <!-- 过期时间选择 -->
           <div class="config-section">
             <div class="config-label">过期时间</div>
-            <mdui-segmented-button-group v-model="expireTime" selects="single">
+            <mdui-segmented-button-group :value="expireTime" selects="single" @change="expireTime = $event.target.value">
               <mdui-segmented-button value="7d">7天</mdui-segmented-button>
               <mdui-segmented-button value="30d">30天</mdui-segmented-button>
               <mdui-segmented-button value="1y">1年</mdui-segmented-button>
@@ -166,10 +166,11 @@ import { snackbar } from 'mdui/functions/snackbar.js'
 import Cookies from 'js-cookie'
 import PlainEditor from './editors/Plain.vue'
 import MarkdownEditor from './editors/Markdown.vue'
-import { 
-  generateEncryptionKey, 
-  bytesToStr, 
-  encryptContent 
+import {
+  generateEncryptionKey,
+  bytesToStr,
+  encryptContent,
+  keyToUrlSafeStr
 } from '../utils/crypto'
 
 // 获取API基础URL
@@ -325,28 +326,9 @@ const handleSubmit = async () => {
     // 2. 生成加密密钥
     const key = await generateEncryptionKey()
     pasteKey.value = key
-    encryptionKey.value = bytesToStr(key)
+    encryptionKey.value = keyToUrlSafeStr(key)
 
-    // 3. 上传标题
-    const titleResponse = await fetch(
-      `${API_BASE_URL}/api/pastes/${currentPasteId.value}/title`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentAdminKey.value}`
-        },
-        body: JSON.stringify({
-          title: title.value.trim()
-        })
-      }
-    )
-
-    if (!titleResponse.ok) {
-      throw new Error('上传标题失败')
-    }
-
-    // 4. 加密并上传内容
+    // 3. 加密并上传内容
     const encryptedContent = await encryptContent(content, key)
     const contentResponse = await fetch(
       `${API_BASE_URL}/api/pastes/${currentPasteId.value}/content`,
@@ -366,7 +348,7 @@ const handleSubmit = async () => {
       throw new Error('上传内容失败')
     }
 
-    // 5. 显示发布配置Dialog
+    // 4. 显示发布配置Dialog
     snackbar({ message: 'Paste创建成功，请配置发布选项' })
     openPublishConfigDialog()
 
@@ -412,6 +394,7 @@ const handlePublish = async () => {
         },
         body: JSON.stringify({
           settings: {
+            title: title.value.trim(),
             expire_time: expireTime.value,
             max_views: maxViews.value,
             access_key: accessKey.value || undefined

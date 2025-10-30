@@ -32,7 +32,6 @@ from app.schemas.paste import (
     PastePublishRequest,
     PastePublishResponse,
     PasteResponse,
-    PasteTitleUpdateRequest,
     PasteUpdateRequest,
 )
 from app.services.paste_service import PasteService
@@ -75,38 +74,6 @@ async def create_paste(paste_data: PasteCreateRequest, db: Session = Depends(get
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         ) from None
-
-
-@router.post("/{paste_id}/title", response_model=MessageResponse)
-async def update_paste_title(
-    paste_id: str,
-    title_data: PasteTitleUpdateRequest,
-    authorization: str | None = Header(None),
-    db: Session = Depends(get_db),
-):
-    """
-    上传/更新Paste标题
-
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
-    """
-    admin_key = _get_admin_key_from_header(authorization)
-
-    try:
-        PasteService.update_paste_title(db, paste_id, admin_key, title_data)
-        return MessageResponse(message="标题更新成功")
-    except ValueError as e:
-        if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
-            ) from None
-        elif "不存在" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-            ) from None
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from None
 
 
 @router.post("/{paste_id}/content", response_model=MessageResponse)
@@ -411,10 +378,14 @@ async def get_file(
         # 如果提供了解密密钥，尝试解密文件名和内容
         if encryption_key:
             try:
-                from app.core.security import decrypt_with_key, str_to_bytes
+                from app.core.security import (
+                    decrypt_with_key,
+                    str_to_bytes,
+                    urlsafe_str_to_key,
+                )
 
                 # 解密文件名
-                key_bytes = str_to_bytes(encryption_key)
+                key_bytes = urlsafe_str_to_key(encryption_key)
                 encrypted_name_bytes = str_to_bytes(encrypted_filename)
                 decrypted_name_bytes = decrypt_with_key(encrypted_name_bytes, key_bytes)
                 filename = decrypted_name_bytes.decode()

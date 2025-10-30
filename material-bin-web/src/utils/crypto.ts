@@ -1,15 +1,13 @@
 /**
- * 加密工具模块 - 与后端加密逻辑保持一致
- * 后端使用: Fernet (AES-128 CBC + HMAC SHA256)
- * 前端使用: Web Crypto API (AES-GCM 256位)
+ * 加密工具模块 - AES-GCM 96位IV + 128位密钥
  */
 
 /**
- * 生成随机加密密钥 (32字节 = 256位)
+ * 生成随机加密密钥
  * 对应后端: generate_encryption_key()
  */
 export async function generateEncryptionKey(): Promise<Uint8Array> {
-  const key = new Uint8Array(32) // 32字节 = 256位
+  const key = new Uint8Array(16) // 16字节 = 128位
   crypto.getRandomValues(key)
   return key
 }
@@ -28,6 +26,34 @@ export function bytesToStr(data: Uint8Array): string {
  */
 export function strToBytes(data: string): Uint8Array {
   const binaryString = atob(data)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  return bytes
+}
+
+/**
+ * 将加密密钥转换为URL-safe base64字符串
+ * 专门用于加密密钥的编码，使其可以安全地用于URL
+ */
+export function keyToUrlSafeStr(key: Uint8Array): string {
+  const base64 = btoa(String.fromCharCode(...key))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/**
+ * 将URL-safe base64字符串转换为加密密钥
+ * 专门用于加密密钥的解码
+ */
+export function urlSafeStrToKey(urlSafeBase64: string): Uint8Array {
+  // 将URL-safe base64转换回标准base64
+  let base64 = urlSafeBase64.replace(/-/g, '+').replace(/_/g, '/')
+  // 补充padding
+  while (base64.length % 4) {
+    base64 += '='
+  }
+  const binaryString = atob(base64)
   const bytes = new Uint8Array(binaryString.length)
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i)

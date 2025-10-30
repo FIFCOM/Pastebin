@@ -247,6 +247,29 @@ def str_to_bytes(data: str) -> bytes:
     return base64.b64decode(data.encode())
 
 
+def key_to_urlsafe_str(key: bytes) -> str:
+    """
+    将加密密钥转换为URL-safe base64字符串
+    专门用于加密密钥的编码，使其可以安全地用于URL
+    """
+    base64_str = base64.b64encode(key).decode()
+    return base64_str.replace('+', '-').replace('/', '_').replace('=', '')
+
+
+def urlsafe_str_to_key(urlsafe_base64: str) -> bytes:
+    """
+    将URL-safe base64字符串转换为加密密钥
+    专门用于加密密钥的解码
+    """
+    # 将URL-safe base64转换回标准base64
+    base64_str = urlsafe_base64.replace('-', '+').replace('_', '/')
+    # 补充padding
+    padding = 4 - len(base64_str) % 4
+    if padding != 4:
+        base64_str += '=' * padding
+    return base64.b64decode(base64_str.encode())
+
+
 def prepare_user_keys(password: str) -> tuple[bytes, bytes, bytes]:
     """
     准备用户密钥（注册时使用）

@@ -108,7 +108,7 @@ def load_config() -> Settings:
         # 加密设置
         pbkdf2_iterations=_int_env("PBKDF2_ITERATIONS", 100000),
         salt_length=_int_env("SALT_LENGTH", 32),
-        encryption_key_length=_int_env("ENCRYPTION_KEY_LENGTH", 32),
+        encryption_key_length=_int_env("ENCRYPTION_KEY_LENGTH", 16),
         session_key_length=_int_env("SESSION_KEY_LENGTH", 32),
         # 服务器配置
         host=os.getenv("HOST", "0.0.0.0"),
