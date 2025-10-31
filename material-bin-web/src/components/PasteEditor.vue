@@ -168,7 +168,6 @@ import PlainEditor from './editors/Plain.vue'
 import MarkdownEditor from './editors/Markdown.vue'
 import {
   generateEncryptionKey,
-  bytesToStr,
   encryptContent,
   keyToUrlSafeStr
 } from '../utils/crypto'
@@ -395,6 +394,7 @@ const handlePublish = async () => {
         body: JSON.stringify({
           settings: {
             title: title.value.trim(),
+            type: contentType.value === 'markdown' ? 'md' : 'txt',
             expire_time: expireTime.value,
             max_views: maxViews.value,
             access_key: accessKey.value || undefined

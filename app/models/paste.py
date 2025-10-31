@@ -31,8 +31,9 @@ class Paste(Base):
     # 状态管理
     status = Column(Enum("draft", "published", "edited"), default="draft")
 
-    # 内容
+    # METADATA
     title = Column(String(255))
+    type = Column(Enum("txt", "md"), default="txt") # paste类型，默认为text，可选markdown
     content_path = Column(String(500))  # 加密内容文件路径
 
     # 加密相关

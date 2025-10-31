@@ -430,6 +430,7 @@ async def update_paste(
     需要在Authorization头中提供admin_key: Bearer {admin_key}
 
     - **title**: 新标题（可选）
+    - **type**: Paste类型：txt或md（可选）
     - **expire_time**: 过期时间（可选）
     - **max_views**: 最大查看次数（可选）
     - **access_key**: 访问密钥，空字符串表示禁用（可选）

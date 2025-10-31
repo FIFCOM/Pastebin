@@ -369,6 +369,9 @@ class PasteService:
             raise ValueError("Paste标题不能为空")
         paste.title = settings_data.title  # type: ignore
 
+        # 设置Paste类型
+        paste.type = settings_data.type  # type: ignore
+
         # 设置过期时间
         expire_at = get_expire_datetime(settings_data.expire_time)
         paste.expire_at = expire_at  # type: ignore
@@ -455,6 +458,7 @@ class PasteService:
 
         return PasteResponse(
             title=str(paste.title) if paste.title else None,  # type: ignore
+            type=str(paste.type) if paste.type else "txt",  # type: ignore
             status=str(paste.status),  # type: ignore
             files=file_infos,
             published_at=paste.published_at,  # type: ignore
@@ -565,6 +569,9 @@ class PasteService:
         # 更新字段
         if update_data.title is not None:
             paste.title = update_data.title  # type: ignore
+        
+        if update_data.type is not None:
+            paste.type = update_data.type  # type: ignore
 
         if update_data.expire_time is not None:
             paste.expire_at = get_expire_datetime(update_data.expire_time)  # type: ignore

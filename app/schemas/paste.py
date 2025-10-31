@@ -55,6 +55,9 @@ class PastePublishSettings(BaseModel):
     """Paste发布设置"""
 
     title: str = Field(..., max_length=255, description="Paste标题")
+    type: str = Field(
+        "txt", pattern="^(txt|md)$", description="Paste类型：txt或md，默认为txt"
+    )
     expire_time: str = Field(
         ...,
         pattern="^(7d|30d|1y|never)$",
@@ -84,6 +87,9 @@ class PasteUpdateRequest(BaseModel):
     """更新Paste请求"""
 
     title: str | None = Field(None, max_length=255, description="新标题")
+    type: str | None = Field(
+        None, pattern="^(txt|md)$", description="Paste类型：txt或md"
+    )
     expire_time: str | None = Field(
         None, pattern="^(7d|30d|1y|never)$", description="过期时间"
     )
@@ -124,6 +130,7 @@ class PasteResponse(BaseModel):
     """Paste信息响应"""
 
     title: str | None = Field(None, description="Paste标题")
+    type: str = Field(..., description="Paste类型：txt或md")
     status: str = Field(..., description="状态：published或edited")
     files: list[FileInfo] = Field(default=[], description="文件列表")
     published_at: datetime | None = Field(None, description="发布时间")
