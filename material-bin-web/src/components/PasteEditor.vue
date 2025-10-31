@@ -201,7 +201,7 @@ const encryptionKey = ref('')
 const pasteKey = ref<Uint8Array | null>(null) // 客户端加密密钥
 
 // 发布配置
-const expireTime = ref('7d')
+const expireTime = ref('30d')
 const maxViews = ref(-1)
 const accessKey = ref('')
 
@@ -226,7 +226,7 @@ const handleContentTypeChange = (e: Event) => {
   const isMarkdown = target.checked
   contentType.value = isMarkdown ? 'markdown' : 'plain'
   
-  // 保存到 Cookie
+  // 保存到 Cookie，有效期30天
   Cookies.set('contentType', contentType.value, { expires: 30 })
 }
 
@@ -310,7 +310,7 @@ const handleSubmit = async () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        encryption_mode: 'client'
+        encryption_mode: 'server'
       })
     })
 
@@ -454,7 +454,7 @@ const resetForm = () => {
   currentAdminKey.value = ''
   encryptionKey.value = ''
   pasteKey.value = null
-  expireTime.value = '7d'
+  expireTime.value = '30d'
   maxViews.value = -1
   accessKey.value = ''
 }

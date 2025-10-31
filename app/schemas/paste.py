@@ -64,7 +64,7 @@ class PastePublishSettings(BaseModel):
         description="过期时间：7d, 30d, 1y, never",
     )
     max_views: int = Field(
-        ..., ge=1, description="最大查看次数，1表示阅后即焚，-1表示无限制"
+        ..., description="最大查看次数，1表示阅后即焚，-1表示无限制"
     )
     access_key: str | None = Field(None, max_length=72, description="访问密钥（可选，最多72字符）")
 
