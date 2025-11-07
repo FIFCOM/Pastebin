@@ -82,7 +82,7 @@ class UserResponse(BaseModel):
 class UserUpdateRequest(BaseModel):
     """用户更新请求"""
 
-    email: EmailStr | None = Field(None, description="用户邮箱")
+    email: EmailStr | None = Field(default=None, description="用户邮箱")
     password: str | None = Field(
         None, min_length=64, max_length=64, description="SHA256哈希后的新密码"
     )
@@ -129,7 +129,7 @@ class UserListResponse(BaseModel):
 class UserCreateRequest(BaseModel):
     """管理员创建用户请求"""
 
-    username: str | None = Field(None, description="用户名，留空则自动生成")
+    username: str | None = Field(default=None, description="用户名，留空则自动生成")
     email: EmailStr = Field(..., description="用户邮箱")
     password: str = Field(
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"

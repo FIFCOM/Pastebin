@@ -525,9 +525,7 @@ class PasteService:
         # 读取内容
         encrypted_content = PasteService._read_content_from_file(str(content_path))
 
-        response = PasteContentResponse(
-            encrypted_content=encrypted_content, content=None
-        )
+        response = PasteContentResponse()
 
         # 如果提供了解密密钥，尝试解密
         if encryption_key:
@@ -537,10 +535,11 @@ class PasteService:
                 decrypted_bytes = decrypt_with_key(content_bytes, key_bytes)
                 response.content = decrypted_bytes.decode()
             except Exception:
-                # 解密失败，只返回加密内容
-                print("解密失败，返回加密内容")
-                pass
-
+                # 解密失败，抛出异常
+                raise ValueError("解密密钥错误") from None
+        else:
+            response.encrypted_content = encrypted_content
+        
         return response
 
     @staticmethod

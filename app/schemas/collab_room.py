@@ -117,7 +117,7 @@ class SharedPasteInfo(BaseModel):
     """分享的Paste信息"""
 
     paste_id: str = Field(..., description="Paste ID")
-    title: str | None = Field(None, description="Paste标题")
+    title: str | None = Field(default=None, description="Paste标题")
     encrypted_paste_key: str = Field(..., description="加密的Paste密钥")
     shared_by: str = Field(..., description="分享者成员ID")
     target_member: str | None = Field(
@@ -196,7 +196,7 @@ class MemberTokenPayload(BaseModel):
 
     member_id: str = Field(..., description="成员ID")
     display_name: str = Field(..., description="显示名称")
-    user_id: int | None = Field(None, description="关联的用户ID（可选）")
+    user_id: int | None = Field(default=None, description="关联的用户ID（可选）")
     exp: int = Field(..., description="过期时间戳")
 
 

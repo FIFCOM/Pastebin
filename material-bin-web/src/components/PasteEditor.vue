@@ -54,22 +54,10 @@
         close-on-overlay-click
       >
         <div class="dialog-content">
-          <!-- Paste信息 -->
-          <div class="info-section">
-            <div class="info-item">
-              <span class="info-label">Paste ID:</span>
-              <span class="info-value">{{ currentPasteId }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Admin Key:</span>
-              <span class="info-value monospace">{{ currentAdminKey }}</span>
-            </div>
-          </div>
-
           <!-- 过期时间选择 -->
           <div class="config-section">
             <div class="config-label">过期时间</div>
-            <mdui-segmented-button-group :value="expireTime" selects="single" @change="expireTime = $event.target.value">
+            <mdui-segmented-button-group :value="expireTime" @change="expireTime = $event.target.value" selects="single">
               <mdui-segmented-button value="7d">7天</mdui-segmented-button>
               <mdui-segmented-button value="30d">30天</mdui-segmented-button>
               <mdui-segmented-button value="1y">1年</mdui-segmented-button>
@@ -80,7 +68,8 @@
           <!-- 最大查看次数 -->
           <div class="config-section">
             <mdui-text-field
-              v-model.number="maxViews"
+              :value="maxViews"
+              @input="maxViews = Number($event.target.value)"
               label="最大查看次数"
               type="number"
               helper="1表示阅后即焚，-1表示无限制"
@@ -90,13 +79,14 @@
             ></mdui-text-field>
           </div>
 
-          <!-- 访问密钥（可选） -->
+          <!-- 访问密钥输入框 -->
           <div class="config-section">
             <mdui-text-field
-              v-model="accessKey"
-              label="访问密钥（可选）"
+              :value="accessKey"
+              @input="accessKey = $event.target.value"
+              label="访问密钥"
               type="password"
-              helper="留空则无需密钥即可访问（最多72个字符）"
+              helper="设置后访问者需要输入密钥才能查看（最多72个字符）"
               variant="outlined"
               clearable
               maxlength="72"
@@ -118,32 +108,39 @@
       <mdui-dialog
         ref="publishSuccessDialogRef"
         headline="发布成功"
-        icon="check_circle"
         close-on-overlay-click
       >
+        <mdui-icon slot="icon" name="check_circle" class="success-icon"></mdui-icon>
         <div class="dialog-content">
-          <div class="success-message">
-            <p>您的Paste已成功发布！</p>
-          </div>
-          
           <div class="info-section">
             <div class="info-item">
-              <span class="info-label">Paste ID:</span>
-              <span class="info-value">{{ currentPasteId }}</span>
+                <mdui-text-field
+                    label="分享链接"
+                    readonly
+                    :value="pasteUrl"
+                    style="width: 100%;"
+                >
+                    <mdui-button-icon
+                        slot="suffix"
+                        icon="content_copy"
+                        @click="copyToClipboard(pasteUrl, '分享链接已复制')"
+                    ></mdui-button-icon>
+                </mdui-text-field>
             </div>
             <div class="info-item">
-              <span class="info-label">Admin Key:</span>
-              <span class="info-value monospace">{{ currentAdminKey }}</span>
+                <mdui-text-field
+                    label="Admin Key (请妥善保管)"
+                    readonly
+                    :value="currentAdminKey"
+                    style="width: 100%;"
+                >
+                    <mdui-button-icon
+                        slot="suffix"
+                        icon="content_copy"
+                        @click="copyToClipboard(currentAdminKey, 'Admin Key 已复制')"
+                    ></mdui-button-icon>
+                </mdui-text-field>
             </div>
-            <div class="info-item" v-if="encryptionKey">
-              <span class="info-label">加密密钥:</span>
-              <span class="info-value monospace">{{ encryptionKey }}</span>
-            </div>
-          </div>
-
-          <div class="warning-message">
-            <mdui-icon name="warning"></mdui-icon>
-            <p>请妥善保存以上信息，关闭后将无法再次查看！</p>
           </div>
         </div>
 
@@ -156,6 +153,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
+import 'mdui/components/button-icon.js'
 import 'mdui/components/card.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
@@ -219,6 +217,27 @@ const canSubmit = computed(() => {
     return markdownContent.value.trim().length > 0
   }
 })
+
+const pasteUrl = computed(() => {
+  if (!currentPasteId.value) return ''
+  const baseUrl = window.location.origin
+  let url = `${baseUrl}/p/${currentPasteId.value}`
+  if (encryptionKey.value) {
+    url += `#${encryptionKey.value}`
+  }
+  return url
+})
+
+// 复制到剪贴板
+const copyToClipboard = async (text: string, successMessage: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    snackbar({ message: successMessage });
+  } catch (err) {
+    console.error('Failed to copy: ', err);
+    snackbar({ message: '复制失败', closeable: true });
+  }
+};
 
 // 处理内容类型切换
 const handleContentTypeChange = (e: Event) => {
@@ -310,7 +329,7 @@ const handleSubmit = async () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        encryption_mode: 'server'
+        encryption_mode: 'client',
       })
     })
 
@@ -590,5 +609,30 @@ onMounted(() => {
 .warning-message p {
   margin: 0;
   font-size: 14px;
+}
+
+/* 成功图标样式和动画 */
+.success-icon {
+  font-size: 48px;
+  color: var(--mdui-color-primary);
+  animation: successIconAnimation 0.6s ease-out;
+}
+
+@keyframes successIconAnimation {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>

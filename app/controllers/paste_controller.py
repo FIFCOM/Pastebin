@@ -287,7 +287,7 @@ async def get_paste_info(
             ) from None
 
 
-@router.get("/{paste_id}/content", response_model=PasteContentResponse)
+@router.get("/{paste_id}/content", response_model=PasteContentResponse, response_model_exclude_none=True)
 async def get_paste_content(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),

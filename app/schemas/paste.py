@@ -25,7 +25,7 @@ class PasteContentUpdateRequest(BaseModel):
     encrypted_content: str | None = Field(
         None, description="Base64编码的加密内容（客户端加密模式）"
     )
-    content: str | None = Field(None, description="明文内容（服务端加密模式）")
+    content: str | None = Field(default=None, description="明文内容（服务端加密模式）")
 
     @validator("encrypted_content", "content")
     def validate_content_fields(cls, v, values):
@@ -66,7 +66,7 @@ class PastePublishSettings(BaseModel):
     max_views: int = Field(
         ..., description="最大查看次数，1表示阅后即焚，-1表示无限制"
     )
-    access_key: str | None = Field(None, max_length=72, description="访问密钥（可选，最多72字符）")
+    access_key: str | None = Field(default=None, max_length=72, description="访问密钥（可选，最多72字符）")
 
     @validator("max_views")
     def validate_max_views(cls, v):
@@ -86,15 +86,15 @@ class PastePublishSettings(BaseModel):
 class PasteUpdateRequest(BaseModel):
     """更新Paste请求"""
 
-    title: str | None = Field(None, max_length=255, description="新标题")
+    title: str | None = Field(default=None, max_length=255, description="新标题")
     type: str | None = Field(
         None, pattern="^(txt|md)$", description="Paste类型：txt或md"
     )
     expire_time: str | None = Field(
         None, pattern="^(7d|30d|1y|never)$", description="过期时间"
     )
-    max_views: int | None = Field(None, ge=1, description="最大查看次数")
-    access_key: str | None = Field(None, description="访问密钥，空字符串表示禁用")
+    max_views: int | None = Field(default=None, ge=1, description="最大查看次数")
+    access_key: str | None = Field(default=None, description="访问密钥，空字符串表示禁用")
 
     @validator("max_views")
     def validate_max_views(cls, v):
@@ -129,13 +129,13 @@ class FileInfo(BaseModel):
 class PasteResponse(BaseModel):
     """Paste信息响应"""
 
-    title: str | None = Field(None, description="Paste标题")
+    title: str | None = Field(default=None, description="Paste标题")
     type: str = Field(..., description="Paste类型：txt或md")
     status: str = Field(..., description="状态：published或edited")
     files: list[FileInfo] = Field(default=[], description="文件列表")
-    published_at: datetime | None = Field(None, description="发布时间")
+    published_at: datetime | None = Field(default=None, description="发布时间")
     updated_at: datetime = Field(..., description="更新时间")
-    expire_at: datetime | None = Field(None, description="过期时间")
+    expire_at: datetime | None = Field(default=None, description="过期时间")
     view_count: int = Field(..., description="查看次数")
     max_views: int = Field(..., description="最大查看次数")
 
@@ -146,9 +146,11 @@ class PasteResponse(BaseModel):
 class PasteContentResponse(BaseModel):
     """Paste内容响应"""
 
-    encrypted_content: str = Field(..., description="加密内容（Base64）")
+    encrypted_content: str | None = Field(
+        default=None, description="加密内容（Base64）"
+    )
     content: str | None = Field(
-        None, description="明文内容（如果提供了正确的解密密钥）"
+        default=None, description="明文内容（如果提供了正确的解密密钥）"
     )
 
 
@@ -158,7 +160,7 @@ class PastePublishResponse(BaseModel):
     paste_id: str = Field(..., description="Paste ID")
     admin_key: str = Field(..., description="管理密钥")
     encryption_key: str | None = Field(
-        None, description="加密密钥（当encryption_mode为server时返回）"
+        default=None, description="加密密钥（当encryption_mode为server时返回）"
     )
 
 

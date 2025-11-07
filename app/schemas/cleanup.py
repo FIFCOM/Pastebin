@@ -27,7 +27,7 @@ class CleanupTaskResult(BaseModel):
     success: bool = Field(..., description="是否执行成功")
     deleted_count: int = Field(..., description="删除的记录数量")
     message: str = Field(..., description="执行结果消息")
-    error: str | None = Field(None, description="错误信息（如果有）")
+    error: str | None = Field(default=None, description="错误信息（如果有）")
 
 
 class CleanupResponse(BaseModel):
