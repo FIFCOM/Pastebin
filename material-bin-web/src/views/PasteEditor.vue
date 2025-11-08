@@ -162,16 +162,18 @@ import 'mdui/components/segmented-button-group.js'
 import 'mdui/components/segmented-button.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import Cookies from 'js-cookie'
-import PlainEditor from './editors/Plain.vue'
-import MarkdownEditor from './editors/Markdown.vue'
+import PlainEditor from '../components/editors/Plain.vue'
+import MarkdownEditor from '../components/editors/Markdown.vue'
 import {
   generateEncryptionKey,
   encryptContent,
   keyToUrlSafeStr
 } from '../utils/crypto'
-
-// 获取API基础URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+import {
+  createPaste,
+  uploadPasteContent,
+  publishPaste
+} from '../services/paste'
 
 // 生成随机ID的函数
 const generateRandomId = () => {
@@ -322,22 +324,8 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
-    // 1. 创建Paste（客户端加密模式）
-    const createResponse = await fetch(`${API_BASE_URL}/api/pastes`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        encryption_mode: 'client',
-      })
-    })
-
-    if (!createResponse.ok) {
-      throw new Error('创建Paste失败')
-    }
-
-    const createData = await createResponse.json()
+    // 1. 创建 Paste（客户端加密模式）
+    const createData = await createPaste('client')
     currentPasteId.value = createData.paste_id
     currentAdminKey.value = createData.admin_key
 
@@ -348,28 +336,13 @@ const handleSubmit = async () => {
 
     // 3. 加密并上传内容
     const encryptedContent = await encryptContent(content, key)
-    const contentResponse = await fetch(
-      `${API_BASE_URL}/api/pastes/${currentPasteId.value}/content`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentAdminKey.value}`
-        },
-        body: JSON.stringify({
-          encrypted_content: encryptedContent
-        })
-      }
-    )
+    await uploadPasteContent(currentPasteId.value, currentAdminKey.value, {
+      encrypted_content: encryptedContent
+    })
 
-    if (!contentResponse.ok) {
-      throw new Error('上传内容失败')
-    }
-
-    // 4. 显示发布配置Dialog
+    // 4. 显示发布配置 Dialog
     snackbar({ message: 'Paste创建成功，请配置发布选项' })
     openPublishConfigDialog()
-
   } catch (error) {
     console.error('提交失败:', error)
     snackbar({ 
@@ -402,40 +375,24 @@ const handlePublish = async () => {
   isPublishing.value = true
 
   try {
-    const publishResponse = await fetch(
-      `${API_BASE_URL}/api/pastes/${currentPasteId.value}/publish`,
+    await publishPaste(
+      currentPasteId.value,
+      currentAdminKey.value,
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentAdminKey.value}`
-        },
-        body: JSON.stringify({
-          settings: {
-            title: title.value.trim(),
-            type: contentType.value === 'markdown' ? 'md' : 'txt',
-            expire_time: expireTime.value,
-            max_views: maxViews.value,
-            access_key: accessKey.value || undefined
-          }
-        })
+        title: title.value.trim(),
+        type: contentType.value === 'markdown' ? 'md' : 'txt',
+        expire_time: expireTime.value as any,
+        max_views: maxViews.value,
+        access_key: accessKey.value || undefined
       }
     )
 
-    if (!publishResponse.ok) {
-      const errorData = await publishResponse.json()
-      throw new Error(errorData.detail || '发布失败')
-    }
-
-    const publishData = await publishResponse.json()
-    
-    // 关闭配置Dialog
+    // 关闭配置 Dialog
     closePublishConfigDialog()
-    
-    // 显示成功Dialog
+
+    // 显示成功 Dialog
     snackbar({ message: '发布成功！' })
     openSuccessDialog()
-
   } catch (error) {
     console.error('发布失败:', error)
     snackbar({ 

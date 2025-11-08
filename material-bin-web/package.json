@@ -10,11 +10,18 @@
   },
   "dependencies": {
     "@mdui/icons": "^1.0.3",
+    "@types/markdown-it": "^14.1.2",
+    "axios": "^1.13.2",
+    "highlight.js": "^11.11.1",
     "js-cookie": "^3.0.5",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-toc-done-right": "^4.2.0",
     "material-icons": "^1.13.14",
     "mdui": "^2.1.4",
     "vditor": "^3.11.2",
-    "vue": "^3.5.22"
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.6",

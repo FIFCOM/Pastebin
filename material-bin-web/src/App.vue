@@ -2,10 +2,7 @@
   <GlobalHeader></GlobalHeader>
   <mdui-layout>
     <mdui-layout-main class="mdui-container">
-      <PasteEditor
-        @submit="handlePasteSubmit"
-        @cancel="handlePasteCancel"
-      />
+      <router-view />
     </mdui-layout-main>
   </mdui-layout>
   
@@ -16,26 +13,6 @@ import 'mdui/mdui.css'
 import 'mdui'
 
 import GlobalHeader from './components/GlobalHeader.vue'
-import PasteEditor from './components/PasteEditor.vue'
-import { snackbar } from 'mdui'
-
-// 处理Paste提交
-const handlePasteSubmit = (data: { title: string; content: string; contentType: 'plain' | 'markdown' }) => {
-  console.log('Paste提交:', data)
-  snackbar({
-    message: `已提交: ${data.title} (${data.contentType})`,
-    placement: 'top'
-  })
-}
-
-// 处理取消
-const handlePasteCancel = () => {
-  console.log('取消编辑')
-  snackbar({
-    message: '已取消',
-    placement: 'top'
-  })
-}
 </script>
 
 <style scoped>
