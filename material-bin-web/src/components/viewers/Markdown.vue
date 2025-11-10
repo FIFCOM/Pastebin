@@ -1,14 +1,19 @@
 <template>
   <div ref="viewerRef" class="markdown-viewer mdui-prose" v-html="renderedHtml"></div>
+  <!-- 动态主题样式 -->
+  <component :is="'style'" v-text="highlightStyle"></component>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import markdownItAnchor from 'markdown-it-anchor'
 import markdownItTocDoneRight from 'markdown-it-toc-done-right'
 import { useTheme } from '@/composables/useTheme'
+// 导入主题样式
+import lightTheme from 'highlight.js/styles/github.css?inline'
+import darkTheme from 'highlight.js/styles/github-dark.css?inline'
 
 const props = defineProps<{
   content: string
@@ -17,33 +22,14 @@ const props = defineProps<{
 const { actualTheme } = useTheme()
 const viewerRef = ref<HTMLElement | null>(null)
 
-// 动态加载 highlight.js 样式
-const loadHighlightStyle = async (theme: 'light' | 'dark') => {
-  // 移除旧的样式标签
-  const oldStyle = document.querySelector('style[data-highlight-theme]')
-  if (oldStyle) {
-    oldStyle.remove()
-  }
-  
-  // 动态导入并应用新样式
-  const styleModule = theme === 'dark'
-    ? await import('highlight.js/styles/github-dark.css?inline')
-    : await import('highlight.js/styles/github.css?inline')
-  
-  const style = document.createElement('style')
-  style.setAttribute('data-highlight-theme', theme)
-  style.textContent = styleModule.default
-  document.head.appendChild(style)
-}
+// 主题样式映射
+const themeStyles = {
+  light: lightTheme,
+  dark: darkTheme
+} as const
 
-// 初始化和监听主题变化
-onMounted(() => {
-  loadHighlightStyle(actualTheme.value)
-})
-
-watch(actualTheme, (newTheme) => {
-  loadHighlightStyle(newTheme)
-})
+// 动态计算当前主题样式
+const highlightStyle = computed(() => themeStyles[actualTheme.value])
 
 // 初始化 markdown-it 实例
 const md = new MarkdownIt({

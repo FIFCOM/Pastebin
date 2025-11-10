@@ -1,13 +1,16 @@
 import { ref } from 'vue'
 import { setTheme } from 'mdui/functions/setTheme.js'
+import { setColorScheme } from 'mdui/functions/setColorScheme.js';
 import Cookies from 'js-cookie'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 type ActualTheme = 'light' | 'dark'
+type ThemeColor = '#0061a4' | '#ffb300' | '#f4511e' | '#0b8043' | '#ab47bc' | string
 
-// 全局状态（在模块作用域）
+
 const themeMode = ref<ThemeMode>('auto')
 const actualTheme = ref<ActualTheme>('light')
+const themeColor = ref<ThemeColor>('#0061a4')
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null
@@ -23,10 +26,42 @@ const getSystemTheme = (): ActualTheme => {
 /**
  * 应用主题
  */
-const applyTheme = (theme: ActualTheme) => {
-  actualTheme.value = theme
-  setTheme(theme)
+const applyTheme = (newTheme: ThemeMode) => {
+  // 切换前统一使用 cleanupTheme 清理旧的系统主题监听
+  cleanupTheme()
+
+  themeMode.value = newTheme
+
+  // 判断 newTheme 是否为 auto
+  if (newTheme === 'auto') {
+    // 跟随系统：读取当前系统主题并绑定监听
+    actualTheme.value = getSystemTheme()
+
+    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    mediaQueryListener = handleSystemThemeChange
+    mediaQuery.addEventListener('change', mediaQueryListener)
+  } else {
+    // 固定为 light / dark：不绑定系统监听
+    actualTheme.value = newTheme
+  }
+
+  Cookies.set('theme', newTheme, { expires: 30 })
+  setTheme(actualTheme.value)
 }
+
+const applyColor = (newColor: ThemeColor) => {
+  // 简单格式校验：必须为 #RRGGBB，否则回退为当前已记录或默认颜色
+  const isValidHex =
+    typeof newColor === 'string' &&
+    /^#[0-9a-fA-F]{6}$/.test(newColor)
+
+  const finalColor = isValidHex ? newColor : themeColor.value
+
+  themeColor.value = finalColor
+  Cookies.set('theme_color', finalColor, { expires: 30 })
+  setColorScheme(finalColor)
+}
+
 
 /**
  * 系统主题变化处理
@@ -42,58 +77,37 @@ const handleSystemThemeChange = (e: MediaQueryListEvent) => {
  * 初始化主题
  */
 const initTheme = () => {
-  // 1. 读取用户设置
-  const savedMode = Cookies.get('theme') as ThemeMode | undefined
-  themeMode.value = savedMode || 'auto'
-  
-  // 2. 根据模式决定实际主题
-  if (themeMode.value === 'auto') {
-    actualTheme.value = getSystemTheme()
-    
-    // 监听系统主题变化
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    mediaQueryListener = handleSystemThemeChange
-    mediaQuery.addEventListener('change', mediaQueryListener)
+  // 读取用户设置（默认 auto）
+  const savedMode = (Cookies.get('theme') as ThemeMode | undefined) || 'auto'
+
+  // 通过 applyTheme 统一处理 themeMode、actualTheme 和监听器
+  applyTheme(savedMode)
+
+  // 读取并应用保存的颜色（通过 applyColor 统一处理和校验）
+  const savedColor = Cookies.get('theme_color') as ThemeColor | undefined
+  if (savedColor) {
+    applyColor(savedColor)
   } else {
-    actualTheme.value = themeMode.value
+    applyColor(themeColor.value)
   }
-  
-  // 3. 应用主题
-  setTheme(actualTheme.value)
 }
 
 /**
  * 切换主题模式
  */
 const toggleTheme = () => {
-  // 移除旧的监听器
-  if (mediaQuery && mediaQueryListener) {
-    mediaQuery.removeEventListener('change', mediaQueryListener)
-    mediaQueryListener = null
-  }
-  
   // 循环切换：auto -> light -> dark -> auto
+  let nextTheme: ThemeMode
   if (themeMode.value === 'auto') {
-    themeMode.value = 'light'
-    actualTheme.value = 'light'
-    Cookies.set('theme', 'light', { expires: 30 })
+    nextTheme = 'light'
   } else if (themeMode.value === 'light') {
-    themeMode.value = 'dark'
-    actualTheme.value = 'dark'
-    Cookies.set('theme', 'dark', { expires: 30 })
+    nextTheme = 'dark'
   } else {
-    // 切换回 auto，清除 cookie
-    themeMode.value = 'auto'
-    Cookies.remove('theme')
-    
-    // 重新读取系统主题并监听
-    actualTheme.value = getSystemTheme()
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    mediaQueryListener = handleSystemThemeChange
-    mediaQuery.addEventListener('change', mediaQueryListener)
+    nextTheme = 'auto'
   }
-  
-  applyTheme(actualTheme.value)
+
+  // 所有监听处理统一交给 applyTheme
+  applyTheme(nextTheme)
 }
 
 /**
@@ -114,8 +128,10 @@ export const useTheme = () => {
   return {
     themeMode,
     actualTheme,
+    themeColor,
     toggleTheme,
     initTheme,
-    cleanupTheme
+    cleanupTheme,
+    applyColor
   }
 }
