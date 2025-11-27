@@ -12,7 +12,17 @@
 import 'mdui/mdui.css'
 import 'mdui'
 
+import { onMounted } from 'vue'
 import GlobalHeader from './components/GlobalHeader.vue'
+import { useAuth } from './composables/useAuth'
+
+const { initAuth } = useAuth()
+
+onMounted(() => {
+  initAuth().catch((e) => {
+    console.error('Failed to initialize auth on app mount', e)
+  })
+})
 </script>
 
 <style scoped>

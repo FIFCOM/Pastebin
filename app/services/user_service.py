@@ -4,7 +4,7 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import Column, and_
+from sqlalchemy import Column, and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -95,21 +95,29 @@ class UserService:
     def authenticate_user(db: Session, login_data: UserLoginRequest) -> User | None:
         """
         用户认证
-
+ 
+        说明：
+        - login_data.username 字段可以填写「用户名」或「邮箱」
+        - 为了兼容当前注册流程（只能输入邮箱），这里同时按 username 和 email 匹配
+ 
         Args:
             db: 数据库会话
             login_data: 登录数据
-
+ 
         Returns:
             认证成功的用户或None
         """
-        user = db.query(User).filter(User.username == login_data.username).first()
+        user = (
+            db.query(User)
+            .filter(User.email == login_data.email)
+            .first()
+        )
         if not user:
             return None
-
+ 
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
-
+ 
         return user
 
     @staticmethod
@@ -129,7 +137,7 @@ class UserService:
         """
         user = UserService.authenticate_user(db, login_data)
         if not user:
-            raise ValueError("用户名或密码错误")
+            raise ValueError("邮箱或密码错误")
 
         # 检查用户是否启用了TOTP
         if user.totp_secret:  # type: ignore
@@ -514,27 +522,34 @@ class UserService:
     ) -> User | None:
         """
         用户认证（包含TOTP验证）
-
+ 
+        说明：
+        - login_data.username 字段可以填写「用户名」或「邮箱」
+ 
         Args:
             db: 数据库会话
             login_data: 登录数据（包含TOTP代码）
-
+ 
         Returns:
             认证成功的用户或None
         """
-        user = db.query(User).filter(User.username == login_data.username).first()
+        user = (
+            db.query(User)
+            .filter(User.email == login_data.email)
+            .first()
+        )
         if not user:
             return None
-
+ 
         # 验证密码
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
-
+ 
         # 验证TOTP代码
         if user.totp_secret:  # type: ignore
             if not verify_totp_code(user.totp_secret, login_data.totp_code):  # type: ignore
                 return None
-
+ 
         return user
 
     @staticmethod
@@ -556,7 +571,7 @@ class UserService:
         """
         user = UserService.authenticate_user_with_totp(db, login_data)
         if not user:
-            raise ValueError("用户名、密码或TOTP代码错误")
+            raise ValueError("邮箱、密码或TOTP代码错误")
 
         # 恢复用户密钥
         try:

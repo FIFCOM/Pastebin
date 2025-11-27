@@ -29,7 +29,7 @@ class UserRegisterRequest(BaseModel):
 class UserLoginRequest(BaseModel):
     """用户登录请求"""
 
-    username: str = Field(..., description="用户名")
+    email: EmailStr = Field(..., description="用户邮箱")
     password: str = Field(
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
     )
@@ -45,7 +45,7 @@ class UserLoginRequest(BaseModel):
 class UserLoginWithTotpRequest(BaseModel):
     """用户TOTP登录请求"""
 
-    username: str = Field(..., description="用户名")
+    email: EmailStr = Field(..., description="用户邮箱")
     password: str = Field(
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
     )

@@ -52,7 +52,7 @@ async def login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)
     """
     用户登录
 
-    - **username**: 用户名
+    - **email**: 用户邮箱
     - **password**: SHA256哈希后的密码
     """
     try:
@@ -73,7 +73,7 @@ async def login_user_with_totp(
     """
     用户TOTP登录
 
-    - **username**: 用户名
+    - **email**: 用户邮箱
     - **password**: SHA256哈希后的密码
     - **totp_code**: 6位TOTP验证码
     """
