@@ -33,7 +33,7 @@ class Paste(Base):
 
     # METADATA
     title = Column(String(255))
-    type = Column(Enum("txt", "md"), default="txt") # paste类型，默认为text，可选markdown
+    type = Column(Enum("txt", "md"), default="txt") # paste类型，默认为txt，可选md
     content_path = Column(String(500))  # 加密内容文件路径
 
     # 加密相关

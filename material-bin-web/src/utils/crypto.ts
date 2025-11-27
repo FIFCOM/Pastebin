@@ -3,6 +3,18 @@
  */
 
 /**
+ * 生成非密码学安全的随机字符串
+ */
+export function generateRandomId(len: number = 8) : string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < len; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+/**
  * 生成随机加密密钥
  * 对应后端: generate_encryption_key()
  */

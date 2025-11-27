@@ -19,18 +19,18 @@
       <div class="editor-section content-type-switch">
         <span>Markdown</span>
         <mdui-switch
-          :checked="contentType === 'markdown'"
+          :checked="contentType === 'md'"
           @change="handleContentTypeChange"
         ></mdui-switch>
       </div>
 
       <!-- Plain文本输入框 -->
-      <div v-show="contentType === 'plain'" class="editor-section">
+      <div v-show="contentType === 'txt'" class="editor-section">
         <plain-editor v-model="plainContent"></plain-editor>
       </div>
 
       <!-- Markdown编辑器 -->
-      <div v-show="contentType === 'markdown'" class="editor-section">
+      <div v-show="contentType === 'md'" class="editor-section">
         <markdown-editor v-model="markdownContent"></markdown-editor>
       </div>
 
@@ -165,6 +165,7 @@ import Cookies from 'js-cookie'
 import PlainEditor from '../components/editors/Plain.vue'
 import MarkdownEditor from '../components/editors/Markdown.vue'
 import {
+  generateRandomId,
   generateEncryptionKey,
   encryptContent,
   keyToUrlSafeStr
@@ -175,19 +176,9 @@ import {
   publishPaste
 } from '../services/paste'
 
-// 生成随机ID的函数
-const generateRandomId = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
-}
-
 // 数据定义
 const title = ref(`未命名的Paste.ID-${generateRandomId()}`)
-const contentType = ref<'plain' | 'markdown'>('plain')
+const contentType = ref<'txt' | 'md'>('txt')
 const plainContent = ref('')
 const markdownContent = ref('')
 const titleInputRef = ref<any>(null)
@@ -213,7 +204,7 @@ const publishSuccessDialogRef = ref<any>(null)
 const canSubmit = computed(() => {
   if (!title.value.trim()) return false
   
-  if (contentType.value === 'plain') {
+  if (contentType.value === 'txt') {
     return plainContent.value.trim().length > 0
   } else {
     return markdownContent.value.trim().length > 0
@@ -245,17 +236,17 @@ const copyToClipboard = async (text: string, successMessage: string) => {
 const handleContentTypeChange = (e: Event) => {
   const target = e.target as any
   const isMarkdown = target.checked
-  contentType.value = isMarkdown ? 'markdown' : 'plain'
+  contentType.value = isMarkdown ? 'md' : 'txt'
   
   // 保存到 Cookie，有效期30天
-  Cookies.set('contentType', contentType.value, { expires: 30 })
+  Cookies.set('content_type', contentType.value, { expires: 30 })
 }
 
 watch(contentType, (newType, oldType) => {
-  if (oldType === 'markdown') {
+  if (oldType === 'md') {
     plainContent.value = markdownContent.value;
   }
-  if (newType === 'markdown') {
+  if (newType === 'md') {
     markdownContent.value = plainContent.value;
   }
 });
@@ -311,7 +302,7 @@ const handleSubmit = async () => {
   
   let content = ''
   
-  if (contentType.value === 'plain') {
+  if (contentType.value === 'txt') {
     content = plainContent.value.trim()
   } else {
     content = markdownContent.value.trim()
@@ -380,7 +371,7 @@ const handlePublish = async () => {
       currentAdminKey.value,
       {
         title: title.value.trim(),
-        type: contentType.value === 'markdown' ? 'md' : 'txt',
+        type: contentType.value === 'md' ? 'md' : 'txt',
         expire_time: expireTime.value as any,
         max_views: maxViews.value,
         access_key: accessKey.value || undefined
@@ -438,12 +429,12 @@ const resetForm = () => {
 // 生命周期钩子
 onMounted(() => {
   // 从 Cookie 中读取保存的内容类型偏好
-  const savedContentType = Cookies.get('contentType')
-  if (savedContentType === 'markdown' || savedContentType === 'plain') {
+  const savedContentType = Cookies.get('content_type')
+  if (savedContentType === 'md' || savedContentType === 'txt') {
     contentType.value = savedContentType
   } else {
-    // 如果没有保存的偏好，默认使用 plain
-    contentType.value = 'plain'
+    // 如果没有保存的偏好，默认使用 txt
+    contentType.value = 'txt'
   }
 })
 </script>

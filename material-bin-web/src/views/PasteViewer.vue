@@ -14,16 +14,16 @@
       <div class="viewer-type-switch">
         <span>Markdown 渲染</span>
         <mdui-switch
-          :checked="viewerType === 'markdown'"
+          :checked="viewerType === 'md'"
           @change="handleViewerTypeChange"
         ></mdui-switch>
       </div>
 
       <!-- Plain Viewer -->
-      <plain-viewer v-if="viewerType === 'plain'" :content="decryptedContent" />
+      <plain-viewer v-if="viewerType === 'txt'" :content="decryptedContent" />
       
       <!-- Markdown Viewer -->
-      <markdown-viewer v-else-if="viewerType === 'markdown'" :content="decryptedContent" />
+      <markdown-viewer v-else-if="viewerType === 'md'" :content="decryptedContent" />
     </div>
 
     <!-- Access Key 输入对话框 -->
@@ -106,7 +106,7 @@ const pasteData = ref<PasteData | null>(null)
 const decryptedContent = ref<string>('')
 const isLoading = ref<boolean>(true)
 const error = ref<string>('')
-const viewerType = ref<'plain' | 'markdown'>('plain')
+const viewerType = ref<'txt' | 'md'>('txt')
 
 // Access Key 相关
 const accessKeyDialog = ref<any>(null)
@@ -159,7 +159,7 @@ function validateParams(): { pasteId: string; encryptionKey: Uint8Array } | null
 function handleViewerTypeChange(e: Event) {
   const target = e.target as any
   const isMarkdown = target.checked
-  viewerType.value = isMarkdown ? 'markdown' : 'plain'
+  viewerType.value = isMarkdown ? 'md' : 'txt'
 }
 
 /**
@@ -176,7 +176,7 @@ async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?:
     decryptedContent.value = await decryptContent(content.encrypted_content, encryptionKey)
     
     // 根据 paste 类型设置默认 viewer（不使用持久化）
-    viewerType.value = data.type === 'md' ? 'markdown' : 'plain'
+    viewerType.value = data.type === 'md' ? 'md' : 'txt'
     
     return true
   } catch (e: any) {
