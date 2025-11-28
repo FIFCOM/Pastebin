@@ -5,7 +5,7 @@
       <router-view />
     </mdui-layout-main>
   </mdui-layout>
-  
+  <GlobalFooter></GlobalFooter>
 </template>
 
 <script setup lang="ts">
@@ -14,6 +14,7 @@ import 'mdui'
 
 import { onMounted } from 'vue'
 import GlobalHeader from './components/GlobalHeader.vue'
+import GlobalFooter from './components/GlobalFooter.vue'
 import { useAuth } from './composables/useAuth'
 
 const { initAuth } = useAuth()

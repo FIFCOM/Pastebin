@@ -93,10 +93,9 @@ const initTheme = () => {
 }
 
 /**
- * 切换主题模式
+ * 切换主题模式（循环：auto -> light -> dark -> auto）
  */
 const toggleTheme = () => {
-  // 循环切换：auto -> light -> dark -> auto
   let nextTheme: ThemeMode
   if (themeMode.value === 'auto') {
     nextTheme = 'light'
@@ -108,6 +107,16 @@ const toggleTheme = () => {
 
   // 所有监听处理统一交给 applyTheme
   applyTheme(nextTheme)
+}
+
+/**
+ * 设置为指定主题模式
+ */
+const setThemeMode = (mode: ThemeMode) => {
+  if (themeMode.value === mode) {
+    return
+  }
+  applyTheme(mode)
 }
 
 /**
@@ -130,6 +139,7 @@ export const useTheme = () => {
     actualTheme,
     themeColor,
     toggleTheme,
+    setThemeMode,
     initTheme,
     cleanupTheme,
     applyColor
