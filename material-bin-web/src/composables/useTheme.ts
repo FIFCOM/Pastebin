@@ -1,16 +1,25 @@
 import { ref } from 'vue'
 import { setTheme } from 'mdui/functions/setTheme.js'
 import { setColorScheme } from 'mdui/functions/setColorScheme.js';
-import Cookies from 'js-cookie'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 type ActualTheme = 'light' | 'dark'
-type ThemeColor = '#0061a4' | '#ffb300' | '#f4511e' | '#0b8043' | '#ab47bc' | string
+
+// 预设主题色列表，供全局复用
+export const presetColors = [
+  '#0061a4',
+  '#ffb300',
+  '#f4511e',
+  '#0b8043',
+  '#ab47bc'
+] as const
+
+type ThemeColor = (typeof presetColors)[number] | string
 
 
 const themeMode = ref<ThemeMode>('auto')
 const actualTheme = ref<ActualTheme>('light')
-const themeColor = ref<ThemeColor>('#0061a4')
+const themeColor = ref<ThemeColor>(presetColors[0])
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null
@@ -45,7 +54,7 @@ const applyTheme = (newTheme: ThemeMode) => {
     actualTheme.value = newTheme
   }
 
-  Cookies.set('theme', newTheme, { expires: 30 })
+  localStorage.setItem('theme', newTheme)
   setTheme(actualTheme.value)
 }
 
@@ -58,7 +67,7 @@ const applyColor = (newColor: ThemeColor) => {
   const finalColor = isValidHex ? newColor : themeColor.value
 
   themeColor.value = finalColor
-  Cookies.set('theme_color', finalColor, { expires: 30 })
+  localStorage.setItem('theme_color', finalColor)
   setColorScheme(finalColor)
 }
 
@@ -78,13 +87,13 @@ const handleSystemThemeChange = (e: MediaQueryListEvent) => {
  */
 const initTheme = () => {
   // 读取用户设置（默认 auto）
-  const savedMode = (Cookies.get('theme') as ThemeMode | undefined) || 'auto'
+  const savedMode = (localStorage.getItem('theme') as ThemeMode | null) || 'auto'
 
   // 通过 applyTheme 统一处理 themeMode、actualTheme 和监听器
   applyTheme(savedMode)
 
   // 读取并应用保存的颜色（通过 applyColor 统一处理和校验）
-  const savedColor = Cookies.get('theme_color') as ThemeColor | undefined
+  const savedColor = localStorage.getItem('theme_color') as ThemeColor | null
   if (savedColor) {
     applyColor(savedColor)
   } else {

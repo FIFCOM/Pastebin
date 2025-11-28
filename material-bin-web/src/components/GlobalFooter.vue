@@ -26,15 +26,12 @@
             @change="handleModeGroupChange"
           >
             <mdui-segmented-button value="auto">
-              <mdui-icon-brightness-auto />
               <span>自动</span>
             </mdui-segmented-button>
             <mdui-segmented-button value="light">
-              <mdui-icon-light-mode />
               <span>浅色</span>
             </mdui-segmented-button>
             <mdui-segmented-button value="dark">
-              <mdui-icon-dark-mode />
               <span>深色</span>
             </mdui-segmented-button>
           </mdui-segmented-button-group>
@@ -69,9 +66,6 @@
 
 <script setup lang="ts">
 import '@mdui/icons/color-lens.js'
-import '@mdui/icons/brightness-auto.js'
-import '@mdui/icons/light-mode.js'
-import '@mdui/icons/dark-mode.js'
 
 import { onMounted, onUnmounted, ref } from 'vue'
 import 'mdui/components/button-icon.js'
@@ -80,17 +74,9 @@ import 'mdui/components/dialog.js'
 import 'mdui/components/segmented-button-group.js'
 import 'mdui/components/segmented-button.js'
 
-import { useTheme } from '../composables/useTheme'
+import { useTheme, presetColors } from '../composables/useTheme'
 
 const themeDialogRef = ref<HTMLDialogElement | null>(null)
-
-const presetColors = [
-  '#0061a4',
-  '#ffb300',
-  '#f4511e',
-  '#0b8043',
-  '#ab47bc'
-]
 
 const {
   themeMode,
