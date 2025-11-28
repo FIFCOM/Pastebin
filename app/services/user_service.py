@@ -4,7 +4,7 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import Column, and_, or_
+from sqlalchemy import Column, and_
 from sqlalchemy.orm import Session
 
 from app.core.security import (

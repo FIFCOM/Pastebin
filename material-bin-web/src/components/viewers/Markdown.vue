@@ -10,10 +10,12 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import markdownItAnchor from 'markdown-it-anchor'
 import markdownItTocDoneRight from 'markdown-it-toc-done-right'
+import markdownItKatex from '@vscode/markdown-it-katex'
 import { useTheme } from '@/composables/useTheme'
 // 导入主题样式
 import lightTheme from 'highlight.js/styles/github.css?inline'
 import darkTheme from 'highlight.js/styles/github-dark.css?inline'
+import 'katex/dist/katex.min.css'
 
 const props = defineProps<{
   content: string
@@ -35,7 +37,7 @@ const highlightStyle = computed(() => themeStyles[actualTheme.value])
 const md = new MarkdownIt({
   html: false,         // 不允许 HTML 标签
   linkify: true,       // 自动识别链接
-  typographer: true,   // 启用语言中立替换和引号美化
+  typographer: false,
   breaks: true,        // 将段内换行转换为 <br>
   highlight(str, lang) {
     // 官方文档推荐写法：优先使用指定语言，否则可选用自动检测或回退为转义文本
@@ -77,6 +79,12 @@ md.use(markdownItTocDoneRight, {
   containerClass: 'markdown-toc',
   listType: 'ul',
   level: [1, 2, 3, 4]
+})
+
+ // 启用 markdown-it-katex（VS Code 同款实现）：渲染行内/块级 LaTeX 公式
+md.use(markdownItKatex, {
+  throwOnError: false,
+  errorColor: '#cc0000'
 })
 
 // 渲染 Markdown
@@ -271,12 +279,10 @@ onMounted(() => {
 
 /* 引用样式 */
 .markdown-viewer :deep(blockquote) {
-  border-left: 4px solid var(--mdui-color-primary);
   padding-left: 1em;
   margin-left: 0;
   margin-right: 0;
   color: var(--mdui-color-on-surface-variant);
-  font-style: italic;
 }
 
 /* 水平线样式 */

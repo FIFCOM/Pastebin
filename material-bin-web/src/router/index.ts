@@ -33,7 +33,7 @@ const router = createRouter({
 })
 
 // 简单 guestOnly 守卫：已登录用户访问 /login 或 /register 时跳回首页
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const { isAuthInitialized, initAuth, isLoggedIn } = useAuth()
 
   if (!isAuthInitialized.value) {

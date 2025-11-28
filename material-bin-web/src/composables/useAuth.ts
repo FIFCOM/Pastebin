@@ -86,7 +86,7 @@ async function registerAndAutoLogin(
 ): Promise<LoginResponse> {
   isAuthLoading.value = true
   try {
-    const user = await registerUser(email, password)
+    await registerUser(email, password)
     const resp = await loginUser(email, password)
     accessToken.value = resp.access_token
     currentUser.value = resp.user
