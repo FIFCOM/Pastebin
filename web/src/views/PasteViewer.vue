@@ -1,0 +1,357 @@
+<template>
+  <div class="paste-view">
+    <!-- 加载状态 -->
+    <div v-if="isLoading" class="loading-indicator">
+      <mdui-circular-progress></mdui-circular-progress>
+    </div>
+
+
+    <!-- Paste 内容 -->
+    <div v-else-if="pasteData && decryptedContent" class="paste-content">
+      <h1 class="mdui-typo-headline">{{ pasteData.title }}</h1>
+      
+      <!-- Viewer 类型切换开关 -->
+      <div class="viewer-type-switch">
+        <span>Markdown 渲染</span>
+        <mdui-switch
+          :checked="viewerType === 'md'"
+          @change="handleViewerTypeChange"
+        ></mdui-switch>
+      </div>
+
+      <!-- Plain Viewer -->
+      <plain-viewer v-if="viewerType === 'txt'" :content="decryptedContent" />
+      
+      <!-- Markdown Viewer -->
+      <markdown-viewer v-else-if="viewerType === 'md'" :content="decryptedContent" />
+    </div>
+
+    <!-- Access Key 输入对话框 -->
+    <mdui-dialog
+      ref="accessKeyDialog"
+      headline="需要访问密钥"
+      close-on-esc="false"
+      close-on-overlay-click="false"
+    >
+      <mdui-icon slot="icon" name="lock" style="color: var(--mdui-color-primary);"></mdui-icon>
+      <div class="dialog-content">
+        <p class="dialog-description">此 Paste 受访问密钥保护，请输入密钥以查看内容。</p>
+        
+        <div class="config-section">
+          <mdui-text-field
+            v-model="accessKeyInput"
+            label="访问密钥"
+            placeholder="请输入访问密钥"
+            type="password"
+            variant="outlined"
+            maxlength="72"
+            counter
+            @keydown.enter="handleAccessKeySubmit"
+          ></mdui-text-field>
+        </div>
+
+        <div v-if="accessKeyError" class="warning-message">
+          <mdui-icon name="error"></mdui-icon>
+          <p>访问密钥验证失败，请重试。</p>
+        </div>
+      </div>
+      
+      <mdui-button
+        slot="action"
+        variant="tonal"
+        @click="handleAccessKeySubmit"
+        :disabled="!accessKeyInput.trim()"
+      >
+        确认
+      </mdui-button>
+    </mdui-dialog>
+
+    <!-- 错误对话框 -->
+    <mdui-dialog
+      ref="errorDialog"
+      headline="错误"
+      close-on-esc="false"
+      close-on-overlay-click="false"
+    >
+      <mdui-icon slot="icon" name="error" style="color: var(--mdui-color-error);"></mdui-icon>
+      <div class="dialog-content">
+        <p class="dialog-description">{{ error }}</p>
+      </div>
+    </mdui-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { getPaste, getPasteContent, type PasteData } from '@/services/paste'
+import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
+import { useTheme } from '@/composables/useTheme'
+import PlainViewer from '@/components/viewers/Plain.vue'
+import MarkdownViewer from '@/components/viewers/Markdown.vue'
+import 'mdui/components/circular-progress.js'
+import 'mdui/components/card.js'
+import 'mdui/components/dialog.js'
+import 'mdui/components/text-field.js'
+import 'mdui/components/button.js'
+import 'mdui/components/switch.js'
+import 'mdui/components/top-app-bar.js'
+
+useTheme()
+
+const route = useRoute()
+
+// 状态
+const pasteData = ref<PasteData | null>(null)
+const decryptedContent = ref<string>('')
+const isLoading = ref<boolean>(true)
+const error = ref<string>('')
+const viewerType = ref<'txt' | 'md'>('txt')
+
+// Access Key 相关
+const accessKeyDialog = ref<any>(null)
+const accessKeyInput = ref<string>('')
+const accessKeyError = ref<boolean>(false)
+const currentAccessKey = ref<string | undefined>(undefined)
+
+// 错误对话框
+const errorDialog = ref<any>(null)
+
+/**
+ * 显示错误对话框
+ */
+function showErrorDialog(errorMessage: string) {
+  error.value = errorMessage
+  if (errorDialog.value) {
+    errorDialog.value.open = true
+  }
+}
+
+/**
+ * 验证必需参数
+ */
+function validateParams(): { pasteId: string; encryptionKey: Uint8Array } | null {
+  const pasteId = route.params.paste_id as string
+  if (!pasteId) {
+    showErrorDialog('URL 中缺少 Paste ID。')
+    return null
+  }
+
+  const encryptionKeyStr = window.location.hash.substring(1)
+  if (!encryptionKeyStr) {
+    showErrorDialog('URL 中缺少加密密钥（hash 部分）。')
+    return null
+  }
+
+  try {
+    const encryptionKey = urlSafeStrToKey(encryptionKeyStr)
+    return { pasteId, encryptionKey }
+  } catch (err) {
+    showErrorDialog('无效的加密密钥格式。')
+    return null
+  }
+}
+
+/**
+ * 处理 Viewer 类型切换
+ * 仅针对当前视图生效，不做持久化
+ */
+function handleViewerTypeChange(e: Event) {
+  const target = e.target as any
+  const isMarkdown = target.checked
+  viewerType.value = isMarkdown ? 'md' : 'txt'
+}
+
+/**
+ * 加载 Paste 数据
+ */
+async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?: string): Promise<boolean> {
+  try {
+    const [data, content] = await Promise.all([
+      getPaste(pasteId, accessKey),
+      getPasteContent(pasteId, accessKey)
+    ])
+
+    pasteData.value = data
+    decryptedContent.value = await decryptContent(content.encrypted_content, encryptionKey)
+    
+    // 根据 paste 类型设置默认 viewer（不使用持久化）
+    viewerType.value = data.type === 'md' ? 'md' : 'txt'
+    
+    return true
+  } catch (e: any) {
+    return handleLoadError(e)
+  }
+}
+
+/**
+ * 处理加载错误
+ */
+function handleLoadError(e: any): boolean {
+  if (e.response) {
+    const status = e.response.status
+    
+    if (status === 404) {
+      showErrorDialog('Paste 不存在，这可能是因为 Paste ID 错误或 Paste 已被删除。')
+    } else if (status === 403) {
+      // 需要 access key - 返回特殊标记
+      return false // 不设置错误，由调用方处理
+    } else {
+      showErrorDialog(`服务器错误 (${status})：${e.response.data?.message || '未知错误'}`)
+    }
+  } else if (e instanceof Error) {
+    if (e.message.includes('decrypt') || e.name === 'OperationError') {
+      showErrorDialog('解密失败，密钥可能不正确或数据已损坏。')
+    } else {
+      showErrorDialog(`发生错误：${e.message}`)
+    }
+  } else {
+    showErrorDialog('发生未知错误。')
+  }
+  
+  console.error('Load paste error:', e)
+  return false
+}
+
+/**
+ * 显示 Access Key 输入对话框
+ */
+function showAccessKeyDialog(isRetry: boolean = false) {
+  isLoading.value = false
+  // 重试时清空输入但保持错误状态；首次显示时清空两者
+  accessKeyInput.value = ''
+  if (!isRetry) {
+    accessKeyError.value = false
+  }
+  if (accessKeyDialog.value) {
+    accessKeyDialog.value.open = true
+  }
+}
+
+/**
+ * 处理 Access Key 提交
+ */
+async function handleAccessKeySubmit() {
+  const params = validateParams()
+  if (!params) return
+
+  const trimmedKey = accessKeyInput.value.trim()
+  if (!trimmedKey) {
+    accessKeyError.value = true
+    return
+  }
+
+  // 关闭对话框并重新加载
+  if (accessKeyDialog.value) {
+    accessKeyDialog.value.open = false
+  }
+  isLoading.value = true
+  error.value = ''
+  currentAccessKey.value = trimmedKey
+
+  const success = await loadPaste(params.pasteId, params.encryptionKey, trimmedKey)
+  
+  if (!success && !error.value) {
+    // 如果失败且没有其他错误（即 403），说明密钥错误
+    accessKeyError.value = true
+    showAccessKeyDialog(true) // 传入 true 表示是重试，不清除输入和错误状态
+  }
+  
+  isLoading.value = false
+}
+
+/**
+ * 初始化加载
+ */
+onMounted(async () => {
+  isLoading.value = true
+  error.value = ''
+
+  const params = validateParams()
+  if (!params) {
+    isLoading.value = false
+    return
+  }
+
+  const success = await loadPaste(params.pasteId, params.encryptionKey)
+  
+  if (!success && !error.value) {
+    // 首次加载时需要 access key
+    showAccessKeyDialog(false)
+  }
+  
+  isLoading.value = false
+})
+</script>
+
+<style scoped>
+.paste-view {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+}
+
+.paste-content {
+  margin-top: 1rem;
+}
+
+.viewer-type-switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--mdui-color-surface-variant);
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.viewer-type-switch > span {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--mdui-color-on-surface);
+}
+
+/* Dialog 样式 */
+.dialog-content {
+  padding: 16px 0;
+}
+
+.dialog-description {
+  font-size: 14px;
+  color: var(--mdui-color-on-surface-variant);
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.config-section {
+  margin-bottom: 20px;
+}
+
+.warning-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--mdui-color-error-container);
+  color: var(--mdui-color-on-error-container);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.warning-message mdui-icon {
+  flex-shrink: 0;
+  font-size: 20px;
+}
+
+.warning-message p {
+  margin: 0;
+  font-size: 14px;
+}
+</style>
