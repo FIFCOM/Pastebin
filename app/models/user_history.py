@@ -1,5 +1,5 @@
 """
-用户Paste关联数据模型
+用户History关联数据模型
 """
 
 from datetime import datetime
@@ -19,10 +19,10 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
-class UserPaste(Base):
-    """用户Paste关联表"""
+class UserHistory(Base):
+    """用户History关联表"""
 
-    __tablename__ = "user_pastes"
+    __tablename__ = "user_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
@@ -48,7 +48,7 @@ class UserPaste(Base):
     paste = relationship("Paste")
 
     # 索引和约束定义
-    __table_args__ = (UniqueConstraint("user_id", "paste_id", name="uq_user_paste"),)
+    __table_args__ = (UniqueConstraint("user_id", "paste_id", name="uq_user_history"),)
 
     def __repr__(self):
-        return f"<UserPaste(id={self.id}, user_id={self.user_id}, paste_id={self.paste_id}, is_starred={self.is_starred})>"
+        return f"<UserHistory(id={self.id}, user_id={self.user_id}, paste_id={self.paste_id}, is_starred={self.is_starred})>"

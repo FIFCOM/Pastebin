@@ -1,5 +1,5 @@
 """
-用户Paste管理控制器 - REST API路由
+用户History管理控制器 - REST API路由
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,21 +9,21 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, get_current_user_with_key
 from app.schemas.common import MessageResponse
 from app.schemas.user import UserResponse
-from app.schemas.user_paste import (
-    UserPasteInfo,
-    UserPasteListResponse,
-    UserPasteSaveRequest,
-    UserPasteSearchParams,
-    UserPasteStarRequest,
+from app.schemas.user_history import (
+    UserHistoryInfo,
+    UserHistoryListResponse,
+    UserHistorySaveRequest,
+    UserHistorySearchParams,
+    UserHistoryStarRequest,
 )
-from app.services.user_paste_service import UserPasteService
+from app.services.user_history_service import UserHistoryService
 
 # 创建路由器
-router = APIRouter(prefix="/api/user/pastes", tags=["用户Paste管理"])
+router = APIRouter(prefix="/api/user/history", tags=["用户History管理"])
 
 
-@router.get("", response_model=UserPasteListResponse)
-async def get_user_pastes(
+@router.get("", response_model=UserHistoryListResponse)
+async def get_user_history(
     page: int = Query(1, ge=1, description="页码"),
     limit: int = Query(10, ge=1, le=100, description="每页数量"),
     status: str | None = Query(None, description="状态过滤：published|edited|all"),
@@ -44,7 +44,7 @@ async def get_user_pastes(
     """
     current_user, user_key = user_and_key
 
-    search_params = UserPasteSearchParams(
+    search_params = UserHistorySearchParams(
         page=page,
         limit=limit,
         status=status,
@@ -53,7 +53,7 @@ async def get_user_pastes(
     )
 
     try:
-        return UserPasteService.get_user_pastes(
+        return UserHistoryService.get_user_history(
             db, current_user.id, user_key, search_params
         )
     except Exception as e:
@@ -64,9 +64,9 @@ async def get_user_pastes(
 
 
 @router.post("/{paste_id}", response_model=MessageResponse)
-async def save_paste_to_user(
+async def save_paste_to_history(
     paste_id: str,
-    save_request: UserPasteSaveRequest,
+    save_request: UserHistorySaveRequest,
     user_and_key: tuple[UserResponse, bytes] = Depends(get_current_user_with_key),
     db: Session = Depends(get_db),
 ):
@@ -79,7 +79,7 @@ async def save_paste_to_user(
     current_user, user_key = user_and_key
 
     try:
-        UserPasteService.save_paste_to_user(
+        UserHistoryService.save_paste_to_history(
             db, current_user.id, paste_id, user_key, save_request
         )
         return MessageResponse(message="Paste已成功保存到用户账户")
@@ -102,8 +102,8 @@ async def save_paste_to_user(
             ) from None
 
 
-@router.get("/{paste_id}", response_model=UserPasteInfo)
-async def get_user_paste(
+@router.get("/{paste_id}", response_model=UserHistoryInfo)
+async def get_user_history_item(
     paste_id: str,
     user_and_key: tuple[UserResponse, bytes] = Depends(get_current_user_with_key),
     db: Session = Depends(get_db),
@@ -114,15 +114,15 @@ async def get_user_paste(
     current_user, user_key = user_and_key
 
     try:
-        user_paste_info = UserPasteService.get_user_paste(
+        user_history_info = UserHistoryService.get_user_history_item(
             db, current_user.id, paste_id, user_key
         )
-        if not user_paste_info:
+        if not user_history_info:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="该Paste未保存到用户账户",
             )
-        return user_paste_info
+        return user_history_info
     except HTTPException:
         raise
     except Exception as e:
@@ -133,9 +133,9 @@ async def get_user_paste(
 
 
 @router.put("/{paste_id}/star", response_model=MessageResponse)
-async def update_paste_star_status(
+async def update_history_star_status(
     paste_id: str,
-    star_request: UserPasteStarRequest,
+    star_request: UserHistoryStarRequest,
     current_user: UserResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -145,7 +145,7 @@ async def update_paste_star_status(
     - **is_starred**: 是否收藏
     """
     try:
-        UserPasteService.update_paste_star_status(
+        UserHistoryService.update_history_star_status(
             db, current_user.id, paste_id, star_request
         )
         action = "收藏" if star_request.is_starred else "取消收藏"
@@ -162,7 +162,7 @@ async def update_paste_star_status(
 
 
 @router.delete("/{paste_id}", response_model=MessageResponse)
-async def remove_paste_from_user(
+async def remove_paste_from_history(
     paste_id: str,
     current_user: UserResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -171,7 +171,7 @@ async def remove_paste_from_user(
     从用户账户移除Paste
     """
     try:
-        UserPasteService.remove_paste_from_user(db, current_user.id, paste_id)
+        UserHistoryService.remove_paste_from_history(db, current_user.id, paste_id)
         return MessageResponse(message="已从用户账户移除该Paste")
     except ValueError as e:
         if "未保存" in str(e):

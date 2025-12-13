@@ -1,5 +1,5 @@
 """
-用户Paste管理相关的Pydantic模型
+用户History管理相关的Pydantic模型
 """
 
 from datetime import datetime
@@ -11,14 +11,14 @@ from pydantic import BaseModel, Field
 # ===============================
 
 
-class UserPasteSaveRequest(BaseModel):
+class UserHistorySaveRequest(BaseModel):
     """将Paste保存到用户账户请求"""
 
     encryption_key: str = Field(..., description="paste密钥，将被用户密钥加密")
     admin_key: str = Field(..., description="管理权限令牌，用于验证权限")
 
 
-class UserPasteStarRequest(BaseModel):
+class UserHistoryStarRequest(BaseModel):
     """收藏/取消收藏Paste请求"""
 
     is_starred: bool = Field(..., description="是否收藏")
@@ -29,8 +29,8 @@ class UserPasteStarRequest(BaseModel):
 # ===============================
 
 
-class UserPasteInfo(BaseModel):
-    """用户Paste信息"""
+class UserHistoryInfo(BaseModel):
+    """用户History信息"""
 
     paste_id: str = Field(..., description="Paste ID")
     status: str = Field(..., description="Paste状态：published或edited")
@@ -48,17 +48,17 @@ class UserPasteInfo(BaseModel):
         from_attributes = True
 
 
-class UserPasteListResponse(BaseModel):
-    """用户Paste列表响应"""
+class UserHistoryListResponse(BaseModel):
+    """用户History列表响应"""
 
-    pastes: list[UserPasteInfo] = Field(..., description="Paste列表")
+    pastes: list[UserHistoryInfo] = Field(..., description="Paste列表")
     total: int = Field(..., description="总数")
     page: int = Field(..., description="当前页码")
     limit: int = Field(..., description="每页数量")
 
 
-class UserPasteSearchParams(BaseModel):
-    """用户Paste搜索参数"""
+class UserHistorySearchParams(BaseModel):
+    """用户History搜索参数"""
 
     page: int = Field(1, ge=1, description="页码")
     limit: int = Field(10, ge=1, le=100, description="每页数量")

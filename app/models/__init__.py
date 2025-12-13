@@ -6,7 +6,7 @@ from .api_key import ApiKey
 from .collab_room import CollabRoom, Member, RoomMember, RoomPaste
 from .paste import File, Paste, PasteKey
 from .user import User, UserSession
-from .user_paste import UserPaste
+from .user_history import UserHistory
 
 __all__ = [
     "User",
@@ -15,7 +15,7 @@ __all__ = [
     "Paste",
     "PasteKey",
     "File",
-    "UserPaste",
+    "UserHistory",
     "Member",
     "CollabRoom",
     "RoomMember",

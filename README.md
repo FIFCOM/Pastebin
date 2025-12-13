@@ -127,12 +127,12 @@ npm run dev
 - `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `encryption_key`）
 - `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
 
-### 用户 Paste 管理
+### 用户 History 管理
 
-- `GET /api/user/pastes` - 获取用户Paste列表（需要登录）
-- `POST /api/user/pastes/{paste_id}` - 保存Paste到用户（需要登录）
-- `PUT /api/user/pastes/{paste_id}/star` - 收藏/取消收藏（需要登录）
-- `DELETE /api/user/pastes/{paste_id}` - 从用户账户移除（需要登录）
+- `GET /api/user/history` - 获取用户Paste列表（需要登录）
+- `POST /api/user/history/{paste_id}` - 保存Paste到用户（需要登录）
+- `PUT /api/user/history/{paste_id}/star` - 收藏/取消收藏（需要登录）
+- `DELETE /api/user/history/{paste_id}` - 从用户账户移除（需要登录）
 
 ### API Key 管理
 
