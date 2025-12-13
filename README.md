@@ -1,16 +1,19 @@
-# Material Bin 用户认证 API
+# Material Bin
 
-基于FastAPI的用户认证模块，采用MVC架构，支持加密存储和会话管理。
+一个带 Material Design 风格 Web UI 的 Pastebin：后端基于 FastAPI（MVC 架构），支持用户认证、加密存储、文件上传与分享等能力；前端位于 `web/`（Vue 3 + Vite）。
 
 ## 特性
 
-- 🔐 用户注册和登录（支持SHA256+bcrypt双重加密）
-- 🛡️ 基于PBKDF2+AES的用户密钥管理
-- 🎫 JWT令牌和会话管理
-- 📋 用户CRUD操作
-- 🏗️ MVC架构设计
-- 📊 SQLite/MySQL数据库兼容
-- 🚀 FastAPI + Pydantic + SQLAlchemy
+- 🔐 用户注册/登录（SHA256 + bcrypt 双重加密）
+- 🎫 JWT 令牌与会话管理
+- 🧾 Paste 创建/发布/查看（支持 Markdown / 纯文本）
+- 🔒 客户端加密分享链接：加密密钥放在 URL hash（`/p/:id#key`），不会被浏览器发送给后端
+- 📎 文件上传/下载（与 Paste 绑定）
+- 🔑 用户 API Key 管理
+- 👥 协作房间（member token / 房间 / 加入 / 分享）
+- 🧹 内部清理任务（草稿/过期内容/成员）
+- 📊 SQLite / MySQL 数据库兼容
+- 🚀 FastAPI + Pydantic + SQLAlchemy + Vue 3
 
 ## 项目结构
 
@@ -22,6 +25,10 @@
 │   ├── schemas/          # Pydantic模型
 │   └── core/            # 核心配置和工具
 ├── config/              # 配置管理
+├── web/                 # Web前端（Vue 3 + Vite）
+│   ├── src/             # 页面、组件、路由、请求封装等
+│   ├── public/          # 静态资源
+│   └── vite.config.ts   # 开发代理等配置
 ├── main.py             # 应用入口
 ├── pyproject.toml      # 项目配置
 └── .env.example       # 环境变量示例
@@ -29,11 +36,11 @@
 
 ## 快速开始
 
-### 1. 环境准备
+### 1. 环境准备（后端）
 
 确保已安装Python 3.12+和uv包管理器。
 
-### 2. 项目设置
+### 2. 后端配置
 
 ```bash
 # 复制环境变量配置
@@ -43,9 +50,12 @@ cp .env.example .env
 # 特别注意修改SECRET_KEY为生产环境的安全密钥
 ```
 
-### 3. 启动应用
+### 3. 启动后端
 
 ```bash
+# 安装/同步依赖（推荐）
+uv sync
+
 # 启动开发服务器
 uv run python main.py
 
@@ -58,6 +68,30 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 - 健康检查: http://localhost:8000/api/health
+
+### 5. 启动 Web（`web/`）
+
+前端默认通过 Vite 代理 `/api` 到后端（推荐），对应配置项是 `VITE_BACKEND`。
+
+```bash
+cd web
+npm install
+
+# 可选：配置后端地址（用于 Vite dev proxy 的 target）
+# macOS/Linux:
+export VITE_BACKEND="http://localhost:8000"
+# Windows PowerShell:
+# $env:VITE_BACKEND="http://localhost:8000"
+
+npm run dev
+```
+
+打开 Vite 输出的本地地址（默认类似 http://localhost:5173）。
+
+前端页面路由：
+- `/`：Paste 编辑/发布
+- `/p/:paste_id`：Paste 查看（需要在 URL hash 携带密钥：`/p/:id#encryption_key`）
+- `/login`、`/register`：登录/注册
 
 ## API端点
 
@@ -75,11 +109,52 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/users` - 获取用户列表
 - `POST /api/users` - 创建用户（管理功能）
 
-### 会话管理
+### 会话管理（用户）
 
 - `GET /api/users/{user_id}/sessions` - 获取用户会话
 - `DELETE /api/users/sessions/{session_id}` - 撤销会话
 - `POST /api/users/cleanup-sessions` - 清理过期会话
+
+### Paste
+
+- `POST /api/pastes` - 创建Paste（草稿）
+- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `Bearer {admin_key}`）
+- `POST /api/pastes/{paste_id}/publish` - 发布（需要 `Bearer {admin_key}`）
+- `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`）
+- `GET /api/pastes/{paste_id}/content` - 获取内容（可选 `access_key` / `encryption_key`）
+- `POST /api/pastes/{paste_id}/files` - 上传文件（JSON，客户端加密；需要 `Bearer {admin_key}`）
+- `POST /api/pastes/{paste_id}/files/upload` - 上传文件（multipart，服务端加密；需要 `Bearer {admin_key}`）
+- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `encryption_key`）
+- `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
+
+### 用户 Paste 管理
+
+- `GET /api/user/pastes` - 获取用户Paste列表（需要登录）
+- `POST /api/user/pastes/{paste_id}` - 保存Paste到用户（需要登录）
+- `PUT /api/user/pastes/{paste_id}/star` - 收藏/取消收藏（需要登录）
+- `DELETE /api/user/pastes/{paste_id}` - 从用户账户移除（需要登录）
+
+### API Key 管理
+
+- `GET /api/user/apikeys` - 列表（需要登录）
+- `POST /api/user/apikeys` - 创建（需要登录）
+- `DELETE /api/user/apikeys/{key_id}` - 删除（需要登录）
+
+### 协作房间
+
+- `POST /api/rooms/member-token` - 获取成员令牌（可匿名）
+- `POST /api/rooms` - 创建房间（`Bearer {member_token}`）
+- `GET /api/join/{pin_code}` - 通过PIN码获取房间信息
+- `POST /api/rooms/{room_id}/join` - 加入房间（`Bearer {member_token}`）
+- `GET /api/rooms/{room_id}/members` - 成员列表（`Bearer {member_token}`）
+- `POST /api/rooms/{room_id}/pastes` - 分享Paste（`Bearer {member_token}`）
+- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`Bearer {member_token}`）
+- `DELETE /api/rooms/{room_id}/leave` - 离开房间（`Bearer {member_token}`）
+
+### 内部任务（需要内部令牌）
+
+- `POST /api/internal/cleanup` - 执行清理任务（`Bearer {INTERNAL_TOKEN}`）
+- `GET /api/internal/cleanup/status` - 清理服务状态（`Bearer {INTERNAL_TOKEN}`）
 
 ### 其他
 
@@ -126,7 +201,7 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## 数据库
 
 ### SQLite（默认）
-默认使用SQLite数据库，文件位置：`./user_auth.db`
+默认使用SQLite数据库，文件位置由 `DATABASE_URL` 决定（示例：`sqlite:///./material_bin.db`）
 
 ### MySQL
 设置环境变量：

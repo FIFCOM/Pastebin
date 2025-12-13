@@ -72,7 +72,9 @@ async def execute_cleanup_tasks(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"清理任务执行失败: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"清理任务执行失败: {str(e)}"
+        ) from e
 
 
 @router.get("/cleanup/status")

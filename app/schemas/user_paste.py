@@ -62,7 +62,9 @@ class UserPasteSearchParams(BaseModel):
 
     page: int = Field(1, ge=1, description="页码")
     limit: int = Field(10, ge=1, le=100, description="每页数量")
-    status: str | None = Field(default=None, description="状态过滤：published|edited|all")
+    status: str | None = Field(
+        default=None, description="状态过滤：published|edited|all"
+    )
     starred: bool | None = Field(default=None, description="收藏状态过滤：true|false")
     search: str | None = Field(default=None, description="搜索关键词，搜索title")
 

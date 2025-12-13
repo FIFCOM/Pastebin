@@ -27,6 +27,7 @@ else:
         echo=settings.debug,
     )
 
+
 def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
     """确保SQLite连接启用外键约束"""
     cursor = dbapi_connection.cursor()

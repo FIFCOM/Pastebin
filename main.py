@@ -5,9 +5,8 @@ Material Bin 用户认证 API 主应用
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from app.controllers import (
     api_key_router,
@@ -18,6 +17,7 @@ from app.controllers import (
     user_paste_router,
     user_router,
 )
+from app.core.error_handlers import register_exception_handlers
 from app.core.init_db import init_database
 from config.config import settings, validate_config
 
@@ -82,46 +82,8 @@ app.include_router(user_paste_router)
 app.include_router(collab_room_router)
 app.include_router(cleanup_router)
 
-
-# 全局异常处理
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc: HTTPException):
-    """HTTP 异常处理器"""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.detail,
-            "status_code": exc.status_code,
-        },
-    )
-
-
-@app.exception_handler(ValueError)
-async def value_error_handler(request, exc: ValueError):
-    """值错误异常处理器"""
-    return JSONResponse(
-        status_code=400,
-        content={
-            "error": str(exc),
-            "status_code": 400,
-        },
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc: Exception):
-    """通用异常处理器"""
-    error_message = "内部服务器错误"
-    if settings.debug:
-        error_message = str(exc)
-
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": error_message,
-            "status_code": 500,
-        },
-    )
+# 全局异常处理（避免直接返回 Pydantic 风格错误结构）
+register_exception_handlers(app, debug=settings.debug)
 
 
 # 根路径

@@ -6,7 +6,7 @@ import base64
 import os
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import bcrypt
@@ -76,11 +76,11 @@ def encrypt_with_key(data: bytes, key: bytes) -> bytes:
     """
     # 生成随机IV（12字节用于GCM）
     iv = os.urandom(12)
-    
+
     # 使用AES-GCM加密
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(iv, data, None)
-    
+
     # 返回 IV + 密文
     return iv + ciphertext
 
@@ -100,11 +100,11 @@ def decrypt_with_key(encrypted_data: bytes, key: bytes) -> bytes:
         # 提取IV和密文
         iv = encrypted_data[:12]
         ciphertext = encrypted_data[12:]
-        
+
         # 使用AES-GCM解密
         aesgcm = AESGCM(key)
         plaintext = aesgcm.decrypt(iv, ciphertext, None)
-        
+
         return plaintext
     except Exception as e:
         raise ValueError(f"解密失败: {str(e)}") from e
@@ -121,12 +121,12 @@ def hash_password(password: str) -> str:
         bcrypt哈希后的密码
     """
     # 将密码转换为字节
-    password_bytes = password.encode('utf-8')
+    password_bytes = password.encode("utf-8")
     # 生成盐并哈希密码
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
     # 返回字符串形式
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -141,8 +141,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         密码是否正确
     """
     try:
-        password_bytes = plain_password.encode('utf-8')
-        hashed_bytes = hashed_password.encode('utf-8')
+        password_bytes = plain_password.encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
         return bcrypt.checkpw(password_bytes, hashed_bytes)
     except Exception:
         return False
@@ -161,9 +161,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     """
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
 
@@ -252,7 +252,7 @@ def key_to_urlsafe_str(key: bytes) -> str:
     专门用于加密密钥的编码，使其可以安全地用于URL
     """
     base64_str = base64.b64encode(key).decode()
-    return base64_str.replace('+', '-').replace('/', '_').replace('=', '')
+    return base64_str.replace("+", "-").replace("/", "_").replace("=", "")
 
 
 def urlsafe_str_to_key(urlsafe_base64: str) -> bytes:
@@ -261,11 +261,11 @@ def urlsafe_str_to_key(urlsafe_base64: str) -> bytes:
     专门用于加密密钥的解码
     """
     # 将URL-safe base64转换回标准base64
-    base64_str = urlsafe_base64.replace('-', '+').replace('_', '/')
+    base64_str = urlsafe_base64.replace("-", "+").replace("_", "/")
     # 补充padding
     padding = 4 - len(base64_str) % 4
     if padding != 4:
-        base64_str += '=' * padding
+        base64_str += "=" * padding
     return base64.b64decode(base64_str.encode())
 
 

@@ -4,7 +4,7 @@
 
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from sqlalchemy import and_, or_
@@ -69,7 +69,7 @@ class CollabRoomService:
     def _create_member_token(member: Member) -> str:
         """创建成员JWT令牌"""
         # 设置24小时过期
-        exp = int((datetime.utcnow() + timedelta(hours=24)).timestamp())
+        exp = int((datetime.now(UTC) + timedelta(hours=24)).timestamp())
 
         payload = MemberTokenPayload(
             member_id=str(member.id),  # type: ignore
@@ -112,7 +112,7 @@ class CollabRoomService:
             成员令牌响应
         """
         # 设置24小时过期
-        expire_at = datetime.utcnow() + timedelta(hours=24)
+        expire_at = datetime.now(UTC) + timedelta(hours=24)
 
         if user_id:
             # 已登录用户
@@ -292,7 +292,7 @@ class CollabRoomService:
 
         if existing_membership:
             # 更新最后活跃时间
-            existing_membership.last_seen = datetime.utcnow()  # type: ignore
+            existing_membership.last_seen = datetime.now(UTC)  # type: ignore
         else:
             # 检查房间是否已满
             current_count = int(room.member_count or 0)  # type: ignore
@@ -598,5 +598,5 @@ class CollabRoomService:
         )
 
         if membership:
-            membership.last_seen = datetime.utcnow()  # type: ignore
+            membership.last_seen = datetime.now(UTC)  # type: ignore
             db.commit()

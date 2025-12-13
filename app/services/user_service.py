@@ -2,7 +2,7 @@
 用户服务层 - 业务逻辑处理
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Column, and_
 from sqlalchemy.orm import Session
@@ -95,29 +95,25 @@ class UserService:
     def authenticate_user(db: Session, login_data: UserLoginRequest) -> User | None:
         """
         用户认证
- 
+
         说明：
         - login_data.username 字段可以填写「用户名」或「邮箱」
         - 为了兼容当前注册流程（只能输入邮箱），这里同时按 username 和 email 匹配
- 
+
         Args:
             db: 数据库会话
             login_data: 登录数据
- 
+
         Returns:
             认证成功的用户或None
         """
-        user = (
-            db.query(User)
-            .filter(User.email == login_data.email)
-            .first()
-        )
+        user = db.query(User).filter(User.email == login_data.email).first()
         if not user:
             return None
- 
+
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
- 
+
         return user
 
     @staticmethod
@@ -159,7 +155,7 @@ class UserService:
         encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
 
         # 创建会话记录
-        expires_at = datetime.utcnow() + timedelta(
+        expires_at = datetime.now(UTC) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
         session = UserSession(
@@ -395,7 +391,7 @@ class UserService:
     def cleanup_expired_sessions(db: Session) -> int:
         """清理过期会话"""
         expired_sessions = db.query(UserSession).filter(
-            UserSession.expires_at < datetime.utcnow()
+            UserSession.expires_at < datetime.now(UTC)
         )
         count = expired_sessions.count()
         expired_sessions.delete()
@@ -522,34 +518,30 @@ class UserService:
     ) -> User | None:
         """
         用户认证（包含TOTP验证）
- 
+
         说明：
         - login_data.username 字段可以填写「用户名」或「邮箱」
- 
+
         Args:
             db: 数据库会话
             login_data: 登录数据（包含TOTP代码）
- 
+
         Returns:
             认证成功的用户或None
         """
-        user = (
-            db.query(User)
-            .filter(User.email == login_data.email)
-            .first()
-        )
+        user = db.query(User).filter(User.email == login_data.email).first()
         if not user:
             return None
- 
+
         # 验证密码
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
- 
+
         # 验证TOTP代码
         if user.totp_secret:  # type: ignore
             if not verify_totp_code(user.totp_secret, login_data.totp_code):  # type: ignore
                 return None
- 
+
         return user
 
     @staticmethod
@@ -589,7 +581,7 @@ class UserService:
         encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
 
         # 创建会话记录
-        expires_at = datetime.utcnow() + timedelta(
+        expires_at = datetime.now(UTC) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
         session = UserSession(

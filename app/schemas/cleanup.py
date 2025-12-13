@@ -2,7 +2,6 @@
 清理任务相关的Pydantic模型
 """
 
-
 from pydantic import BaseModel, Field
 
 

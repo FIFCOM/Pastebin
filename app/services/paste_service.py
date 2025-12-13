@@ -5,7 +5,7 @@ Paste服务层 - 业务逻辑处理
 import hashlib
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -136,7 +136,7 @@ class PasteService:
         admin_key = PasteService._generate_admin_key()
 
         # 设置草稿24小时过期
-        expire_at = datetime.utcnow() + timedelta(hours=24)
+        expire_at = datetime.now(UTC) + timedelta(hours=24)
 
         # 创建Paste记录
         paste = Paste(
@@ -158,7 +158,10 @@ class PasteService:
         db.refresh(paste)
 
         return PasteCreateResponse(
-            paste_id=paste_id, admin_key=admin_key, expires_at=expire_at
+            paste_id=paste_id,
+            admin_key=admin_key,
+            expires_at=expire_at,
+            timestamp=int(datetime.now(UTC).timestamp()),
         )
 
     @staticmethod
@@ -218,7 +221,7 @@ class PasteService:
         if str(paste.status) == "published":  # type: ignore
             paste.status = "edited"  # type: ignore
 
-        paste.updated_at = datetime.utcnow()  # type: ignore
+        paste.updated_at = datetime.now(UTC)  # type: ignore
         db.commit()
 
     @staticmethod
@@ -284,7 +287,7 @@ class PasteService:
         # 如果是已发布状态，更新为编辑状态
         if str(paste.status) == "published":  # type: ignore
             paste.status = "edited"  # type: ignore
-            paste.updated_at = datetime.utcnow()  # type: ignore
+            paste.updated_at = datetime.now(UTC)  # type: ignore
 
         db.commit()
 
@@ -385,8 +388,8 @@ class PasteService:
 
         # 更新状态
         paste.status = "published"  # type: ignore
-        paste.published_at = datetime.utcnow()  # type: ignore
-        paste.updated_at = datetime.utcnow()  # type: ignore
+        paste.published_at = datetime.now(UTC)  # type: ignore
+        paste.updated_at = datetime.now(UTC)  # type: ignore
 
         db.commit()
 
@@ -405,7 +408,10 @@ class PasteService:
                 db.commit()
 
         return PastePublishResponse(
-            paste_id=paste_id, admin_key=admin_key, encryption_key=encryption_key
+            paste_id=paste_id,
+            admin_key=admin_key,
+            encryption_key=encryption_key,
+            timestamp=int(datetime.now(UTC).timestamp()),
         )
 
     @staticmethod
@@ -441,7 +447,7 @@ class PasteService:
         from datetime import datetime as dt_type
 
         paste_expire_at: dt_type = paste.expire_at  # type: ignore
-        if paste_expire_at is not None and datetime.utcnow() > paste_expire_at:
+        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
             raise ValueError("Paste已过期")
 
         # 获取文件列表
@@ -505,7 +511,7 @@ class PasteService:
         from datetime import datetime as dt_type
 
         paste_expire_at: dt_type = paste.expire_at  # type: ignore
-        if paste_expire_at is not None and datetime.utcnow() > paste_expire_at:
+        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
             raise ValueError("Paste已过期")
 
         # 检查查看次数限制并增加计数
@@ -539,7 +545,7 @@ class PasteService:
                 raise ValueError("解密密钥错误") from None
         else:
             response.encrypted_content = encrypted_content
-        
+
         return response
 
     @staticmethod
@@ -568,7 +574,7 @@ class PasteService:
         # 更新字段
         if update_data.title is not None:
             paste.title = update_data.title  # type: ignore
-        
+
         if update_data.type is not None:
             paste.type = update_data.type  # type: ignore
 
@@ -588,7 +594,7 @@ class PasteService:
         if str(paste.status) == "published":  # type: ignore
             paste.status = "edited"  # type: ignore
 
-        paste.updated_at = datetime.utcnow()  # type: ignore
+        paste.updated_at = datetime.now(UTC)  # type: ignore
         db.commit()
 
     @staticmethod

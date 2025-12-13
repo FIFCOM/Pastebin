@@ -4,6 +4,7 @@ Paste控制器 - REST API路由
 
 import base64
 import io
+import time
 
 from fastapi import (
     APIRouter,
@@ -95,7 +96,7 @@ async def update_paste_content(
 
     try:
         PasteService.update_paste_content(db, paste_id, admin_key, content_data)
-        return MessageResponse(message="内容更新成功")
+        return MessageResponse(message="内容更新成功", timestamp=int(time.time()))
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
             raise HTTPException(
@@ -287,7 +288,11 @@ async def get_paste_info(
             ) from None
 
 
-@router.get("/{paste_id}/content", response_model=PasteContentResponse, response_model_exclude_none=True)
+@router.get(
+    "/{paste_id}/content",
+    response_model=PasteContentResponse,
+    response_model_exclude_none=True,
+)
 async def get_paste_content(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
@@ -470,7 +475,7 @@ async def delete_paste(
 
     try:
         PasteService.delete_paste(db, paste_id, admin_key)
-        return MessageResponse(message="Paste删除成功")
+        return MessageResponse(message="Paste删除成功", timestamp=int(time.time()))
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
             raise HTTPException(

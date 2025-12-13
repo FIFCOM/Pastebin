@@ -2,7 +2,7 @@
 Paste相关的Pydantic模型
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, validator
 
@@ -63,10 +63,10 @@ class PastePublishSettings(BaseModel):
         pattern="^(7d|30d|1y|never)$",
         description="过期时间：7d, 30d, 1y, never",
     )
-    max_views: int = Field(
-        ..., description="最大查看次数，1表示阅后即焚，-1表示无限制"
+    max_views: int = Field(..., description="最大查看次数，1表示阅后即焚，-1表示无限制")
+    access_key: str | None = Field(
+        default=None, max_length=72, description="访问密钥（可选，最多72字符）"
     )
-    access_key: str | None = Field(default=None, max_length=72, description="访问密钥（可选，最多72字符）")
 
     @validator("max_views")
     def validate_max_views(cls, v):
@@ -74,11 +74,11 @@ class PastePublishSettings(BaseModel):
         if v != -1 and v < 1:
             raise ValueError("max_views必须是-1（无限制）或大于0的正整数")
         return v
-    
+
     @validator("access_key")
     def validate_access_key(cls, v):
         """验证access_key长度"""
-        if v and len(v.encode('utf-8')) > 72:
+        if v and len(v.encode("utf-8")) > 72:
             raise ValueError("access_key不能超过72字节")
         return v
 
@@ -94,7 +94,9 @@ class PasteUpdateRequest(BaseModel):
         None, pattern="^(7d|30d|1y|never)$", description="过期时间"
     )
     max_views: int | None = Field(default=None, ge=1, description="最大查看次数")
-    access_key: str | None = Field(default=None, description="访问密钥，空字符串表示禁用")
+    access_key: str | None = Field(
+        default=None, description="访问密钥，空字符串表示禁用"
+    )
 
     @validator("max_views")
     def validate_max_views(cls, v):
@@ -115,6 +117,7 @@ class PasteCreateResponse(BaseModel):
     paste_id: str = Field(..., description="Paste ID")
     admin_key: str = Field(..., description="管理密钥")
     expires_at: datetime = Field(..., description="草稿过期时间")
+    timestamp: int = Field(..., description="响应时间戳（秒）")
 
 
 class FileInfo(BaseModel):
@@ -162,6 +165,7 @@ class PastePublishResponse(BaseModel):
     encryption_key: str | None = Field(
         default=None, description="加密密钥（当encryption_mode为server时返回）"
     )
+    timestamp: int = Field(..., description="响应时间戳（秒）")
 
 
 class FileUploadResponse(BaseModel):
@@ -182,7 +186,7 @@ def get_expire_datetime(expire_time: str) -> datetime | None:
 
     from datetime import timedelta
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if expire_time == "7d":
         return now + timedelta(days=7)
     elif expire_time == "30d":

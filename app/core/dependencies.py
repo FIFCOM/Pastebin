@@ -2,6 +2,8 @@
 依赖注入函数
 """
 
+from datetime import UTC
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -180,7 +182,7 @@ async def get_current_user_with_key(
     # 检查会话是否过期
     from datetime import datetime
 
-    if session.expires_at < datetime.utcnow():  # type: ignore
+    if session.expires_at < datetime.now(UTC):  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话已过期",

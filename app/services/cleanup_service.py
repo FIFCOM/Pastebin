@@ -3,7 +3,7 @@
 """
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ class CleanupService:
         """
         try:
             # 查找过期的草稿
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             expired_drafts = (
                 db.query(Paste)
                 .filter(Paste.status == "draft", Paste.expire_at < now)
@@ -83,7 +83,7 @@ class CleanupService:
         """
         try:
             # 查找过期的已发布paste
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             expired_pastes = (
                 db.query(Paste)
                 .filter(
@@ -140,7 +140,7 @@ class CleanupService:
         """
         try:
             # 查找过期的成员
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             expired_members = db.query(Member).filter(Member.expire_at < now).all()
 
             deleted_count = 0
@@ -187,7 +187,7 @@ class CleanupService:
         """
         # 获取paste的内容文件路径
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if paste and paste.content_path: # type: ignore
+        if paste and paste.content_path:  # type: ignore
             try:
                 content_file_path = os.path.join(
                     settings.data_dir, str(paste.content_path)

@@ -2,7 +2,7 @@
 健康检查控制器
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -23,5 +23,5 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version=settings.version,
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
