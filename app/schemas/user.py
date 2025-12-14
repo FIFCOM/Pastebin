@@ -4,7 +4,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserRegisterRequest(BaseModel):
@@ -18,7 +18,8 @@ class UserRegisterRequest(BaseModel):
         description="SHA256哈希后的密码(64位十六进制字符串)",
     )
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         if not all(c in "0123456789abcdefABCDEF" for c in v):
@@ -34,7 +35,8 @@ class UserLoginRequest(BaseModel):
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
     )
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         if not all(c in "0123456789abcdefABCDEF" for c in v):
@@ -51,14 +53,16 @@ class UserLoginWithTotpRequest(BaseModel):
     )
     totp_code: str = Field(..., min_length=6, max_length=6, description="6位TOTP验证码")
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         if not all(c in "0123456789abcdefABCDEF" for c in v):
             raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
         return v.lower()
 
-    @validator("totp_code")
+    @field_validator("totp_code")
+    @classmethod
     def validate_totp_code(cls, v):
         """验证TOTP代码格式"""
         if not v.isdigit():
@@ -87,7 +91,8 @@ class UserUpdateRequest(BaseModel):
         None, min_length=64, max_length=64, description="SHA256哈希后的新密码"
     )
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         if v is not None:
@@ -135,7 +140,8 @@ class UserCreateRequest(BaseModel):
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
     )
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         if not all(c in "0123456789abcdefABCDEF" for c in v):
@@ -155,7 +161,8 @@ class TotpVerifyRequest(BaseModel):
 
     totp_code: str = Field(..., min_length=6, max_length=6, description="6位TOTP验证码")
 
-    @validator("totp_code")
+    @field_validator("totp_code")
+    @classmethod
     def validate_totp_code(cls, v):
         """验证TOTP代码格式"""
         if not v.isdigit():

@@ -4,7 +4,7 @@ Paste相关的Pydantic模型
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # ===============================
 # 请求模型
@@ -27,14 +27,16 @@ class PasteContentUpdateRequest(BaseModel):
     )
     content: str | None = Field(default=None, description="明文内容（服务端加密模式）")
 
-    @validator("encrypted_content", "content")
-    def validate_content_fields(cls, v, values):
+    @field_validator("encrypted_content", "content", mode="after")
+    @classmethod
+    def validate_content_fields(cls, v, info):
         """验证内容字段"""
         # 至少有一个字段不为空
-        encrypted_content = values.get("encrypted_content")
-        content = v if v is not None else encrypted_content
-        if not content:
-            raise ValueError("必须提供encrypted_content或content")
+        if info.field_name == "content":
+            # 当验证content字段时，检查是否至少有一个字段不为空
+            encrypted_content = info.data.get("encrypted_content")
+            if not v and not encrypted_content:
+                raise ValueError("必须提供encrypted_content或content")
         return v
 
 
@@ -68,14 +70,16 @@ class PastePublishSettings(BaseModel):
         default=None, max_length=72, description="访问密钥（可选，最多72字符）"
     )
 
-    @validator("max_views")
+    @field_validator("max_views")
+    @classmethod
     def validate_max_views(cls, v):
         """验证max_views"""
         if v != -1 and v < 1:
             raise ValueError("max_views必须是-1（无限制）或大于0的正整数")
         return v
 
-    @validator("access_key")
+    @field_validator("access_key")
+    @classmethod
     def validate_access_key(cls, v):
         """验证access_key长度"""
         if v and len(v.encode("utf-8")) > 72:
@@ -98,7 +102,8 @@ class PasteUpdateRequest(BaseModel):
         default=None, description="访问密钥，空字符串表示禁用"
     )
 
-    @validator("max_views")
+    @field_validator("max_views")
+    @classmethod
     def validate_max_views(cls, v):
         """验证max_views"""
         if v is not None and v != -1 and v < 1:

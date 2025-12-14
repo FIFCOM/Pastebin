@@ -3,7 +3,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -27,7 +27,7 @@ class User(Base):
     salt = Column(String(255), nullable=False)  # 用于派生 master_key
     encrypted_user_key = Column(Text, nullable=False)  # 加密的用户密钥
     totp_secret = Column(String(255), nullable=True)  # 加密的TOTP密钥，空值表示未启用
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     sessions = relationship(
@@ -56,7 +56,7 @@ class UserSession(Base):
     session_token = Column(String(255), unique=True, nullable=False, index=True)
     encrypted_session_key = Column(Text, nullable=False)  # 会话加密的用户密钥
     expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     user = relationship("User", back_populates="sessions")

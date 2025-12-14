@@ -3,7 +3,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Column,
@@ -30,7 +30,7 @@ class Member(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )  # 可为空（游客）
     display_name = Column(String(50), nullable=False)  # Guest_xxxxx 或 username
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     expire_at = Column(DateTime, nullable=False)  # 24小时后过期
 
     # 关系
@@ -82,7 +82,7 @@ class CollabRoom(Base):
 
     max_members = Column(Integer, default=10, nullable=False)  # 2~100
     member_count = Column(Integer, default=1, nullable=False)  # 当前成员数
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     creator_member = relationship("Member", back_populates="created_rooms")
@@ -124,10 +124,10 @@ class RoomMember(Base):
     )  # 引用Member表
 
     last_seen = Column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=lambda: datetime.now(UTC), nullable=False
     )  # 最后活跃时间
     joined_at = Column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=lambda: datetime.now(UTC), nullable=False
     )  # 加入房间时间
 
     # 关系
@@ -180,7 +180,7 @@ class RoomPaste(Base):
 
     encrypted_paste_key = Column(Text, nullable=False)  # 用room_key加密的paste密钥
 
-    shared_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    shared_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     room = relationship("CollabRoom", back_populates="room_pastes")

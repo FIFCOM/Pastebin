@@ -2,7 +2,7 @@
 API Key数据模型
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -23,7 +23,7 @@ class ApiKey(Base):
     key_hash = Column(
         String(255), unique=True, nullable=False, index=True
     )  # API key的哈希值
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     user = relationship("User", back_populates="api_keys")

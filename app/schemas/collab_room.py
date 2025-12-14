@@ -4,7 +4,7 @@
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # ===============================
 # 请求模型
@@ -23,7 +23,8 @@ class RoomJoinRequest(BaseModel):
 
     pin_code: str = Field(..., min_length=6, max_length=6, description="6位PIN码")
 
-    @validator("pin_code")
+    @field_validator("pin_code")
+    @classmethod
     def validate_pin_code(cls, v):
         """验证PIN码格式"""
         if not v.isalnum():

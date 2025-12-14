@@ -3,7 +3,7 @@ Paste数据模型
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -51,8 +51,8 @@ class Paste(Base):
     view_count = Column(Integer, default=0)
 
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC))
     published_at = Column(DateTime)  # 发布时间
     expire_at = Column(DateTime)  # 既可以表示draft的过期时间，也可以表示paste的过期时间
 
@@ -119,7 +119,7 @@ class File(Base):
     storage_path = Column(Text, nullable=False)  # 存储路径
     checksum = Column(String(64))
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # 关系
     paste = relationship("Paste", back_populates="files")

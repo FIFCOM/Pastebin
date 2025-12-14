@@ -2,7 +2,7 @@
 用户History关联数据模型
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -41,7 +41,7 @@ class UserHistory(Base):
     # 用户是否标记为收藏
     is_starred = Column(Boolean, default=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
     user = relationship("User")
