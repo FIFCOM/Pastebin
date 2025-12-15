@@ -4,7 +4,7 @@ Paste控制器 - REST API路由
 
 import io
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import cast
 from urllib.parse import quote
 
@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.time_utils import is_expired
 from app.schemas.common import MessageResponse
 from app.schemas.paste import (
     FileUploadCompleteRequest,
@@ -209,8 +210,6 @@ async def upload_file_chunk(
     """
     admin_key = _get_admin_key_from_header(authorization)
     try:
-        from datetime import UTC, datetime
-
         from app.models.paste import FileUploadSession, Paste
 
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
@@ -227,8 +226,7 @@ async def upload_file_chunk(
         if not session:
             raise ValueError("上传会话不存在或已过期")
 
-        now = datetime.now(UTC)
-        if session.expire_at < now:  # type: ignore
+        if is_expired(session.expire_at):  # type: ignore[arg-type]
             PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
             raise ValueError("上传会话已过期")
 
@@ -564,7 +562,7 @@ async def get_file(
             )
 
         paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
-        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
+        if is_expired(paste_expire_at):
             raise HTTPException(
                 status_code=status.HTTP_410_GONE, detail="Paste已过期"
             )

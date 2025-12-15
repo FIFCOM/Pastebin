@@ -163,13 +163,17 @@ export async function encryptWithKey(
     ['encrypt']
   )
 
+  const algorithm: AesGcmParams = {
+    name: 'AES-GCM',
+    iv: iv as unknown as BufferSource
+  }
+  if (options?.aad) {
+    algorithm.additionalData = options.aad as unknown as BufferSource
+  }
+
   // 加密数据
   const encrypted = await crypto.subtle.encrypt(
-    {
-      name: 'AES-GCM',
-      iv: iv as unknown as BufferSource,
-      additionalData: options?.aad as unknown as BufferSource | undefined
-    },
+    algorithm,
     cryptoKey,
     dataBytes as unknown as BufferSource
   )
@@ -214,13 +218,17 @@ export async function decryptWithKey(
     ['decrypt']
   )
 
+  const algorithm: AesGcmParams = {
+    name: 'AES-GCM',
+    iv: iv as unknown as BufferSource
+  }
+  if (options?.aad) {
+    algorithm.additionalData = options.aad as unknown as BufferSource
+  }
+
   // 解密数据
   const decrypted = await crypto.subtle.decrypt(
-    {
-      name: 'AES-GCM',
-      iv: iv as unknown as BufferSource,
-      additionalData: options?.aad as unknown as BufferSource | undefined
-    },
+    algorithm,
     cryptoKey,
     ciphertext as unknown as BufferSource
   )

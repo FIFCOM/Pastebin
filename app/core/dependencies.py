@@ -2,14 +2,13 @@
 依赖注入函数
 """
 
-from datetime import UTC
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decrypt_with_key, str_to_bytes, verify_token
+from app.core.time_utils import is_expired
 from app.models.user import UserSession
 from app.schemas.user import UserResponse
 from app.services.api_key_service import ApiKeyService
@@ -182,10 +181,8 @@ async def get_current_user_with_key(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 检查会话是否过期
-    from datetime import datetime
-
-    if session.expires_at < datetime.now(UTC):  # type: ignore
+    # 检查会话是否过期（兼容 SQLite 返回的 naive datetime）
+    if is_expired(session.expires_at):  # type: ignore[arg-type]
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话已过期",

@@ -16,6 +16,7 @@ from app.core.security import (
     bytes_to_str,
     generate_encryption_key,
 )
+from app.core.time_utils import is_expired
 from app.models.collab_room import CollabRoom, Member, RoomMember, RoomPaste
 from app.models.paste import Paste
 from app.models.user import User
@@ -488,7 +489,7 @@ class CollabRoomService:
             raise ValueError("该Paste设置了访问密钥，不能通过协作房间分享")
 
         # 过期 Paste 不允许分享
-        if paste.expire_at is not None and datetime.now(UTC) > paste.expire_at:  # type: ignore
+        if is_expired(paste.expire_at):  # type: ignore[arg-type]
             raise ValueError("Paste已过期，不能分享")
 
         # 如果指定了目标成员，验证目标成员是否在房间中

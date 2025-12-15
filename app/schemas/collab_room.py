@@ -2,7 +2,7 @@
 协作房间相关的Pydantic模型
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -217,8 +217,10 @@ def calculate_is_online(last_seen: datetime) -> bool:
     """计算成员是否在线（2分钟内活跃）"""
     from datetime import timedelta
 
-    now = datetime.now(UTC)
-    return (now - last_seen) <= timedelta(minutes=2)
+    from app.core.time_utils import coerce_utc, utc_now
+
+    now = utc_now()
+    return (now - coerce_utc(last_seen)) <= timedelta(minutes=2)
 
 
 def build_join_url(pin_code: str, base_url: str = "") -> str:

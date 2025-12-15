@@ -23,6 +23,7 @@ from app.core.security import (
     urlsafe_str_to_key,
     verify_password,
 )
+from app.core.time_utils import is_expired
 from app.models.paste import File, FileUploadSession, Paste, PasteKey
 from app.schemas.paste import (
     FileInfo,
@@ -208,8 +209,7 @@ class PasteService:
         if not session:
             raise ValueError("上传会话不存在或已过期")
 
-        now = datetime.now(UTC)
-        if session.expire_at < now:  # type: ignore
+        if is_expired(session.expire_at):  # type: ignore[arg-type]
             PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
             raise ValueError("上传会话已过期")
 
@@ -766,11 +766,8 @@ class PasteService:
         if not PasteService._verify_access_key(paste, access_key):
             raise ValueError("访问密钥错误")
 
-        # 检查是否过期
-        from datetime import datetime as dt_type
-
-        paste_expire_at: dt_type = paste.expire_at  # type: ignore
-        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
+        # 检查是否过期（兼容 SQLite 返回的 naive datetime）
+        if is_expired(paste.expire_at):  # type: ignore[arg-type]
             raise ValueError("Paste已过期")
 
         return PasteResponse(
@@ -817,11 +814,8 @@ class PasteService:
         if not PasteService._verify_access_key(paste, access_key):
             raise ValueError("访问密钥错误")
 
-        # 检查是否过期
-        from datetime import datetime as dt_type
-
-        paste_expire_at: dt_type = paste.expire_at  # type: ignore
-        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
+        # 检查是否过期（兼容 SQLite 返回的 naive datetime）
+        if is_expired(paste.expire_at):  # type: ignore[arg-type]
             raise ValueError("Paste已过期")
 
         content_path = paste.content_path  # type: ignore
