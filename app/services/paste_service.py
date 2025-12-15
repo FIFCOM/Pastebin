@@ -43,6 +43,30 @@ class PasteService:
     """Paste服务类"""
 
     @staticmethod
+    def _get_server_key_for_write(
+        db: Session, paste_id: str, encryption_key: str | None
+    ) -> bytes:
+        """
+        获取用于服务端加密写入的密钥。
+
+        - 草稿阶段优先使用数据库中临时保存的 PasteKey
+        - 发布后（PasteKey 已删除）需要由客户端在请求中携带 encryption_key
+        """
+        paste_key_record = (
+            db.query(PasteKey).filter(PasteKey.paste_id == paste_id).first()
+        )
+        if paste_key_record:
+            return urlsafe_str_to_key(str(paste_key_record.paste_key))  # type: ignore
+
+        if not encryption_key or str(encryption_key).strip() == "":
+            raise ValueError("服务端加密模式缺少encryption_key")
+
+        try:
+            return urlsafe_str_to_key(str(encryption_key))
+        except Exception as e:
+            raise ValueError(f"encryption_key格式错误: {e}") from None
+
+    @staticmethod
     def _generate_paste_id() -> str:
         """生成8位随机Paste ID"""
         chars = string.ascii_letters + string.digits
@@ -170,6 +194,7 @@ class PasteService:
         paste_id: str,
         admin_key: str,
         content_data: PasteContentUpdateRequest,
+        encryption_key: str | None = None,
     ) -> None:
         """
         更新Paste内容
@@ -199,15 +224,10 @@ class PasteService:
             if not content_data.content:
                 raise ValueError("服务端加密模式需要提供content")
 
-            # 获取服务端密钥并加密内容
-            paste_key_record = (
-                db.query(PasteKey).filter(PasteKey.paste_id == paste_id).first()
+            # 使用服务端密钥加密内容（发布后由客户端携带encryption_key）
+            paste_key = PasteService._get_server_key_for_write(
+                db, paste_id, encryption_key
             )
-            if not paste_key_record:
-                raise ValueError("服务端加密密钥不存在")
-
-            # 使用服务端密钥加密内容
-            paste_key = urlsafe_str_to_key(str(paste_key_record.paste_key))  # type: ignore
             encrypted_content = encrypt_with_key(
                 content_data.content.encode(), paste_key
             )
@@ -226,7 +246,11 @@ class PasteService:
 
     @staticmethod
     def upload_file(
-        db: Session, paste_id: str, admin_key: str, file_data: FileUploadRequest
+        db: Session,
+        paste_id: str,
+        admin_key: str,
+        file_data: FileUploadRequest,
+        encryption_key: str | None = None,
     ) -> FileUploadResponse:
         """
         上传文件
@@ -283,13 +307,9 @@ class PasteService:
 
         # 服务端加密：将明文文件在服务端加密后落盘，避免明文落盘风险
         if encryption_mode == "server":
-            paste_key_record = (
-                db.query(PasteKey).filter(PasteKey.paste_id == paste_id).first()
+            paste_key = PasteService._get_server_key_for_write(
+                db, paste_id, encryption_key
             )
-            if not paste_key_record:
-                raise ValueError("服务端加密密钥不存在")
-
-            paste_key = urlsafe_str_to_key(str(paste_key_record.paste_key))  # type: ignore
             file_bytes = encrypt_with_key(file_bytes, paste_key)
             file_name_encrypted = bytes_to_str(
                 encrypt_with_key(str(file_name_value).encode("utf-8"), paste_key)
@@ -482,23 +502,10 @@ class PasteService:
         if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
             raise ValueError("Paste已过期")
 
-        # 获取文件列表
-        files = db.query(File).filter(File.paste_id == paste_id).all()
-        file_infos = [
-            FileInfo(
-                id=str(f.id),  # type: ignore
-                size=int(f.file_size),  # type: ignore
-                encrypted_name=str(f.file_name_encrypted),  # type: ignore
-                url=f"/api/pastes/{paste_id}/files/{f.id}",
-            )
-            for f in files
-        ]
-
         return PasteResponse(
             title=str(paste.title) if paste.title else None,  # type: ignore
             type=str(paste.type) if paste.type else "txt",  # type: ignore
             status=str(paste.status),  # type: ignore
-            files=file_infos,
             published_at=paste.published_at,  # type: ignore
             updated_at=paste.updated_at,  # type: ignore
             expire_at=paste.expire_at,  # type: ignore
@@ -577,6 +584,19 @@ class PasteService:
                 raise ValueError("解密密钥错误") from None
         else:
             response.encrypted_content = encrypted_content
+
+        # 获取文件列表（与内容接口一起返回，便于一次性加载）
+        files = db.query(File).filter(File.paste_id == paste_id).all()
+        if files:
+            response.files = [
+                FileInfo(
+                    id=str(f.id),  # type: ignore
+                    size=int(f.file_size),  # type: ignore
+                    encrypted_name=str(f.file_name_encrypted),  # type: ignore
+                    encrypted_url=f"/api/pastes/{paste_id}/files/{f.id}",
+                )
+                for f in files
+            ]
 
         return response
 

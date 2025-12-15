@@ -7,6 +7,7 @@ import string
 from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
+from pydantic import ValidationError
 from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -37,7 +38,6 @@ from app.schemas.collab_room import (
     calculate_is_online,
 )
 from config.config import settings
-from pydantic import ValidationError
 
 
 class CollabRoomService:

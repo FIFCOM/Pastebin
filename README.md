@@ -118,11 +118,11 @@ npm run dev
 ### Paste
 
 - `POST /api/pastes` - 创建Paste（草稿）
-- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `Bearer {admin_key}`）
+- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `Bearer {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
 - `POST /api/pastes/{paste_id}/publish` - 发布（需要 `Bearer {admin_key}`）
-- `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`）
-- `GET /api/pastes/{paste_id}/content` - 获取内容（可选 `access_key` / `encryption_key`）
-- `POST /api/pastes/{paste_id}/files` - 上传文件（统一接口，JSON；client/server；需要 `Bearer {admin_key}`）
+- `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`；文件列表请从 `/content` 获取）
+- `GET /api/pastes/{paste_id}/content` - 获取内容与文件列表（可选 `access_key` / `encryption_key`）
+- `POST /api/pastes/{paste_id}/files` - 上传文件（统一接口，JSON；client/server；需要 `Bearer {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
 - `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`）
 - `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
 

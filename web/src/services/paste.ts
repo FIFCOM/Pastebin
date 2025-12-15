@@ -8,14 +8,13 @@ export interface PasteFile {
   id: string
   size: number
   encrypted_name: string
-  url: string
+  encrypted_url: string
 }
 
 export interface PasteData {
   title: string
   type: 'txt' | 'md'
   status: 'published' | 'edited'
-  files: PasteFile[]
   published_at: string
   updated_at: string
   expire_at: string
@@ -23,6 +22,7 @@ export interface PasteData {
 
 export interface PasteContent {
   encrypted_content: string
+  files: PasteFile[]
 }
 
 export interface CreatePasteResponse {

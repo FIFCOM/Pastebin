@@ -4,6 +4,8 @@ Paste控制器 - REST API路由
 
 import io
 import time
+from datetime import UTC, datetime
+from typing import cast
 
 from fastapi import (
     APIRouter,
@@ -77,6 +79,9 @@ async def update_paste_content(
     paste_id: str,
     content_data: PasteContentUpdateRequest,
     authorization: str | None = Header(None),
+    encryption_key: str | None = Header(
+        None, alias="X-Encryption-Key", description="服务端加密模式下用于加密写入的密钥"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -90,7 +95,9 @@ async def update_paste_content(
     admin_key = _get_admin_key_from_header(authorization)
 
     try:
-        PasteService.update_paste_content(db, paste_id, admin_key, content_data)
+        PasteService.update_paste_content(
+            db, paste_id, admin_key, content_data, encryption_key=encryption_key
+        )
         return MessageResponse(message="内容更新成功", timestamp=int(time.time()))
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
@@ -112,6 +119,9 @@ async def upload_file_json(
     paste_id: str,
     file_data: FileUploadRequest,
     authorization: str | None = Header(None),
+    encryption_key: str | None = Header(
+        None, alias="X-Encryption-Key", description="服务端加密模式下用于加密写入的密钥"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -126,7 +136,9 @@ async def upload_file_json(
     admin_key = _get_admin_key_from_header(authorization)
 
     try:
-        return PasteService.upload_file(db, paste_id, admin_key, file_data)
+        return PasteService.upload_file(
+            db, paste_id, admin_key, file_data, encryption_key=encryption_key
+        )
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
             raise HTTPException(
@@ -313,9 +325,7 @@ async def get_file(
                 status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
             )
 
-        from datetime import UTC, datetime
-
-        paste_expire_at = paste.expire_at  # type: ignore
+        paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
         if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
             raise HTTPException(
                 status_code=status.HTTP_410_GONE, detail="Paste已过期"

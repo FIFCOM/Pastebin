@@ -143,7 +143,7 @@ class FileInfo(BaseModel):
     id: str = Field(..., description="文件ID")
     size: int = Field(..., description="文件大小（字节）")
     encrypted_name: str = Field(..., description="加密的文件名（Base64）")
-    url: str = Field(..., description="下载URL")
+    encrypted_url: str = Field(..., description="下载URL（不包含任何密钥）")
 
 
 class PasteResponse(BaseModel):
@@ -152,7 +152,6 @@ class PasteResponse(BaseModel):
     title: str | None = Field(default=None, description="Paste标题")
     type: str = Field(..., description="Paste类型：txt或md")
     status: str = Field(..., description="状态：published或edited")
-    files: list[FileInfo] = Field(default=[], description="文件列表")
     published_at: datetime | None = Field(default=None, description="发布时间")
     updated_at: datetime = Field(..., description="更新时间")
     expire_at: datetime | None = Field(default=None, description="过期时间")
@@ -172,6 +171,7 @@ class PasteContentResponse(BaseModel):
     content: str | None = Field(
         default=None, description="明文内容（如果提供了正确的解密密钥）"
     )
+    files: list[FileInfo] | None = Field(default=None, description="文件列表（可选）")
 
 
 class PastePublishResponse(BaseModel):
