@@ -22,7 +22,22 @@
           :checked="contentType === 'md'"
           @change="handleContentTypeChange"
         ></mdui-switch>
+        <mdui-button class="upload-btn" @click="toggleUploader" variant="tonal">
+          <mdui-icon slot="icon" name="upload"></mdui-icon>
+          上传文件
+          <mdui-icon slot="end-icon" :name="showUploader ? 'expand_less' : 'expand_more'"></mdui-icon>
+        </mdui-button>
       </div>
+
+      <!-- 文件上传区域 -->
+      <FileUploader
+        :visible="showUploader"
+        :paste-id="currentPasteId"
+        :admin-key="currentAdminKey"
+        :encryption-key="pasteKey"
+        :on-ensure-paste="ensurePasteCreated"
+        @insert-file="handleInsertFile"
+      />
 
       <!-- Plain文本输入框 -->
       <div v-show="contentType === 'txt'" class="editor-section">
@@ -163,6 +178,7 @@ import 'mdui/components/segmented-button.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import PlainEditor from '../components/editors/Plain.vue'
 import MarkdownEditor from '../components/editors/Markdown.vue'
+import FileUploader from '../components/upload/FileUploader.vue'
 import {
   generateRandomId,
   generateEncryptionKey,
@@ -230,6 +246,56 @@ const copyToClipboard = async (text: string, successMessage: string) => {
     snackbar({ message: '复制失败', closeable: true });
   }
 };
+
+// 文件上传
+const showUploader = ref(false)
+
+const toggleUploader = () => {
+  showUploader.value = !showUploader.value
+}
+
+// 确保 Paste 已创建（供文件上传使用）
+const ensurePasteCreated = async (): Promise<boolean> => {
+  if (currentPasteId.value && pasteKey.value) {
+    return true
+  }
+
+  try {
+    const createData = await createPaste('client')
+    currentPasteId.value = createData.paste_id
+    currentAdminKey.value = createData.admin_key
+
+    const key = await generateEncryptionKey()
+    pasteKey.value = key
+    encryptionKey.value = keyToUrlSafeStr(key)
+
+    return true
+  } catch (error) {
+    console.error('创建 Paste 失败:', error)
+    snackbar({
+      message: `创建失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      closeable: true
+    })
+    return false
+  }
+}
+
+const handleInsertFile = (file: { fileId: string; name: string; size: number }) => {
+  const fileUrl = `/api/pastes/${currentPasteId.value}/files/${file.fileId}`
+
+  // 统一使用 Markdown 格式：图片用 ![](url)，其他用 [](url)
+  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(file.name)
+  const insertText = isImage ? `![${file.name}](${fileUrl})` : `[${file.name}](${fileUrl})`
+
+  // 插入到当前编辑器
+  if (contentType.value === 'md') {
+    markdownContent.value += '\n' + insertText
+  } else {
+    plainContent.value += '\n' + insertText
+  }
+
+  snackbar({ message: '已插入文件链接' })
+}
 
 // 处理内容类型切换
 const handleContentTypeChange = (e: Event) => {
@@ -314,18 +380,19 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
-    // 1. 创建 Paste（客户端加密模式）
-    const createData = await createPaste('client')
-    currentPasteId.value = createData.paste_id
-    currentAdminKey.value = createData.admin_key
+    // 1. 确保 Paste 已创建（可能已通过文件上传创建）
+    if (!currentPasteId.value || !pasteKey.value) {
+      const createData = await createPaste('client')
+      currentPasteId.value = createData.paste_id
+      currentAdminKey.value = createData.admin_key
 
-    // 2. 生成加密密钥
-    const key = await generateEncryptionKey()
-    pasteKey.value = key
-    encryptionKey.value = keyToUrlSafeStr(key)
+      const key = await generateEncryptionKey()
+      pasteKey.value = key
+      encryptionKey.value = keyToUrlSafeStr(key)
+    }
 
-    // 3. 加密并上传内容
-    const encryptedContent = await encryptContent(content, key)
+    // 2. 加密并上传内容
+    const encryptedContent = await encryptContent(content, pasteKey.value)
     await uploadPasteContent(currentPasteId.value, currentAdminKey.value, {
       encrypted_content: encryptedContent
     })
@@ -463,6 +530,10 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 500;
   color: var(--mdui-color-on-surface);
+}
+
+.upload-btn {
+  margin-left: auto;
 }
 
 .title-input {

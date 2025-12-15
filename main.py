@@ -12,6 +12,7 @@ from app.controllers import (
     api_key_router,
     cleanup_router,
     collab_room_router,
+    config_router,
     health_router,
     paste_router,
     user_history_router,
@@ -75,6 +76,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(health_router)
+app.include_router(config_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
 app.include_router(paste_router)
