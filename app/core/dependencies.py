@@ -16,7 +16,10 @@ from app.services.api_key_service import ApiKeyService
 from app.services.user_service import UserService
 
 # HTTP Bearer 安全方案
+# - required: 缺少/无效 Authorization 直接报错
+# - optional: 缺少 Authorization 返回 None（用于“可匿名”接口）
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -84,7 +87,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     db: Session = Depends(get_db),
 ) -> UserResponse | None:
     """

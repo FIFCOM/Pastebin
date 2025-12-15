@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app.models.collab_room import Member
+from app.models.collab_room import CollabRoom, Member, RoomMember
 from app.models.paste import File, Paste
 from app.schemas.cleanup import CleanupResponse, CleanupTaskResult
 from config.config import settings
@@ -144,8 +144,17 @@ class CleanupService:
             expired_members = db.query(Member).filter(Member.expire_at < now).all()
 
             deleted_count = 0
+            affected_room_ids: set[str] = set()
             for member in expired_members:
                 try:
+                    # 记录该成员参与的房间，用于后续同步 member_count
+                    room_ids = (
+                        db.query(RoomMember.room_id)
+                        .filter(RoomMember.member_id == str(member.id))  # type: ignore
+                        .all()
+                    )
+                    affected_room_ids.update([str(rid) for (rid,) in room_ids])
+
                     # Member删除会级联删除：
                     # - 创建的房间 (CollabRoom)
                     # - 房间成员关系 (RoomMember)
@@ -155,6 +164,16 @@ class CleanupService:
 
                 except Exception as e:
                     print(f"清理成员 {member.id} 时出错: {e}")
+
+            # 先 flush 删除，再按真实 room_members 同步 collab_rooms.member_count
+            db.flush()
+            for room_id in affected_room_ids:
+                room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
+                if not room:
+                    continue
+                room.member_count = (
+                    db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
+                )  # type: ignore
 
             db.commit()
 

@@ -7,6 +7,7 @@ from fastapi import (
     Depends,
     Header,
     HTTPException,
+    Path,
     Query,
     status,
 )
@@ -103,7 +104,7 @@ async def create_room(
 
 @router.get("/join/{pin_code}", response_model=RoomInfoResponse)
 async def get_room_info_by_pin(
-    pin_code: str,
+    pin_code: str = Path(..., min_length=6, max_length=6, regex="^[A-Za-z0-9]{6}$"),
     db: Session = Depends(get_db),
 ):
     """

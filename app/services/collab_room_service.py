@@ -6,8 +6,9 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
-import jwt
+from jose import JWTError, jwt
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -36,13 +37,14 @@ from app.schemas.collab_room import (
     calculate_is_online,
 )
 from config.config import settings
+from pydantic import ValidationError
 
 
 class CollabRoomService:
     """协作房间服务类"""
 
     # JWT密钥（应该从配置中获取）
-    JWT_SECRET = settings.secret_key
+    JWT_SECRET = settings.member_token_secret_key
     JWT_ALGORITHM = "HS256"
 
     @staticmethod
@@ -79,7 +81,7 @@ class CollabRoomService:
         )
 
         return jwt.encode(
-            payload.dict(),
+            payload.model_dump(),
             CollabRoomService.JWT_SECRET,
             algorithm=CollabRoomService.JWT_ALGORITHM,
         )
@@ -94,8 +96,19 @@ class CollabRoomService:
                 algorithms=[CollabRoomService.JWT_ALGORITHM],
             )
             return MemberTokenPayload(**payload_dict)
-        except jwt.InvalidTokenError as e:
+        except (JWTError, ValidationError) as e:
             raise ValueError(f"无效的成员令牌: {e}") from None
+
+    @staticmethod
+    def _sync_room_member_count(db: Session, room_id: str) -> int:
+        """将 collab_rooms.member_count 同步为 room_members 的真实数量，并返回最新值。"""
+        count = (
+            db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
+        )
+        room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
+        if room:
+            room.member_count = count  # type: ignore
+        return int(count)
 
     @staticmethod
     def get_member_token(
@@ -174,46 +187,51 @@ class CollabRoomService:
         if not member:
             raise ValueError("成员不存在")
 
-        # 生成唯一的PIN码
+        # 生成唯一的PIN码（并处理并发下的唯一约束竞态）
         max_attempts = 10
+        last_error: Exception | None = None
         for _ in range(max_attempts):
             pin_code = CollabRoomService._generate_pin_code()
-            if not db.query(CollabRoom).filter(CollabRoom.pin_code == pin_code).first():
-                break
-        else:
-            raise ValueError("无法生成唯一的PIN码")
+            room_key = CollabRoomService._generate_room_key()
 
-        # 生成房间密钥
-        room_key = CollabRoomService._generate_room_key()
+            room = CollabRoom(
+                creator_member_id=str(member.id),  # type: ignore
+                room_name=room_data.room_name,
+                pin_code=pin_code,
+                room_key=room_key,
+                max_members=room_data.max_members,
+                member_count=1,
+            )
+            db.add(room)
 
-        # 创建房间
-        room = CollabRoom(
-            creator_member_id=str(member.id),  # type: ignore
-            room_name=room_data.room_name,
-            pin_code=pin_code,
-            room_key=room_key,
-            max_members=room_data.max_members,
-            member_count=1,
-        )
+            try:
+                db.flush()  # 获取room.id + 触发 pin_code 唯一性校验
+            except IntegrityError as e:
+                db.rollback()
+                last_error = e
+                continue
 
-        db.add(room)
-        db.flush()  # 获取room.id
+            room_member = RoomMember(
+                room_id=str(room.id),  # type: ignore
+                member_id=str(member.id),  # type: ignore
+            )
+            db.add(room_member)
 
-        # 将创建者加入房间
-        room_member = RoomMember(
-            room_id=str(room.id),  # type: ignore
-            member_id=str(member.id),  # type: ignore
-        )
-        db.add(room_member)
+            try:
+                db.commit()
+            except IntegrityError as e:
+                db.rollback()
+                last_error = e
+                continue
 
-        db.commit()
-        db.refresh(room)
+            db.refresh(room)
+            return RoomCreateResponse(
+                room_id=str(room.id),  # type: ignore
+                pin_code=pin_code,
+                join_url=build_join_url(pin_code),
+            )
 
-        return RoomCreateResponse(
-            room_id=str(room.id),  # type: ignore
-            pin_code=pin_code,
-            join_url=build_join_url(pin_code),
-        )
+        raise ValueError(f"无法生成唯一的PIN码: {last_error}")
 
     @staticmethod
     def get_room_info_by_pin(db: Session, pin_code: str) -> RoomInfoResponse:
@@ -233,10 +251,14 @@ class CollabRoomService:
         if not room:
             raise ValueError("房间不存在")
 
+        # 避免 member_count 漂移：按真实 room_members 数量返回
+        member_count = (
+            db.query(RoomMember).filter(RoomMember.room_id == str(room.id)).count()  # type: ignore
+        )
         return RoomInfoResponse(
             room_id=str(room.id),  # type: ignore
             room_name=str(room.room_name),  # type: ignore
-            member_count=int(room.member_count or 0),  # type: ignore
+            member_count=int(member_count),
             max_members=int(room.max_members or 10),  # type: ignore
         )
 
@@ -291,27 +313,56 @@ class CollabRoomService:
         )
 
         if existing_membership:
-            # 更新最后活跃时间
             existing_membership.last_seen = datetime.now(UTC)  # type: ignore
+            db.commit()
         else:
-            # 检查房间是否已满
-            current_count = int(room.member_count or 0)  # type: ignore
+            # 以真实数量判断是否已满，避免 member_count 漂移/并发竞态
             max_count = int(room.max_members or 10)  # type: ignore
-
+            current_count = (
+                db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
+            )
             if current_count >= max_count:
                 raise ValueError("房间已满")
 
-            # 创建新的成员关系
             room_member = RoomMember(
                 room_id=room_id,
                 member_id=str(member.id),  # type: ignore
             )
             db.add(room_member)
 
-            # 更新房间成员数
-            room.member_count = current_count + 1  # type: ignore
+            try:
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+                # 可能并发重复加入：当作已在房间中
+                existing_membership = (
+                    db.query(RoomMember)
+                    .filter(
+                        and_(
+                            RoomMember.room_id == room_id,
+                            RoomMember.member_id == str(member.id),  # type: ignore
+                        )
+                    )
+                    .first()
+                )
+                if not existing_membership:
+                    raise
+                existing_membership.last_seen = datetime.now(UTC)  # type: ignore
+                db.commit()
+            else:
+                # 二次校验容量（并发下避免超员）；超员则撤销本次加入
+                new_count = (
+                    db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
+                )
+                if new_count > max_count:
+                    db.delete(room_member)
+                    db.commit()
+                    CollabRoomService._sync_room_member_count(db, room_id)
+                    db.commit()
+                    raise ValueError("房间已满")
 
-        db.commit()
+                CollabRoomService._sync_room_member_count(db, room_id)
+                db.commit()
 
         # 获取房间成员列表
         room_members = (
@@ -429,6 +480,16 @@ class CollabRoomService:
         paste = db.query(Paste).filter(Paste.id == share_data.paste_id).first()
         if not paste:
             raise ValueError("Paste不存在")
+        if str(paste.status) == "draft":  # type: ignore
+            raise ValueError("草稿状态的Paste不可分享")
+
+        # 防止绕过 Paste 的 access_key 保护：设置了访问密钥的 Paste 不允许通过房间分享
+        if paste.access_key_hash:  # type: ignore
+            raise ValueError("该Paste设置了访问密钥，不能通过协作房间分享")
+
+        # 过期 Paste 不允许分享
+        if paste.expire_at is not None and datetime.now(UTC) > paste.expire_at:  # type: ignore
+            raise ValueError("Paste已过期，不能分享")
 
         # 如果指定了目标成员，验证目标成员是否在房间中
         if share_data.target_member_id:
@@ -500,7 +561,6 @@ class CollabRoomService:
         )
 
         if paste_type == "received":
-            # 只返回发送给当前用户或所有人的
             query = query.filter(
                 or_(
                     RoomPaste.target_member_id == token_payload.member_id,
@@ -508,11 +568,16 @@ class CollabRoomService:
                 )
             )
         elif paste_type == "sent":
-            # 只返回当前用户发送的
+            query = query.filter(RoomPaste.shared_by_member_id == token_payload.member_id)
+        elif paste_type == "all":
+            # “all” 仅表示与当前成员相关（收到的 + 自己发出的），不包含他人之间的定向分享
             query = query.filter(
-                RoomPaste.shared_by_member_id == token_payload.member_id
+                or_(
+                    RoomPaste.shared_by_member_id == token_payload.member_id,
+                    RoomPaste.target_member_id == token_payload.member_id,
+                    RoomPaste.target_member_id.is_(None),
+                )
             )
-        # paste_type == "all" 不需要额外过滤
 
         room_pastes = query.order_by(RoomPaste.shared_at.desc()).all()
 
@@ -564,12 +629,7 @@ class CollabRoomService:
         # 删除成员关系
         db.delete(membership)
 
-        # 更新房间成员数
-        room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
-        if room:
-            current_count = int(room.member_count or 1)  # type: ignore
-            room.member_count = max(0, current_count - 1)  # type: ignore
-
+        CollabRoomService._sync_room_member_count(db, room_id)
         db.commit()
 
     @staticmethod

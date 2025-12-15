@@ -65,6 +65,7 @@ class Settings:
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+    member_token_secret_key: str
 
     # 加密设置
     pbkdf2_iterations: int
@@ -93,6 +94,7 @@ def load_config() -> Settings:
     """
     load_env_file()
 
+    secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     return Settings(
         # 应用设置
         app_name=os.getenv("APP_NAME", "Material Bin User Auth API"),
@@ -102,9 +104,14 @@ def load_config() -> Settings:
         database_url=os.getenv("DATABASE_URL", "sqlite:///./user_auth.db"),
         mysql_database_url=os.getenv("MYSQL_DATABASE_URL"),
         # 安全设置
-        secret_key=os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production"),
+        secret_key=secret_key,
         algorithm=os.getenv("ALGORITHM", "HS256"),
         access_token_expire_minutes=_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 30),
+        # 协作房间 member token（必须显式设置，且建议与 SECRET_KEY 分离）
+        member_token_secret_key=os.getenv(
+            "MEMBER_TOKEN_SECRET_KEY",
+            "change-this-member-token-secret-key-in-production",
+        ),
         # 加密设置
         pbkdf2_iterations=_int_env("PBKDF2_ITERATIONS", 100000),
         salt_length=_int_env("SALT_LENGTH", 32),
@@ -135,6 +142,11 @@ def validate_config(config: Settings) -> None:
 
     if config.internal_token == "change-this-internal-token-in-production":
         missing.append("INTERNAL_TOKEN (using default, change for production)")
+
+    if config.member_token_secret_key == "change-this-member-token-secret-key-in-production":
+        missing.append(
+            "MEMBER_TOKEN_SECRET_KEY (using default, change for production)"
+        )
 
     if missing:
         raise RuntimeError(

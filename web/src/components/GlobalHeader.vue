@@ -21,9 +21,7 @@
           slot="trigger"
           class="user-button"
         >
-          <span class="user-initial">
-            {{ userInitial }}
-          </span>
+          <mdui-icon-account-circle />
         </mdui-button-icon>
         <mdui-menu>
           <mdui-menu-item disabled>
@@ -40,7 +38,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import '@mdui/icons/account-circle.js'
+
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/dropdown.js'
@@ -54,11 +53,6 @@ const { isLoggedIn, currentUser, logout } = useAuth()
 
 const router = useRouter()
 const route = useRoute()
-
-const userInitial = computed(() => {
-  const name = currentUser.value?.username || ''
-  return name ? name.charAt(0).toUpperCase() : 'U'
-})
 
 const handleLoginClick = () => {
   // 已在登录页时不再重复跳转，避免 redirect 参数不断叠加
@@ -105,19 +99,7 @@ const handleLogout = () => {
   align-items: center;
   justify-content: center;
   margin-right: 4px;
-}
-
-.user-initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: var(--mdui-color-primary-container);
-  color: var(--mdui-color-on-primary-container);
-  font-size: 14px;
-  font-weight: 600;
+  --mdui-icon-size: 22px;
 }
 
 </style>

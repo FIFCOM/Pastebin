@@ -37,7 +37,7 @@ class PasteShareRequest(BaseModel):
 
     paste_id: str = Field(..., max_length=32, description="Paste ID")
     encrypted_paste_key: str = Field(
-        ..., description="用room_key加密的paste密钥（Base64）"
+        ..., max_length=4096, description="用room_key加密的paste密钥（Base64）"
     )
     target_member_id: str | None = Field(
         None, description="目标接收者ID，不提供则发送给所有人"
@@ -223,15 +223,15 @@ def calculate_is_online(last_seen: datetime) -> bool:
 
 def build_join_url(pin_code: str, base_url: str = "") -> str:
     """构建房间加入链接"""
-    if not base_url:
-        # 这里应该从配置中获取基础URL，暂时使用占位符
-        base_url = "https://example.com"
-    return f"{base_url}/join/{pin_code}"
+    if base_url:
+        return f"{base_url.rstrip('/')}/join/{pin_code}"
+    # 默认返回相对路径，避免写死域名误导前端
+    return f"/join/{pin_code}"
 
 
 def build_ws_url(room_id: str, base_url: str = "") -> str:
     """构建WebSocket连接URL"""
-    if not base_url:
-        # 这里应该从配置中获取基础URL，暂时使用占位符
-        base_url = "wss://example.com"
-    return f"{base_url}/api/rooms/{room_id}/ws"
+    if base_url:
+        return f"{base_url.rstrip('/')}/api/rooms/{room_id}/ws"
+    # 默认返回相对路径，由前端自行拼接 ws(s)://{host}
+    return f"/api/rooms/{room_id}/ws"
