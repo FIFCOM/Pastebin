@@ -2,7 +2,6 @@
 Paste控制器 - REST API路由
 """
 
-import base64
 import io
 import time
 
@@ -12,11 +11,7 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
-    UploadFile,
     status,
-)
-from fastapi import (
-    File as FastAPIFile,
 )
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -120,59 +115,17 @@ async def upload_file_json(
     db: Session = Depends(get_db),
 ):
     """
-    上传文件（JSON格式，用于客户端加密）
+    上传文件（统一接口）
 
     需要在Authorization头中提供admin_key: Bearer {admin_key}
 
-    - **encrypted_file**: Base64编码的加密文件数据
-    - **encrypted_metadata**: 加密的文件元数据
+    - **encryption_mode**: client（客户端加密）或server（服务端加密）；不填则以Paste的encryption_mode为准
+    - **encrypted_file**: Base64编码的文件数据（client: 加密后；server: 明文，服务端会加密后落盘）
+    - **encrypted_metadata**: 文件元数据（client: 可加密；server: 明文，服务端会加密file_name）
     """
     admin_key = _get_admin_key_from_header(authorization)
 
     try:
-        return PasteService.upload_file(db, paste_id, admin_key, file_data)
-    except ValueError as e:
-        if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
-            ) from None
-        elif "不存在" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-            ) from None
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from None
-
-
-@router.post("/{paste_id}/files/upload", response_model=FileUploadResponse)
-async def upload_file_multipart(
-    paste_id: str,
-    file: UploadFile = FastAPIFile(...),
-    authorization: str | None = Header(None),
-    db: Session = Depends(get_db),
-):
-    """
-    上传文件（multipart/form-data格式，用于服务端加密）
-
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
-    """
-    admin_key = _get_admin_key_from_header(authorization)
-
-    try:
-        # 读取文件内容
-        file_content = await file.read()
-
-        # 构造文件数据
-        file_data = FileUploadRequest(
-            encrypted_file=base64.b64encode(file_content).decode(),
-            encrypted_metadata={
-                "file_name": file.filename or "unknown",
-                "mime_type": file.content_type or "application/octet-stream",
-            },
-        )
-
         return PasteService.upload_file(db, paste_id, admin_key, file_data)
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
@@ -330,12 +283,14 @@ async def get_paste_content(
 async def get_file(
     paste_id: str,
     file_id: str,
+    access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
     db: Session = Depends(get_db),
 ):
     """
     获取文件
 
+    - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
     - **encryption_key**: 解密密钥（可选，如果提供且正确则解密文件名和内容）
 
     返回文件流，Content-Disposition: attachment; filename="filename"
@@ -346,10 +301,36 @@ async def get_file(
         from app.models.paste import File, Paste
         from config.config import settings
 
+        # 检查 Paste 状态/访问密钥/过期/阅后即焚
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste or str(paste.status) == "draft":  # type: ignore
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        if not PasteService._verify_access_key(paste, access_key):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
+            )
+
+        from datetime import UTC, datetime
+
+        paste_expire_at = paste.expire_at  # type: ignore
+        if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail="Paste已过期"
+            )
+
+        paste_max_views = int(paste.max_views or -1)  # type: ignore
+        paste_view_count = int(paste.view_count or 0)  # type: ignore
+        if paste_max_views > 0 and paste_view_count >= paste_max_views:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
+            )
+
         # 获取文件记录
         file_record = (
             db.query(File)
-            .join(Paste)
             .filter(File.id == file_id, File.paste_id == paste_id)
             .first()
         )
@@ -357,13 +338,6 @@ async def get_file(
         if not file_record:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在"
-            )
-
-        # 检查Paste状态
-        paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste or str(paste.status) == "draft":  # type: ignore
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
         # 读取文件

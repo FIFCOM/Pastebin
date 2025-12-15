@@ -41,10 +41,22 @@ class PasteContentUpdateRequest(BaseModel):
 
 
 class FileUploadRequest(BaseModel):
-    """文件上传请求（JSON格式，用于客户端加密）"""
+    """文件上传请求（统一接口）"""
 
-    encrypted_file: str = Field(..., description="Base64编码的加密文件数据")
-    encrypted_metadata: dict = Field(..., description="加密的文件元数据")
+    encryption_mode: str | None = Field(
+        default=None,
+        pattern="^(client|server)$",
+        description="加密模式：client或server（可选；不填则以Paste的encryption_mode为准）",
+    )
+
+    encrypted_file: str = Field(
+        ...,
+        description="Base64编码的文件数据（client: 加密后；server: 明文，服务端会加密后落盘）",
+    )
+    encrypted_metadata: dict = Field(
+        ...,
+        description="文件元数据（client: 可加密；server: 明文，服务端会加密file_name）",
+    )
 
 
 class PastePublishRequest(BaseModel):

@@ -122,9 +122,8 @@ npm run dev
 - `POST /api/pastes/{paste_id}/publish` - 发布（需要 `Bearer {admin_key}`）
 - `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`）
 - `GET /api/pastes/{paste_id}/content` - 获取内容（可选 `access_key` / `encryption_key`）
-- `POST /api/pastes/{paste_id}/files` - 上传文件（JSON，客户端加密；需要 `Bearer {admin_key}`）
-- `POST /api/pastes/{paste_id}/files/upload` - 上传文件（multipart，服务端加密；需要 `Bearer {admin_key}`）
-- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `encryption_key`）
+- `POST /api/pastes/{paste_id}/files` - 上传文件（统一接口，JSON；client/server；需要 `Bearer {admin_key}`）
+- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`）
 - `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
 
 ### 用户 History 管理

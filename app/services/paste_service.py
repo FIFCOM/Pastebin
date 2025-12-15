@@ -250,6 +250,19 @@ class PasteService:
         if not PasteService._verify_admin_key(paste, admin_key):
             raise ValueError("管理密钥错误")
 
+        paste_encryption_mode = str(paste.encryption_mode or "client")  # type: ignore
+        request_encryption_mode = (
+            str(file_data.encryption_mode).strip() if file_data.encryption_mode else None
+        )
+        encryption_mode = request_encryption_mode or paste_encryption_mode
+
+        if encryption_mode not in ("client", "server"):
+            raise ValueError("无效的encryption_mode")
+
+        # 以 Paste 的 encryption_mode 为准；请求体中可携带做显式声明，但不允许不一致
+        if paste_encryption_mode != encryption_mode:
+            raise ValueError("encryption_mode与Paste不一致")
+
         # 生成文件ID
         import uuid
 
@@ -263,6 +276,27 @@ class PasteService:
         except Exception as e:
             raise ValueError(f"文件数据格式错误: {e}") from None
 
+        file_name_value = file_data.encrypted_metadata.get("file_name", "")
+        mime_type_value = file_data.encrypted_metadata.get(
+            "mime_type", "application/octet-stream"
+        )
+
+        # 服务端加密：将明文文件在服务端加密后落盘，避免明文落盘风险
+        if encryption_mode == "server":
+            paste_key_record = (
+                db.query(PasteKey).filter(PasteKey.paste_id == paste_id).first()
+            )
+            if not paste_key_record:
+                raise ValueError("服务端加密密钥不存在")
+
+            paste_key = urlsafe_str_to_key(str(paste_key_record.paste_key))  # type: ignore
+            file_bytes = encrypt_with_key(file_bytes, paste_key)
+            file_name_encrypted = bytes_to_str(
+                encrypt_with_key(str(file_name_value).encode("utf-8"), paste_key)
+            )
+        else:
+            file_name_encrypted = file_name_value
+
         # 保存文件到存储
         storage_path = PasteService._save_file_to_storage(paste_id, file_id, file_bytes)
 
@@ -273,10 +307,8 @@ class PasteService:
         file_record = File(
             id=file_id,
             paste_id=paste_id,
-            file_name_encrypted=file_data.encrypted_metadata.get("file_name", ""),
-            mime_type=file_data.encrypted_metadata.get(
-                "mime_type", "application/octet-stream"
-            ),
+            file_name_encrypted=file_name_encrypted,
+            mime_type=mime_type_value,
             file_size=len(file_bytes),
             storage_path=storage_path,
             checksum=checksum,
