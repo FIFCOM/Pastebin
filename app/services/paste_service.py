@@ -546,6 +546,10 @@ class PasteService:
         if paste_expire_at is not None and datetime.now(UTC) > paste_expire_at:
             raise ValueError("Paste已过期")
 
+        content_path = paste.content_path  # type: ignore
+        if content_path is None or str(content_path).strip() == "":
+            raise ValueError("Paste内容为空")
+
         # 检查查看次数限制并增加计数
         paste_max_views = int(paste.max_views or -1)  # type: ignore
         paste_view_count = int(paste.view_count or 0)  # type: ignore
@@ -555,10 +559,6 @@ class PasteService:
         # 增加查看次数
         paste.view_count = paste_view_count + 1  # type: ignore
         db.commit()
-
-        content_path = paste.content_path  # type: ignore
-        if content_path is None or str(content_path).strip() == "":
-            raise ValueError("Paste内容为空")
 
         # 读取内容
         encrypted_content = PasteService._read_content_from_file(str(content_path))

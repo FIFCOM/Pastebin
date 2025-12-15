@@ -3,6 +3,17 @@
     <mdui-top-app-bar-title> # Material Bin </mdui-top-app-bar-title>
     <div class="header-spacer"></div>
 
+    <!-- 功能图标按钮 -->
+    <mdui-button-icon>
+      <mdui-icon-groups />
+    </mdui-button-icon>
+    <mdui-button-icon>
+      <mdui-icon-history />
+    </mdui-button-icon>
+    <mdui-button-icon>
+      <mdui-icon-share />
+    </mdui-button-icon>
+
     <!-- 未登录：显示登录按钮 -->
     <template v-if="!isLoggedIn">
       <mdui-button
@@ -39,6 +50,9 @@
 
 <script setup lang="ts">
 import '@mdui/icons/account-circle.js'
+import '@mdui/icons/groups.js'
+import '@mdui/icons/history.js'
+import '@mdui/icons/share.js'
 
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
