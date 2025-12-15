@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.models.collab_room import CollabRoom, Member, RoomMember
-from app.models.paste import File, Paste
+from app.models.paste import File, FileUploadSession, Paste
 from app.schemas.cleanup import CleanupResponse, CleanupTaskResult
 from config.config import settings
 
@@ -196,6 +196,68 @@ class CleanupService:
             )
 
     @staticmethod
+    def cleanup_expired_uploads(db: Session) -> CleanupTaskResult:
+        """
+        清理过期的分片上传会话及其临时文件
+        """
+        try:
+            now = datetime.now(UTC)
+            expired_sessions = (
+                db.query(FileUploadSession)
+                .filter(FileUploadSession.expire_at < now)
+                .all()
+            )
+
+            deleted_count = 0
+            for sess in expired_sessions:
+                try:
+                    paste_id = str(sess.paste_id)  # type: ignore
+                    upload_id = str(sess.id)  # type: ignore
+                    # 删除临时目录：data/uploads/files/{paste_id}/{upload_id}
+                    upload_dir = os.path.join(
+                        settings.data_dir, "uploads", "files", paste_id, upload_id
+                    )
+                    if os.path.exists(upload_dir):
+                        for root, dirs, files in os.walk(upload_dir, topdown=False):
+                            for name in files:
+                                try:
+                                    os.remove(os.path.join(root, name))
+                                except Exception:
+                                    pass
+                            for name in dirs:
+                                try:
+                                    os.rmdir(os.path.join(root, name))
+                                except Exception:
+                                    pass
+                        try:
+                            os.rmdir(upload_dir)
+                        except Exception:
+                            pass
+
+                    db.delete(sess)
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"清理上传会话 {sess.id} 时出错: {e}")
+
+            db.commit()
+            return CleanupTaskResult(
+                task_name="expired_uploads",
+                success=True,
+                deleted_count=deleted_count,
+                message=f"成功清理 {deleted_count} 个过期上传会话",
+                error=None,
+            )
+        except Exception as e:
+            db.rollback()
+            return CleanupTaskResult(
+                task_name="expired_uploads",
+                success=False,
+                deleted_count=0,
+                message="清理过期上传会话失败",
+                error=str(e),
+            )
+
+    @staticmethod
     def _delete_paste_files(paste_id: str, db: Session) -> None:
         """
         删除paste关联的物理文件
@@ -225,8 +287,40 @@ class CleanupService:
                 )
                 if os.path.exists(file_path):
                     os.remove(file_path)
+
+                # 分片上传的manifest（若存在）
+                manifest_path = os.path.join(
+                    settings.data_dir,
+                    "files",
+                    paste_id,
+                    f"{file_record.id}.manifest.json",  # type: ignore
+                )
+                if os.path.exists(manifest_path):
+                    os.remove(manifest_path)
             except Exception as e:
                 print(f"删除文件 {file_record.storage_path} 时出错: {e}")
+
+        # 删除该 paste 下的临时上传目录（若有）
+        try:
+            upload_root = os.path.join(settings.data_dir, "uploads", "files", paste_id)
+            if os.path.exists(upload_root):
+                for root, dirs, files in os.walk(upload_root, topdown=False):
+                    for name in files:
+                        try:
+                            os.remove(os.path.join(root, name))
+                        except Exception:
+                            pass
+                    for name in dirs:
+                        try:
+                            os.rmdir(os.path.join(root, name))
+                        except Exception:
+                            pass
+                try:
+                    os.rmdir(upload_root)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     @staticmethod
     def execute_cleanup_tasks(db: Session, task_names: list[str]) -> CleanupResponse:
@@ -245,6 +339,7 @@ class CleanupService:
             "expired_drafts": CleanupService.cleanup_expired_drafts,
             "expired_pastes": CleanupService.cleanup_expired_pastes,
             "expired_members": CleanupService.cleanup_expired_members,
+            "expired_uploads": CleanupService.cleanup_expired_uploads,
         }
 
         task_results = []

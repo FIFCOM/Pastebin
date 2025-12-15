@@ -40,8 +40,8 @@ class PasteContentUpdateRequest(BaseModel):
         return v
 
 
-class FileUploadRequest(BaseModel):
-    """文件上传请求（统一接口）"""
+class FileUploadInitRequest(BaseModel):
+    """分片上传初始化请求（二进制分片上传）"""
 
     encryption_mode: str | None = Field(
         default=None,
@@ -49,14 +49,78 @@ class FileUploadRequest(BaseModel):
         description="加密模式：client或server（可选；不填则以Paste的encryption_mode为准）",
     )
 
-    encrypted_file: str = Field(
+    file_name: str = Field(
         ...,
-        description="Base64编码的文件数据（client: 加密后；server: 明文，服务端会加密后落盘）",
+        description="文件名（client: 建议传加密后的Base64；server: 明文，服务端会加密后落库）",
     )
-    encrypted_metadata: dict = Field(
-        ...,
-        description="文件元数据（client: 可加密；server: 明文，服务端会加密file_name）",
+    mime_type: str = Field(
+        default="application/octet-stream",
+        description="MIME类型",
     )
+    file_size: int = Field(..., ge=0, description="原始文件大小（字节，未加密前）")
+
+    requested_chunk_size: int | None = Field(
+        default=None,
+        ge=1,
+        description="客户端期望的分片大小（字节）；服务端可能会调整",
+    )
+
+
+class FileUploadInitResponse(BaseModel):
+    """分片上传初始化响应"""
+
+    upload_id: str = Field(..., description="上传会话ID（也是最终file_id）")
+    chunk_size: int = Field(..., description="服务端确认的分片大小（字节，按明文分片）")
+    total_chunks: int = Field(..., description="总分片数")
+    expires_at: datetime = Field(..., description="上传会话过期时间")
+    aad_prefix: str = Field(..., description="AAD前缀（版本化）")
+    aad_required: bool = Field(..., description="是否强制AAD")
+    iv_scheme: str = Field(..., description="nonce/iv方案说明")
+
+
+class FileUploadCompleteRequest(BaseModel):
+    """分片上传完成请求"""
+
+    checksum_sha256: str | None = Field(
+        default=None, description="可选：原始文件 SHA256（十六进制）"
+    )
+    chunk_hashes_sha256: list[str] | None = Field(
+        default=None,
+        description="可选：每个分片的SHA256（十六进制，按index顺序；server模式为明文分片，client模式为加密分片）",
+    )
+
+    @field_validator("checksum_sha256")
+    @classmethod
+    def validate_sha256_hex(cls, v: str | None):
+        if v is None or v == "":
+            return None
+        vv = v.strip().lower()
+        if len(vv) != 64 or any(ch not in "0123456789abcdef" for ch in vv):
+            raise ValueError("checksum_sha256必须为64位十六进制字符串")
+        return vv
+
+    @field_validator("chunk_hashes_sha256")
+    @classmethod
+    def validate_chunk_hashes(cls, v: list[str] | None):
+        if v is None:
+            return None
+        if len(v) == 0:
+            raise ValueError("chunk_hashes_sha256不能为空列表")
+        out: list[str] = []
+        for item in v:
+            if not item or not str(item).strip():
+                raise ValueError("chunk_hashes_sha256包含空值")
+            vv = str(item).strip().lower()
+            if len(vv) != 64 or any(ch not in "0123456789abcdef" for ch in vv):
+                raise ValueError("chunk_hashes_sha256必须为64位十六进制字符串数组")
+            out.append(vv)
+        return out
+
+
+class FileUploadCompleteResponse(BaseModel):
+    """分片上传完成响应"""
+
+    file_id: str = Field(..., description="文件ID")
 
 
 class PastePublishRequest(BaseModel):
@@ -109,7 +173,9 @@ class PasteUpdateRequest(BaseModel):
     expire_time: str | None = Field(
         None, pattern="^(7d|30d|1y|never)$", description="过期时间"
     )
-    max_views: int | None = Field(default=None, ge=1, description="最大查看次数")
+    max_views: int | None = Field(
+        default=None, description="最大查看次数（-1表示无限制，其余需>=1）"
+    )
     access_key: str | None = Field(
         default=None, description="访问密钥，空字符串表示禁用"
     )
@@ -144,6 +210,15 @@ class FileInfo(BaseModel):
     size: int = Field(..., description="文件大小（字节）")
     encrypted_name: str = Field(..., description="加密的文件名（Base64）")
     encrypted_url: str = Field(..., description="下载URL（不包含任何密钥）")
+    plain_size: int | None = Field(
+        default=None, description="原始文件大小（字节；分片上传时可用）"
+    )
+    chunk_size: int | None = Field(
+        default=None, description="分片大小（字节；分片上传时可用）"
+    )
+    total_chunks: int | None = Field(
+        default=None, description="总分片数（分片上传时可用）"
+    )
 
 
 class PasteResponse(BaseModel):
@@ -183,12 +258,6 @@ class PastePublishResponse(BaseModel):
         default=None, description="加密密钥（当encryption_mode为server时返回）"
     )
     timestamp: int = Field(..., description="响应时间戳（秒）")
-
-
-class FileUploadResponse(BaseModel):
-    """文件上传响应"""
-
-    file_id: str = Field(..., description="文件ID")
 
 
 # ===============================

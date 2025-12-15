@@ -2,7 +2,9 @@
 Paste服务层 - 业务逻辑处理
 """
 
+import base64
 import hashlib
+import json
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
@@ -21,11 +23,13 @@ from app.core.security import (
     urlsafe_str_to_key,
     verify_password,
 )
-from app.models.paste import File, Paste, PasteKey
+from app.models.paste import File, FileUploadSession, Paste, PasteKey
 from app.schemas.paste import (
     FileInfo,
-    FileUploadRequest,
-    FileUploadResponse,
+    FileUploadCompleteRequest,
+    FileUploadCompleteResponse,
+    FileUploadInitRequest,
+    FileUploadInitResponse,
     PasteContentResponse,
     PasteContentUpdateRequest,
     PasteCreateRequest,
@@ -42,6 +46,369 @@ from config.config import settings
 class PasteService:
     """Paste服务类"""
 
+    FILE_CHUNK_AAD_PREFIX = "mb:filechunk:v1"
+
+    @staticmethod
+    def _upload_session_dir(paste_id: str, upload_id: str) -> Path:
+        return Path(settings.data_dir) / "uploads" / "files" / paste_id / upload_id
+
+    @staticmethod
+    def _upload_chunk_path(paste_id: str, upload_id: str, index: int) -> Path:
+        return PasteService._upload_session_dir(paste_id, upload_id) / "chunks" / f"{index:08d}.part"
+
+    @staticmethod
+    def _final_file_path(paste_id: str, file_id: str) -> Path:
+        return Path(settings.data_dir) / "files" / paste_id / file_id
+
+    @staticmethod
+    def _final_manifest_path(paste_id: str, file_id: str) -> Path:
+        return Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
+
+    @staticmethod
+    def _file_chunk_aad(paste_id: str, file_id: str, chunk_index: int, total_chunks: int) -> bytes:
+        # AAD 约定（前后端需一致）：用于绑定 paste/file/chunk 维度，防乱序/重放/篡改
+        return f"{PasteService.FILE_CHUNK_AAD_PREFIX}|paste:{paste_id}|file:{file_id}|i:{chunk_index}|n:{total_chunks}".encode()
+
+    @staticmethod
+    def init_file_upload(
+        db: Session,
+        paste_id: str,
+        admin_key: str,
+        req: FileUploadInitRequest,
+        encryption_key: str | None = None,
+    ) -> FileUploadInitResponse:
+        """
+        初始化分片上传会话（application/octet-stream 分片上传）。
+
+        - upload_id 也是最终 File.id
+        - chunk_size 为“明文分片大小”；client 模式下上传的是加密分片（长度=明文分片+28B）
+        """
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise ValueError("Paste不存在")
+
+        if not PasteService._verify_admin_key(paste, admin_key):
+            raise ValueError("管理密钥错误")
+
+        paste_encryption_mode = str(paste.encryption_mode or "client")  # type: ignore
+        request_encryption_mode = (
+            str(req.encryption_mode).strip() if req.encryption_mode else None
+        )
+        encryption_mode = request_encryption_mode or paste_encryption_mode
+        if encryption_mode not in ("client", "server"):
+            raise ValueError("无效的encryption_mode")
+        if paste_encryption_mode != encryption_mode:
+            raise ValueError("encryption_mode与Paste不一致")
+
+        max_file_size = int(settings.max_upload_file_size)
+        if max_file_size > 0 and req.file_size > max_file_size:
+            raise ValueError(f"文件过大，最大允许 {max_file_size} 字节")
+
+        now = datetime.now(UTC)
+        active_sessions = (
+            db.query(FileUploadSession)
+            .filter(FileUploadSession.expire_at > now)
+            .count()
+        )
+        if int(settings.max_concurrent_uploads) > 0 and active_sessions >= int(
+            settings.max_concurrent_uploads
+        ):
+            raise ValueError("当前上传会话过多，请稍后重试")
+
+        requested = int(req.requested_chunk_size or int(settings.max_chunk_size))
+        if requested <= 0:
+            requested = int(settings.max_chunk_size)
+        chunk_size = min(requested, int(settings.max_chunk_size))
+        if req.file_size > 0:
+            chunk_size = min(chunk_size, int(req.file_size))
+        else:
+            chunk_size = max(1, chunk_size)
+
+        total_chunks = (int(req.file_size) + chunk_size - 1) // chunk_size
+        if total_chunks <= 0:
+            total_chunks = 1
+
+        # 生成 upload_id（同时作为最终 file_id）
+        import uuid
+
+        upload_id = str(uuid.uuid4())
+        # IV 前缀使用 upload_id 派生，确保同一 paste_key 下跨文件/跨会话也不重复
+        iv_prefix_b64 = base64.b64encode(
+            hashlib.sha256(upload_id.encode("utf-8")).digest()[:8]
+        ).decode("ascii")
+
+        file_name_encrypted: str
+        if encryption_mode == "server":
+            paste_key = PasteService._get_server_key_for_write(
+                db, paste_id, encryption_key
+            )
+            file_name_encrypted = bytes_to_str(
+                encrypt_with_key(str(req.file_name).encode("utf-8"), paste_key)
+            )
+        else:
+            # client 模式下约定 file_name 为加密后的 Base64；这里做一次快速校验便于定位错误
+            try:
+                base64.b64decode(str(req.file_name), validate=True)
+            except Exception as e:
+                raise ValueError(f"file_name格式错误（需为Base64）: {e}") from None
+            file_name_encrypted = str(req.file_name)
+
+        expires_at = now + timedelta(seconds=int(settings.upload_expire_seconds))
+
+        session = FileUploadSession(
+            id=upload_id,
+            paste_id=paste_id,
+            encryption_mode=encryption_mode,
+            file_name_encrypted=file_name_encrypted,
+            mime_type=str(req.mime_type or "application/octet-stream"),
+            file_size=int(req.file_size),
+            chunk_size=int(chunk_size),
+            total_chunks=int(total_chunks),
+            iv_prefix=iv_prefix_b64,
+            expire_at=expires_at,
+        )
+        db.add(session)
+        db.commit()
+
+        # 创建上传目录
+        chunk_dir = PasteService._upload_session_dir(paste_id, upload_id) / "chunks"
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+
+        return FileUploadInitResponse(
+            upload_id=upload_id,
+            chunk_size=chunk_size,
+            total_chunks=total_chunks,
+            expires_at=expires_at,
+            aad_prefix=PasteService.FILE_CHUNK_AAD_PREFIX,
+            aad_required=True,
+            iv_scheme="prefix8=sha256(upload_id)[:8]; iv=prefix8||chunk_index_u32be",
+        )
+
+    @staticmethod
+    def complete_file_upload(
+        db: Session,
+        paste_id: str,
+        upload_id: str,
+        admin_key: str,
+        req: FileUploadCompleteRequest,
+        encryption_key: str | None = None,
+    ) -> FileUploadCompleteResponse:
+        """完成分片上传：校验分片齐全后组装落盘并创建 File 记录。"""
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise ValueError("Paste不存在")
+        if not PasteService._verify_admin_key(paste, admin_key):
+            raise ValueError("管理密钥错误")
+
+        session = (
+            db.query(FileUploadSession)
+            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .first()
+        )
+        if not session:
+            raise ValueError("上传会话不存在或已过期")
+
+        now = datetime.now(UTC)
+        if session.expire_at < now:  # type: ignore
+            PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
+            raise ValueError("上传会话已过期")
+
+        encryption_mode = str(session.encryption_mode)
+        chunk_size = int(session.chunk_size)  # type: ignore
+        total_chunks = int(session.total_chunks)  # type: ignore
+        plain_size = int(session.file_size)  # type: ignore
+
+        upload_dir = PasteService._upload_session_dir(paste_id, upload_id)
+        assembled_tmp = upload_dir / "assembled.tmp"
+
+        sha256_encrypted = hashlib.sha256()
+        sha256_plain = hashlib.sha256()
+        chunk_hashes = req.chunk_hashes_sha256
+        if chunk_hashes is not None and len(chunk_hashes) != total_chunks:
+            raise ValueError("chunk_hashes_sha256数量与total_chunks不一致")
+
+        final_file_dir = Path(settings.data_dir) / "files" / paste_id
+        final_file_dir.mkdir(parents=True, exist_ok=True)
+        final_path = PasteService._final_file_path(paste_id, upload_id)
+        if final_path.exists():
+            raise ValueError("目标文件已存在")
+
+        if encryption_mode == "server":
+            paste_key = PasteService._get_server_key_for_write(
+                db, paste_id, encryption_key
+            )
+            iv_prefix_b64 = str(session.iv_prefix) if session.iv_prefix else None  # type: ignore
+            iv_prefix = base64.b64decode(iv_prefix_b64) if iv_prefix_b64 else None
+            if iv_prefix is None or len(iv_prefix) != 8:
+                raise ValueError("服务端上传会话IV前缀无效")
+
+            with open(assembled_tmp, "wb") as out:
+                for index in range(total_chunks):
+                    chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
+                    if not chunk_path.exists():
+                        raise ValueError(f"缺少分片: {index}")
+                    chunk_bytes = chunk_path.read_bytes()
+
+                    expected_plain = chunk_size if index < total_chunks - 1 else plain_size - chunk_size * (total_chunks - 1)
+                    if expected_plain < 0:
+                        expected_plain = 0
+                    if len(chunk_bytes) != expected_plain:
+                        raise ValueError(f"分片大小不匹配: index={index}")
+
+                    if chunk_hashes is not None:
+                        chunk_digest = hashlib.sha256(chunk_bytes).hexdigest()
+                        if chunk_digest != chunk_hashes[index]:
+                            raise ValueError(f"分片hash校验失败: index={index}")
+
+                    sha256_plain.update(chunk_bytes)
+
+                    # deterministic nonce: prefix(8B) + chunk_index(4B, big-endian)
+                    iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
+                    aad = PasteService._file_chunk_aad(paste_id, upload_id, index, total_chunks)
+                    encrypted_chunk = encrypt_with_key(chunk_bytes, paste_key, aad=aad, iv=iv)
+                    out.write(encrypted_chunk)
+                    sha256_encrypted.update(encrypted_chunk)
+        else:
+            # client: 分片已经加密；要求IV为 deterministic: prefix(8B from upload_id sha256) + chunk_index(4B)
+            iv_prefix_b64 = str(session.iv_prefix) if session.iv_prefix else None  # type: ignore
+            iv_prefix = base64.b64decode(iv_prefix_b64) if iv_prefix_b64 else None
+            if iv_prefix is None or len(iv_prefix) != 8:
+                raise ValueError("上传会话IV前缀无效")
+
+            seen_ivs: set[bytes] = set()
+            with open(assembled_tmp, "wb") as out:
+                for index in range(total_chunks):
+                    chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
+                    if not chunk_path.exists():
+                        raise ValueError(f"缺少分片: {index}")
+                    chunk_bytes = chunk_path.read_bytes()
+
+                    expected_plain = chunk_size if index < total_chunks - 1 else plain_size - chunk_size * (total_chunks - 1)
+                    if expected_plain < 0:
+                        expected_plain = 0
+                    expected_encrypted = expected_plain + 12 + 16
+                    if len(chunk_bytes) != expected_encrypted:
+                        raise ValueError(f"分片大小不匹配: index={index}")
+                    iv = bytes(chunk_bytes[:12])
+                    expected_iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
+                    if iv != expected_iv:
+                        raise ValueError(f"分片IV不匹配: index={index}")
+                    if iv in seen_ivs:
+                        raise ValueError("检测到重复IV（同一key下必须保证IV不重复）")
+                    seen_ivs.add(iv)
+
+                    if chunk_hashes is not None:
+                        chunk_digest = hashlib.sha256(chunk_bytes).hexdigest()
+                        if chunk_digest != chunk_hashes[index]:
+                            raise ValueError(f"分片hash校验失败: index={index}")
+
+                    out.write(chunk_bytes)
+                    sha256_encrypted.update(chunk_bytes)
+
+        encrypted_size = assembled_tmp.stat().st_size
+
+        # 可选校验原始文件 hash（仅 server 模式下可重算；client 模式下无法校验）
+        if req.checksum_sha256 and encryption_mode == "server":
+            if sha256_plain.hexdigest() != req.checksum_sha256:
+                raise ValueError("checksum_sha256校验失败")
+
+        manifest_path = PasteService._final_manifest_path(paste_id, upload_id)
+        try:
+            # 原子移动到最终路径
+            assembled_tmp.replace(final_path)
+
+            # 写入manifest（避免DB迁移；下载/解密时可用）
+            manifest = {
+                "version": 1,
+                "paste_id": paste_id,
+                "file_id": upload_id,
+                "encryption_mode": encryption_mode,
+                "plain_size": plain_size,
+                "chunk_size": chunk_size,
+                "total_chunks": total_chunks,
+                "chunk_overhead_bytes": 28,
+                "chunk_format": "aes-gcm-iv12-ciphertext-tag16",
+                "aad_format": f"{PasteService.FILE_CHUNK_AAD_PREFIX}|paste:{{paste_id}}|file:{{file_id}}|i:{{chunk_index}}|n:{{total_chunks}}",
+                "aad_required": True,
+                "iv_scheme": "prefix8+index4be",
+                "iv_prefix": str(session.iv_prefix),
+            }
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
+
+            # 创建文件记录
+            file_record = File(
+                id=upload_id,
+                paste_id=paste_id,
+                file_name_encrypted=str(session.file_name_encrypted),  # type: ignore
+                mime_type=str(session.mime_type),  # type: ignore
+                file_size=int(encrypted_size),
+                storage_path=str(final_path.relative_to(Path(settings.data_dir))),
+                checksum=sha256_encrypted.hexdigest(),
+            )
+            db.add(file_record)
+
+            # 如果是已发布状态，更新为编辑状态
+            if str(paste.status) == "published":  # type: ignore
+                paste.status = "edited"  # type: ignore
+                paste.updated_at = datetime.now(UTC)  # type: ignore
+
+            # 删除上传会话并清理临时文件
+            db.delete(session)
+            db.commit()
+        except Exception:
+            db.rollback()
+            try:
+                if final_path.exists():
+                    final_path.unlink()
+                if manifest_path.exists():
+                    manifest_path.unlink()
+            except Exception:
+                pass
+            raise
+        try:
+            if upload_dir.exists():
+                for p in sorted(upload_dir.rglob("*"), reverse=True):
+                    if p.is_file():
+                        p.unlink(missing_ok=True)
+                    else:
+                        p.rmdir()
+                upload_dir.rmdir()
+        except Exception:
+            pass
+
+        return FileUploadCompleteResponse(file_id=upload_id)
+
+    @staticmethod
+    def abort_file_upload(db: Session, paste_id: str, upload_id: str, admin_key: str) -> None:
+        """取消分片上传并清理临时数据。"""
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise ValueError("Paste不存在")
+        if not PasteService._verify_admin_key(paste, admin_key):
+            raise ValueError("管理密钥错误")
+
+        session = (
+            db.query(FileUploadSession)
+            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .first()
+        )
+        if session:
+            db.delete(session)
+            db.commit()
+
+        upload_dir = PasteService._upload_session_dir(paste_id, upload_id)
+        try:
+            if upload_dir.exists():
+                for p in sorted(upload_dir.rglob("*"), reverse=True):
+                    if p.is_file():
+                        p.unlink(missing_ok=True)
+                    else:
+                        p.rmdir()
+                upload_dir.rmdir()
+        except Exception:
+            pass
     @staticmethod
     def _get_server_key_for_write(
         db: Session, paste_id: str, encryption_key: str | None
@@ -245,106 +612,6 @@ class PasteService:
         db.commit()
 
     @staticmethod
-    def upload_file(
-        db: Session,
-        paste_id: str,
-        admin_key: str,
-        file_data: FileUploadRequest,
-        encryption_key: str | None = None,
-    ) -> FileUploadResponse:
-        """
-        上传文件
-
-        Args:
-            db: 数据库会话
-            paste_id: Paste ID
-            admin_key: 管理密钥
-            file_data: 文件数据
-
-        Returns:
-            文件上传响应
-
-        Raises:
-            ValueError: 当Paste不存在或权限验证失败时
-        """
-        paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste:
-            raise ValueError("Paste不存在")
-
-        if not PasteService._verify_admin_key(paste, admin_key):
-            raise ValueError("管理密钥错误")
-
-        paste_encryption_mode = str(paste.encryption_mode or "client")  # type: ignore
-        request_encryption_mode = (
-            str(file_data.encryption_mode).strip() if file_data.encryption_mode else None
-        )
-        encryption_mode = request_encryption_mode or paste_encryption_mode
-
-        if encryption_mode not in ("client", "server"):
-            raise ValueError("无效的encryption_mode")
-
-        # 以 Paste 的 encryption_mode 为准；请求体中可携带做显式声明，但不允许不一致
-        if paste_encryption_mode != encryption_mode:
-            raise ValueError("encryption_mode与Paste不一致")
-
-        # 生成文件ID
-        import uuid
-
-        file_id = str(uuid.uuid4())
-
-        # 解码文件数据
-        import base64
-
-        try:
-            file_bytes = base64.b64decode(file_data.encrypted_file)
-        except Exception as e:
-            raise ValueError(f"文件数据格式错误: {e}") from None
-
-        file_name_value = file_data.encrypted_metadata.get("file_name", "")
-        mime_type_value = file_data.encrypted_metadata.get(
-            "mime_type", "application/octet-stream"
-        )
-
-        # 服务端加密：将明文文件在服务端加密后落盘，避免明文落盘风险
-        if encryption_mode == "server":
-            paste_key = PasteService._get_server_key_for_write(
-                db, paste_id, encryption_key
-            )
-            file_bytes = encrypt_with_key(file_bytes, paste_key)
-            file_name_encrypted = bytes_to_str(
-                encrypt_with_key(str(file_name_value).encode("utf-8"), paste_key)
-            )
-        else:
-            file_name_encrypted = file_name_value
-
-        # 保存文件到存储
-        storage_path = PasteService._save_file_to_storage(paste_id, file_id, file_bytes)
-
-        # 计算文件校验和
-        checksum = hashlib.sha256(file_bytes).hexdigest()
-
-        # 创建文件记录
-        file_record = File(
-            id=file_id,
-            paste_id=paste_id,
-            file_name_encrypted=file_name_encrypted,
-            mime_type=mime_type_value,
-            file_size=len(file_bytes),
-            storage_path=storage_path,
-            checksum=checksum,
-        )
-
-        db.add(file_record)
-
-        # 如果是已发布状态，更新为编辑状态
-        if str(paste.status) == "published":  # type: ignore
-            paste.status = "edited"  # type: ignore
-            paste.updated_at = datetime.now(UTC)  # type: ignore
-
-        db.commit()
-
-        return FileUploadResponse(file_id=file_id)
-
     @staticmethod
     def delete_file(db: Session, paste_id: str, file_id: str, admin_key: str) -> None:
         """
@@ -377,6 +644,10 @@ class PasteService:
             file_path = Path(settings.data_dir) / str(file_record.storage_path)  # type: ignore
             if file_path.exists():
                 file_path.unlink()
+
+            manifest_path = PasteService._final_manifest_path(paste_id, file_id)
+            if manifest_path.exists():
+                manifest_path.unlink()
         except Exception:
             pass  # 忽略文件删除错误
 
@@ -588,15 +859,42 @@ class PasteService:
         # 获取文件列表（与内容接口一起返回，便于一次性加载）
         files = db.query(File).filter(File.paste_id == paste_id).all()
         if files:
-            response.files = [
-                FileInfo(
-                    id=str(f.id),  # type: ignore
-                    size=int(f.file_size),  # type: ignore
-                    encrypted_name=str(f.file_name_encrypted),  # type: ignore
-                    encrypted_url=f"/api/pastes/{paste_id}/files/{f.id}",
+            def _manifest_fields(
+                file_id: str,
+            ) -> tuple[int | None, int | None, int | None]:
+                try:
+                    manifest_path = PasteService._final_manifest_path(paste_id, file_id)
+                    if not manifest_path.exists():
+                        return None, None, None
+                    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    plain_size = data.get("plain_size")
+                    chunk_size = data.get("chunk_size")
+                    total_chunks = data.get("total_chunks")
+                    return (
+                        int(plain_size) if plain_size is not None else None,
+                        int(chunk_size) if chunk_size is not None else None,
+                        int(total_chunks) if total_chunks is not None else None,
+                    )
+                except Exception:
+                    return None, None, None
+
+            file_infos: list[FileInfo] = []
+            for f in files:
+                file_id = str(f.id)  # type: ignore
+                plain_size, chunk_size, total_chunks = _manifest_fields(file_id)
+                file_infos.append(
+                    FileInfo(
+                        id=file_id,
+                        size=int(f.file_size),  # type: ignore
+                        encrypted_name=str(f.file_name_encrypted),  # type: ignore
+                        encrypted_url=f"/api/pastes/{paste_id}/files/{file_id}",
+                        plain_size=plain_size,
+                        chunk_size=chunk_size,
+                        total_chunks=total_chunks,
+                    )
                 )
-                for f in files
-            ]
+
+            response.files = file_infos
 
         return response
 
@@ -676,6 +974,11 @@ class PasteService:
                 file_path = Path(settings.data_dir) / str(file_record.storage_path)  # type: ignore
                 if file_path.exists():
                     file_path.unlink()
+                manifest_path = PasteService._final_manifest_path(
+                    paste_id, str(file_record.id)  # type: ignore
+                )
+                if manifest_path.exists():
+                    manifest_path.unlink()
             except Exception:
                 pass  # 忽略文件删除错误
 

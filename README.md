@@ -122,9 +122,65 @@ npm run dev
 - `POST /api/pastes/{paste_id}/publish` - 发布（需要 `Bearer {admin_key}`）
 - `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`；文件列表请从 `/content` 获取）
 - `GET /api/pastes/{paste_id}/content` - 获取内容与文件列表（可选 `access_key` / `encryption_key`）
-- `POST /api/pastes/{paste_id}/files` - 上传文件（统一接口，JSON；client/server；需要 `Bearer {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
+- `POST /api/pastes/{paste_id}/files/init` - 初始化分片上传（JSON；返回 `upload_id/chunk_size/total_chunks`）
+- `PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}` - 上传分片（二进制 `application/octet-stream`）
+- `POST /api/pastes/{paste_id}/files/{upload_id}/complete` - 完成分片上传（创建最终文件记录）
+- `POST /api/pastes/{paste_id}/files/{upload_id}/abort` - 取消并清理分片上传
 - `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`）
 - `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
+
+## 文件上传加解密流程
+
+### 共同约定
+
+- 算法：`AES-GCM`
+- 密钥长度：与后端 `ENCRYPTION_KEY_LENGTH` 一致（默认 `16` 字节 = AES-128；可配置 `24/32`）
+- 密文格式：`encrypted_data = IV(12B) + ciphertext_and_tag`（tag 为 `16B`）
+- 加密模式（`encryption_mode`）
+  - `client`：客户端加密；服务端不持有解密密钥
+  - `server`：服务端加密；草稿阶段服务端保存 `PasteKey`，发布后客户端持有 `encryption_key` 并在写入时通过 `X-Encryption-Key` 提供
+
+### 接口：二进制分片上传（支持大文件）
+
+#### 1) 初始化上传会话
+
+`POST /api/pastes/{paste_id}/files/init`
+
+服务端返回：
+- `upload_id`：上传会话ID（也是最终 `file_id`）
+- `chunk_size`：按“明文”计算的分片大小（最后一片可能更小）
+- `total_chunks`：总分片数
+- `aad_prefix / aad_required / iv_scheme`：加密协议参数（前后端必须一致）
+
+#### 2) 上传每个分片（PUT 二进制）
+
+`PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}`（`Content-Type: application/octet-stream`）
+
+后端期望长度：
+- `expected_plain = index < total_chunks-1 ? chunk_size : file_size - chunk_size*(total_chunks-1)`
+- `server` 模式：上传明文分片，长度必须为 `expected_plain`
+- `client` 模式：上传加密分片，长度必须为 `expected_plain + 12 + 16`
+  - 前端可用 `web/src/utils/crypto.ts:327` 的 `encryptFileChunk()` 来保证 IV/AAD/长度一致
+
+并发/覆盖：
+- 同一个分片如果已存在会被拒绝写入（避免并发覆盖导致数据损坏）；失败时临时文件会被清理
+
+#### 3) 完成上传（complete）
+
+`POST /api/pastes/{paste_id}/files/{upload_id}/complete`
+
+可选校验：
+- `checksum_sha256`：整文件明文 SHA256（仅 `server` 模式可由服务端重算校验）
+- `chunk_hashes_sha256[]`：每片 SHA256（`server` 模式对“明文分片”，`client` 模式对“加密分片”）
+
+落盘：
+- 会写入 `data/files/{paste_id}/{file_id}.manifest.json`，用于下载时按分片边界进行流式解密与 AAD 校验
+
+#### 4) 下载解密（chunked 文件）
+
+`GET /api/pastes/{paste_id}/files/{file_id}?encryption_key=...`
+
+若存在 manifest，服务端会按分片边界读取并使用 AAD 进行流式解密（`aad_required=true` 时不会降级为无 AAD 解密）。
 
 ### 用户 History 管理
 

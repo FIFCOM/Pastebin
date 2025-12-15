@@ -126,3 +126,35 @@ class File(Base):
 
     def __repr__(self):
         return f"<File(id={self.id}, paste_id={self.paste_id}, size={self.file_size})>"
+
+
+class FileUploadSession(Base):
+    """分片上传会话表（用于二进制分片上传）"""
+
+    __tablename__ = "file_upload_sessions"
+
+    id = Column(String(36), primary_key=True)  # uuid，同最终 file_id
+    paste_id = Column(String(32), ForeignKey("pastes.id", ondelete="CASCADE"))
+
+    encryption_mode = Column(Enum("client", "server"), default="client")
+
+    file_name_encrypted = Column(Text, nullable=False)
+    mime_type = Column(Text, nullable=False)
+
+    file_size = Column(BigInteger, nullable=False)  # 原始文件大小（未加密前）
+    chunk_size = Column(Integer, nullable=False)
+    total_chunks = Column(Integer, nullable=False)
+
+    # 服务端加密模式下使用的 IV 前缀（8字节随机，Base64编码）
+    iv_prefix = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    expire_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index("idx_upload_session_paste_id", "paste_id"),
+        Index("idx_upload_session_expire_at", "expire_at"),
+    )
+
+    def __repr__(self):
+        return f"<FileUploadSession(id={self.id}, paste_id={self.paste_id})>"

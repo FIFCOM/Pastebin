@@ -9,6 +9,9 @@ export interface PasteFile {
   size: number
   encrypted_name: string
   encrypted_url: string
+  plain_size?: number | null
+  chunk_size?: number | null
+  total_chunks?: number | null
 }
 
 export interface PasteData {
@@ -23,6 +26,25 @@ export interface PasteData {
 export interface PasteContent {
   encrypted_content: string
   files: PasteFile[]
+}
+
+export interface FileUploadInitRequest {
+  encryption_mode?: 'client' | 'server'
+  file_name: string
+  mime_type?: string
+  file_size: number
+  requested_chunk_size?: number
+}
+
+export interface FileUploadInitResponse {
+  upload_id: string
+  chunk_size: number
+  total_chunks: number
+  expires_at: string
+}
+
+export interface FileUploadCompleteResponse {
+  file_id: string
 }
 
 export interface CreatePasteResponse {
@@ -101,4 +123,66 @@ export async function getPasteContent(pasteId: string, accessKey?: string): Prom
     params: accessKey ? { access_key: accessKey } : undefined
   })
   return response.data
+}
+
+export async function initFileUpload(
+  pasteId: string,
+  adminKey: string,
+  body: FileUploadInitRequest,
+  encryptionKey?: string
+): Promise<FileUploadInitResponse> {
+  const response = await apiClient.post(`/pastes/${pasteId}/files/init`, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${adminKey}`,
+      ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
+    }
+  })
+  return response.data
+}
+
+export async function uploadFileChunk(
+  pasteId: string,
+  adminKey: string,
+  uploadId: string,
+  index: number,
+  chunk: ArrayBuffer | Uint8Array | Blob
+): Promise<void> {
+  const data = chunk instanceof Uint8Array ? chunk : chunk
+  await apiClient.put(`/pastes/${pasteId}/files/${uploadId}/chunk/${index}`, data, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      Authorization: `Bearer ${adminKey}`
+    },
+    transformRequest: (d) => d
+  })
+}
+
+export async function completeFileUpload(
+  pasteId: string,
+  adminKey: string,
+  uploadId: string,
+  body: { checksum_sha256?: string } = {},
+  encryptionKey?: string
+): Promise<FileUploadCompleteResponse> {
+  const response = await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/complete`, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${adminKey}`,
+      ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
+    }
+  })
+  return response.data
+}
+
+export async function abortFileUpload(
+  pasteId: string,
+  adminKey: string,
+  uploadId: string
+): Promise<void> {
+  await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/abort`, null, {
+    headers: {
+      Authorization: `Bearer ${adminKey}`
+    }
+  })
 }

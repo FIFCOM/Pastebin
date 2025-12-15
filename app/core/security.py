@@ -63,47 +63,68 @@ def derive_master_key(password: str, salt: bytes) -> bytes:
     return kdf.derive(password.encode())
 
 
-def encrypt_with_key(data: bytes, key: bytes) -> bytes:
+def _assert_aesgcm_key_length(key: bytes) -> None:
+    if len(key) not in (16, 24, 32):
+        raise ValueError(f"AES-GCM 密钥长度错误: {len(key)}（必须为16/24/32字节）")
+
+
+def encrypt_with_key(
+    data: bytes, key: bytes, *, aad: bytes | None = None, iv: bytes | None = None
+) -> bytes:
     """
     使用AES-GCM加密数据（与前端Web Crypto API兼容）
 
     Args:
         data: 要加密的数据
-        key: 加密密钥（32字节）
+        key: 加密密钥（16/24/32字节）
+        aad: 可选A(A)D上下文绑定（必须与解密一致）
+        iv: 可选外部指定IV（必须12字节；分片/确定性nonce场景）
 
     Returns:
         加密后的数据（IV + 密文，12字节IV + 密文）
     """
-    # 生成随机IV（12字节用于GCM）
-    iv = os.urandom(12)
+    _assert_aesgcm_key_length(key)
+
+    # 生成随机IV（12字节用于GCM）或使用外部IV
+    if iv is None:
+        iv = os.urandom(12)
+    if len(iv) != 12:
+        raise ValueError(f"IV长度错误: {len(iv)}（必须为12字节）")
 
     # 使用AES-GCM加密
     aesgcm = AESGCM(key)
-    ciphertext = aesgcm.encrypt(iv, data, None)
+    ciphertext = aesgcm.encrypt(iv, data, aad)
 
     # 返回 IV + 密文
     return iv + ciphertext
 
 
-def decrypt_with_key(encrypted_data: bytes, key: bytes) -> bytes:
+def decrypt_with_key(
+    encrypted_data: bytes, key: bytes, *, aad: bytes | None = None
+) -> bytes:
     """
     使用AES-GCM解密数据（与前端Web Crypto API兼容）
 
     Args:
         encrypted_data: 加密的数据（IV + 密文）
-        key: 解密密钥（32字节）
+        key: 解密密钥（16/24/32字节）
+        aad: 可选A(A)D上下文绑定（必须与加密一致）
 
     Returns:
         解密后的数据
     """
     try:
+        _assert_aesgcm_key_length(key)
+        if len(encrypted_data) < 12 + 16:
+            raise ValueError(f"加密数据长度不足: {len(encrypted_data)}")
+
         # 提取IV和密文
         iv = encrypted_data[:12]
         ciphertext = encrypted_data[12:]
 
         # 使用AES-GCM解密
         aesgcm = AESGCM(key)
-        plaintext = aesgcm.decrypt(iv, ciphertext, None)
+        plaintext = aesgcm.decrypt(iv, ciphertext, aad)
 
         return plaintext
     except Exception as e:
@@ -255,18 +276,34 @@ def key_to_urlsafe_str(key: bytes) -> str:
     return base64_str.replace("+", "-").replace("/", "_").replace("=", "")
 
 
-def urlsafe_str_to_key(urlsafe_base64: str) -> bytes:
+def urlsafe_str_to_key(
+    urlsafe_base64: str, expected_length: int | None = settings.encryption_key_length
+) -> bytes:
     """
     将URL-safe base64字符串转换为加密密钥
     专门用于加密密钥的解码
     """
+    if not urlsafe_base64 or urlsafe_base64.strip() == "":
+        raise ValueError("密钥为空")
+
     # 将URL-safe base64转换回标准base64
     base64_str = urlsafe_base64.replace("-", "+").replace("_", "/")
     # 补充padding
     padding = 4 - len(base64_str) % 4
     if padding != 4:
         base64_str += "=" * padding
-    return base64.b64decode(base64_str.encode())
+    try:
+        key = base64.b64decode(base64_str.encode(), validate=True)
+    except Exception as e:
+        raise ValueError(f"密钥Base64格式错误: {e}") from None
+
+    if expected_length is None:
+        _assert_aesgcm_key_length(key)
+        return key
+
+    if len(key) != int(expected_length):
+        raise ValueError(f"密钥长度不合法: {len(key)}（期望 {expected_length} 字节）")
+    return key
 
 
 def prepare_user_keys(password: str) -> tuple[bytes, bytes, bytes]:
