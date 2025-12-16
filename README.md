@@ -8,7 +8,7 @@
 - 🎫 JWT 令牌与会话管理
 - 🧾 Paste 创建/发布/查看（支持 Markdown / 纯文本）
 - 🔒 客户端加密分享链接：加密密钥放在 URL hash（`/p/:id#key`），不会被浏览器发送给后端
-- 📎 文件上传/下载（与 Paste 绑定）
+- 📎 文件上传/下载（分片上传、可断点续传；与 Paste 绑定）
 - 🔑 用户 API Key 管理
 - 👥 协作房间（member token / 房间 / 加入 / 分享）
 - 🧹 内部清理任务（草稿/过期内容/成员）
@@ -123,6 +123,7 @@ npm run dev
 - `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`；文件列表请从 `/content` 获取）
 - `GET /api/pastes/{paste_id}/content` - 获取内容与文件列表（可选 `access_key` / `encryption_key`）
 - `POST /api/pastes/{paste_id}/files/init` - 初始化分片上传（JSON；返回 `upload_id/chunk_size/total_chunks`）
+- `GET /api/pastes/{paste_id}/files/{upload_id}/status` - 获取分片上传状态（断点续传；返回已上传分片索引等）
 - `PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}` - 上传分片（二进制 `application/octet-stream`）
 - `POST /api/pastes/{paste_id}/files/{upload_id}/complete` - 完成分片上传（创建最终文件记录）
 - `POST /api/pastes/{paste_id}/files/{upload_id}/abort` - 取消并清理分片上传
@@ -164,6 +165,18 @@ npm run dev
 
 并发/覆盖：
 - 同一个分片如果已存在会被拒绝写入（避免并发覆盖导致数据损坏）；失败时临时文件会被清理
+
+#### 2.5) 查询上传状态（断点续传）
+
+`GET /api/pastes/{paste_id}/files/{upload_id}/status`
+
+返回：
+- `uploaded_chunks[]`：已上传分片索引列表（升序）
+- `next_index`：建议继续上传的下一个分片索引（若已齐全则等于 `total_chunks`）
+
+前端实现（Web）：
+- 上传失败后点击“重试”会优先复用旧 `upload_id` 调用 status，跳过已上传分片继续上传；若会话过期/不匹配则回退到重新 `init`
+- 多文件同时上传默认并发为 `10`，超出会排队（可在 `web/src/services/config.ts` 的 `DEFAULT_UPLOAD_CONCURRENCY` 调整）
 
 #### 3) 完成上传（complete）
 

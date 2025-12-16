@@ -28,6 +28,7 @@ from app.schemas.paste import (
     FileUploadCompleteResponse,
     FileUploadInitRequest,
     FileUploadInitResponse,
+    FileUploadStatusResponse,
     PasteContentResponse,
     PasteContentUpdateRequest,
     PasteCreateRequest,
@@ -190,6 +191,32 @@ async def init_file_upload(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
         elif "不存在" in str(e):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+
+
+@router.get("/{paste_id}/files/{upload_id}/status", response_model=FileUploadStatusResponse)
+async def get_file_upload_status(
+    paste_id: str,
+    upload_id: str,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    获取分片上传状态（用于断点续传）
+
+    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    """
+    admin_key = _get_admin_key_from_header(authorization)
+    try:
+        return PasteService.get_file_upload_status(db, paste_id, upload_id, admin_key)
+    except ValueError as e:
+        if "权限" in str(e) or "密钥" in str(e):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+        elif "不存在" in str(e):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+        elif "过期" in str(e):
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(e)) from None
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
 

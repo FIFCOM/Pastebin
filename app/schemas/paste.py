@@ -78,6 +78,26 @@ class FileUploadInitResponse(BaseModel):
     iv_scheme: str = Field(..., description="nonce/iv方案说明")
 
 
+class FileUploadStatusResponse(BaseModel):
+    """分片上传状态响应（用于断点续传）"""
+
+    upload_id: str = Field(..., description="上传会话ID（也是最终file_id）")
+    encryption_mode: str = Field(..., description="加密模式：client或server")
+    file_size: int = Field(..., description="原始文件大小（字节，未加密前）")
+    chunk_size: int = Field(..., description="分片大小（字节，按明文分片）")
+    total_chunks: int = Field(..., description="总分片数")
+    expires_at: datetime = Field(..., description="上传会话过期时间")
+
+    uploaded_chunks: list[int] = Field(
+        default_factory=list, description="已上传分片索引列表（升序）"
+    )
+    uploaded_count: int = Field(..., description="已上传分片数量")
+    next_index: int = Field(
+        ..., description="建议继续上传的下一个分片索引（若已齐全则等于total_chunks）"
+    )
+    completed: bool = Field(..., description="分片是否已全部上传完成（尚未complete也可能为true）")
+
+
 class FileUploadCompleteRequest(BaseModel):
     """分片上传完成请求"""
 

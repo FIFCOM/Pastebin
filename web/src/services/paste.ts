@@ -45,6 +45,19 @@ export interface FileUploadCompleteResponse {
   file_id: string
 }
 
+export interface FileUploadStatusResponse {
+  upload_id: string
+  encryption_mode: 'client' | 'server'
+  file_size: number
+  chunk_size: number
+  total_chunks: number
+  expires_at: string
+  uploaded_chunks: number[]
+  uploaded_count: number
+  next_index: number
+  completed: boolean
+}
+
 export interface CreatePasteResponse {
   paste_id: string
   admin_key: string
@@ -174,6 +187,21 @@ export async function completeFileUpload(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${adminKey}`,
       ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
+    },
+    signal
+  })
+  return response.data
+}
+
+export async function getFileUploadStatus(
+  pasteId: string,
+  adminKey: string,
+  uploadId: string,
+  signal?: AbortSignal
+): Promise<FileUploadStatusResponse> {
+  const response = await apiClient.get(`/pastes/${pasteId}/files/${uploadId}/status`, {
+    headers: {
+      Authorization: `Bearer ${adminKey}`
     },
     signal
   })

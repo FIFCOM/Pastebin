@@ -9,6 +9,8 @@ export interface PublicConfig {
   max_chunk_size: number
 }
 
+// 前端本地配置：多文件上传并发数
+export const DEFAULT_UPLOAD_CONCURRENCY = 10
 // 默认配置（后端不可用时的回退值）
 const DEFAULT_CONFIG: PublicConfig = {
   max_upload_file_size: 10 * 1024 * 1024,

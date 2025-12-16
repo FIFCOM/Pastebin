@@ -38,7 +38,9 @@
             :style="{ '--upload-progress': file.progress + '%' }"
           >
             <mdui-circular-progress slot="icon"></mdui-circular-progress>
-            <span slot="description" class="file-status">{{ file.progress }}% · {{ formatSpeed(file.speed) }}</span>
+            <span slot="description" class="file-status">
+              {{ file.state === 'queued' ? '排队中' : `${file.progress}% · ${formatSpeed(file.speed)}` }}
+            </span>
             <mdui-button-icon slot="end-icon" icon="close" @click="cancelUpload(file.id)"></mdui-button-icon>
           </mdui-list-item>
         </mdui-list>
@@ -107,10 +109,11 @@ import {
   initFileUpload,
   uploadFileChunk,
   completeFileUpload,
+  getFileUploadStatus,
   abortFileUpload,
   deleteFile
 } from '../../services/paste'
-import { getPublicConfig } from '../../services/config'
+import { DEFAULT_UPLOAD_CONCURRENCY, getPublicConfig } from '../../services/config'
 import {
   encryptFileChunk,
   encryptWithKey,
@@ -123,6 +126,7 @@ interface UploadingFile {
   size: number
   progress: number
   speed: number // bytes per second
+  state: 'queued' | 'uploading'
   file: File
   uploadId?: string
   abortController?: AbortController
@@ -141,6 +145,7 @@ interface FailedFile {
   size: number
   error: string
   file: File
+  uploadId?: string
 }
 
 const props = defineProps<{
@@ -162,6 +167,65 @@ const uploadingFiles = ref<UploadingFile[]>([])
 const uploadedFiles = ref<UploadedFile[]>([])
 const failedFiles = ref<FailedFile[]>([])
 const cancelledUploads = new Set<string>()
+
+function createSemaphore(maxConcurrent: number) {
+  let active = 0
+  const waiters: Array<{
+    resolve: (release: () => void) => void
+    reject: (err: unknown) => void
+    signal?: AbortSignal
+    onAbort?: () => void
+  }> = []
+
+  const release = () => {
+    active = Math.max(0, active - 1)
+    dispatch()
+  }
+
+  const dispatch = () => {
+    while (active < maxConcurrent && waiters.length > 0) {
+      const w = waiters.shift()!
+      if (w.onAbort && w.signal) {
+        w.signal.removeEventListener('abort', w.onAbort)
+      }
+      if (w.signal?.aborted) {
+        w.reject(new DOMException('Upload cancelled', 'AbortError'))
+        continue
+      }
+      active += 1
+      w.resolve(release)
+    }
+  }
+
+  const acquire = (signal?: AbortSignal): Promise<() => void> => {
+    if (signal?.aborted) {
+      return Promise.reject(new DOMException('Upload cancelled', 'AbortError'))
+    }
+    if (active < maxConcurrent) {
+      active += 1
+      return Promise.resolve(release)
+    }
+    return new Promise((resolve, reject) => {
+      const waiter = { resolve, reject, signal } as (typeof waiters)[number]
+      if (signal) {
+        const onAbort = () => {
+          const idx = waiters.indexOf(waiter)
+          if (idx >= 0) {
+            waiters.splice(idx, 1)
+            reject(new DOMException('Upload cancelled', 'AbortError'))
+          }
+        }
+        waiter.onAbort = onAbort
+        signal.addEventListener('abort', onAbort, { once: true })
+      }
+      waiters.push(waiter)
+    })
+  }
+
+  return { acquire }
+}
+
+const uploadSemaphore = createSemaphore(DEFAULT_UPLOAD_CONCURRENCY)
 
 // 动态配置
 const maxFileSize = ref(10 * 1024 * 1024) // 默认 10MB
@@ -249,8 +313,14 @@ async function processFiles(files: File[]) {
   }
 }
 
-async function startUpload(file: File) {
-  const id = crypto.randomUUID()
+function isChunkAlreadyExistsError(error: unknown): boolean {
+  const err = error as any
+  const detail = err?.response?.data?.detail
+  return err?.response?.status === 400 && typeof detail === 'string' && detail.includes('分片已存在')
+}
+
+async function startUpload(file: File, options?: { id?: string; resumeUploadId?: string }) {
+  const id = options?.id ?? crypto.randomUUID()
   const abortController = new AbortController()
   const uploadingFile: UploadingFile = {
     id,
@@ -258,6 +328,7 @@ async function startUpload(file: File) {
     size: file.size,
     progress: 0,
     speed: 0,
+    state: 'queued',
     file,
     abortController
   }
@@ -265,6 +336,7 @@ async function startUpload(file: File) {
   let lastLoaded = 0
   uploadingFiles.value.push(uploadingFile)
 
+  let releaseSlot: (() => void) | null = null
   try {
     if (!props.encryptionKey) {
       throw new Error('加密密钥未就绪')
@@ -277,32 +349,77 @@ async function startUpload(file: File) {
     }
 
     throwIfAborted()
+    releaseSlot = await uploadSemaphore.acquire(abortController.signal)
+    uploadingFile.state = 'uploading'
 
     // 加密文件名
     const encryptedNameBytes = await encryptWithKey(file.name, props.encryptionKey)
     const encryptedName = bytesToStr(encryptedNameBytes)
 
-    // 初始化上传
-    const initRes = await initFileUpload(
-      props.pasteId,
-      props.adminKey,
-      {
-        encryption_mode: 'client',
-        file_name: encryptedName,
-        mime_type: file.type || 'application/octet-stream',
-        file_size: file.size,
-        requested_chunk_size: maxChunkSize.value
-      },
-      undefined,
-      abortController.signal
-    )
+    let upload_id: string | null = null
+    let chunk_size = 0
+    let total_chunks = 0
+    const uploadedChunks = new Set<number>()
 
-    uploadingFile.uploadId = initRes.upload_id
-    const { upload_id, chunk_size, total_chunks } = initRes
+    // 断点续传：优先复用旧 uploadId
+    if (options?.resumeUploadId) {
+      try {
+        const status = await getFileUploadStatus(
+          props.pasteId,
+          props.adminKey,
+          options.resumeUploadId,
+          abortController.signal
+        )
+        if (status.encryption_mode !== 'client') {
+          throw new Error('加密模式不匹配')
+        }
+        if (status.file_size !== file.size) {
+          throw new Error('文件大小与上传会话不匹配')
+        }
+        upload_id = options.resumeUploadId
+        chunk_size = status.chunk_size
+        total_chunks = status.total_chunks
+        for (const idx of status.uploaded_chunks || []) uploadedChunks.add(idx)
+        uploadingFile.uploadId = upload_id
+        uploadingFile.progress = Math.round((uploadedChunks.size / total_chunks) * 100)
+        lastTime = Date.now()
+        lastLoaded = Math.min(status.next_index * chunk_size, file.size)
+      } catch (e) {
+        console.warn('Resume status failed, fallback to init:', e)
+      }
+    }
+
+    // 初始化上传（新会话）
+    if (!upload_id) {
+      const initRes = await initFileUpload(
+        props.pasteId,
+        props.adminKey,
+        {
+          encryption_mode: 'client',
+          file_name: encryptedName,
+          mime_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+          requested_chunk_size: maxChunkSize.value
+        },
+        undefined,
+        abortController.signal
+      )
+
+      uploadingFile.uploadId = initRes.upload_id
+      upload_id = initRes.upload_id
+      chunk_size = initRes.chunk_size
+      total_chunks = initRes.total_chunks
+    }
+
+    if (!upload_id) {
+      throw new Error('上传会话未初始化')
+    }
+    const sessionUploadId = upload_id
 
     // 分片上传
     for (let i = 0; i < total_chunks; i++) {
       throwIfAborted()
+      if (uploadedChunks.has(i)) continue
       const start = i * chunk_size
       const end = Math.min(start + chunk_size, file.size)
       const chunkData = new Uint8Array(await file.slice(start, end).arrayBuffer())
@@ -310,19 +427,21 @@ async function startUpload(file: File) {
       // 加密分片
       const encryptedChunk = await encryptFileChunk(chunkData, props.encryptionKey, {
         pasteId: props.pasteId,
-        uploadId: upload_id,
-        fileId: upload_id,
+        uploadId: sessionUploadId,
+        fileId: sessionUploadId,
         chunkIndex: i,
         totalChunks: total_chunks
       })
 
       // 上传分片
       throwIfAborted()
-      await uploadFileChunk(props.pasteId, props.adminKey, upload_id, i, encryptedChunk, (loaded, total) => {
+      const baseCompleted = uploadedChunks.size
+      try {
+        await uploadFileChunk(props.pasteId, props.adminKey, sessionUploadId, i, encryptedChunk, (loaded, total) => {
         const file = uploadingFiles.value.find(f => f.id === id)
         if (file) {
           const chunkProgress = total > 0 ? loaded / total : 0
-          file.progress = Math.round((i + chunkProgress) / total_chunks * 100)
+          file.progress = Math.round(((baseCompleted + chunkProgress) / total_chunks) * 100)
           // 计算速度
           const now = Date.now()
           const totalLoaded = start + loaded
@@ -333,12 +452,18 @@ async function startUpload(file: File) {
             lastLoaded = totalLoaded
           }
         }
-      }, abortController.signal)
+        }, abortController.signal)
+      } catch (e) {
+        if (!isChunkAlreadyExistsError(e)) throw e
+      }
+      uploadedChunks.add(i)
+      const current = uploadingFiles.value.find(f => f.id === id)
+      if (current) current.progress = Math.round((uploadedChunks.size / total_chunks) * 100)
     }
 
     // 完成上传
     throwIfAborted()
-    const completeRes = await completeFileUpload(props.pasteId, props.adminKey, upload_id, {}, undefined, abortController.signal)
+    const completeRes = await completeFileUpload(props.pasteId, props.adminKey, sessionUploadId, {}, undefined, abortController.signal)
 
     // 移动到已上传列表
     uploadingFiles.value = uploadingFiles.value.filter(f => f.id !== id)
@@ -381,8 +506,11 @@ async function startUpload(file: File) {
       name: file.name,
       size: file.size,
       error: error instanceof Error ? error.message : '上传失败',
-      file
+      file,
+      uploadId: uploadingFile.uploadId
     })
+  } finally {
+    releaseSlot?.()
   }
 }
 
@@ -423,7 +551,7 @@ async function removeFile(id: string) {
 
 function retryUpload(file: FailedFile) {
   failedFiles.value = failedFiles.value.filter(f => f.id !== file.id)
-  startUpload(file.file)
+  startUpload(file.file, { id: file.id, resumeUploadId: file.uploadId })
 }
 
 function dismissFailed(id: string) {
@@ -473,8 +601,8 @@ function truncateFileName(name: string, maxLength: number = 20): string {
 .drop-zone:hover,
 .drop-zone.drag-over {
   border-color: rgb(var(--mdui-color-primary));
-  background: rgb(var(--mdui-color-primary-container));
-  color: rgb(var(--mdui-color-on-primary-container));
+  background: rgb(var(--mdui-color-secondary-container));
+  color: rgb(var(--mdui-color-on-secondary-container));
 }
 
 .drop-zone.drag-over .drop-icon,
@@ -568,7 +696,7 @@ function truncateFileName(name: string, maxLength: number = 20): string {
   position: absolute;
   inset: 0;
   width: var(--upload-progress);
-  background: rgb(var(--mdui-color-primary-container));
+  background: rgb(var(--mdui-color-secondary-container));
   transition: width 0.3s ease-out;
   z-index: -1;
   pointer-events: none;

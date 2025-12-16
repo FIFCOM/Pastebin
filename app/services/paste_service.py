@@ -31,6 +31,7 @@ from app.schemas.paste import (
     FileUploadCompleteResponse,
     FileUploadInitRequest,
     FileUploadInitResponse,
+    FileUploadStatusResponse,
     PasteContentResponse,
     PasteContentUpdateRequest,
     PasteCreateRequest,
@@ -183,6 +184,66 @@ class PasteService:
             aad_prefix=PasteService.FILE_CHUNK_AAD_PREFIX,
             aad_required=True,
             iv_scheme="prefix8=sha256(upload_id)[:8]; iv=prefix8||chunk_index_u32be",
+        )
+
+    @staticmethod
+    def get_file_upload_status(
+        db: Session, paste_id: str, upload_id: str, admin_key: str
+    ) -> FileUploadStatusResponse:
+        """获取分片上传状态（用于断点续传）。"""
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise ValueError("Paste不存在")
+        if not PasteService._verify_admin_key(paste, admin_key):
+            raise ValueError("管理密钥错误")
+
+        session = (
+            db.query(FileUploadSession)
+            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .first()
+        )
+        if not session:
+            raise ValueError("上传会话不存在或已过期")
+
+        if is_expired(session.expire_at):  # type: ignore[arg-type]
+            PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
+            raise ValueError("上传会话已过期")
+
+        total_chunks = int(session.total_chunks)  # type: ignore
+        chunk_size = int(session.chunk_size)  # type: ignore
+        file_size = int(session.file_size)  # type: ignore
+
+        chunk_dir = PasteService._upload_session_dir(paste_id, upload_id) / "chunks"
+        uploaded: set[int] = set()
+        if chunk_dir.exists():
+            for p in chunk_dir.glob("*.part"):
+                if not p.is_file():
+                    continue
+                try:
+                    idx = int(p.stem, 10)
+                except Exception:
+                    continue
+                if 0 <= idx < total_chunks:
+                    uploaded.add(idx)
+
+        uploaded_list = sorted(uploaded)
+        next_index = total_chunks
+        for i in range(total_chunks):
+            if i not in uploaded:
+                next_index = i
+                break
+
+        return FileUploadStatusResponse(
+            upload_id=upload_id,
+            encryption_mode=str(session.encryption_mode),
+            file_size=file_size,
+            chunk_size=chunk_size,
+            total_chunks=total_chunks,
+            expires_at=session.expire_at,  # type: ignore[arg-type]
+            uploaded_chunks=uploaded_list,
+            uploaded_count=len(uploaded_list),
+            next_index=next_index,
+            completed=len(uploaded_list) == total_chunks,
         )
 
     @staticmethod
