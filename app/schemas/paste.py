@@ -209,15 +209,9 @@ class FileInfo(BaseModel):
     id: str = Field(..., description="文件ID")
     size: int = Field(..., description="文件大小（字节）")
     encrypted_name: str = Field(..., description="加密的文件名（Base64）")
-    encrypted_url: str = Field(..., description="下载URL（不包含任何密钥）")
+    url: str = Field(..., description="下载URL（不包含任何密钥）")
     plain_size: int | None = Field(
         default=None, description="原始文件大小（字节；分片上传时可用）"
-    )
-    chunk_size: int | None = Field(
-        default=None, description="分片大小（字节；分片上传时可用）"
-    )
-    total_chunks: int | None = Field(
-        default=None, description="总分片数（分片上传时可用）"
     )
 
 

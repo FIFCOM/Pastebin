@@ -8,10 +8,8 @@ export interface PasteFile {
   id: string
   size: number
   encrypted_name: string
-  encrypted_url: string
+  url: string
   plain_size?: number | null
-  chunk_size?: number | null
-  total_chunks?: number | null
 }
 
 export interface PasteData {
@@ -129,14 +127,16 @@ export async function initFileUpload(
   pasteId: string,
   adminKey: string,
   body: FileUploadInitRequest,
-  encryptionKey?: string
+  encryptionKey?: string,
+  signal?: AbortSignal
 ): Promise<FileUploadInitResponse> {
   const response = await apiClient.post(`/pastes/${pasteId}/files/init`, body, {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${adminKey}`,
       ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
-    }
+    },
+    signal
   })
   return response.data
 }
@@ -146,15 +146,18 @@ export async function uploadFileChunk(
   adminKey: string,
   uploadId: string,
   index: number,
-  chunk: ArrayBuffer | Uint8Array | Blob
+  chunk: ArrayBuffer | Uint8Array | Blob,
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<void> {
-  const data = chunk instanceof Uint8Array ? chunk : chunk
-  await apiClient.put(`/pastes/${pasteId}/files/${uploadId}/chunk/${index}`, data, {
+  await apiClient.put(`/pastes/${pasteId}/files/${uploadId}/chunk/${index}`, chunk, {
     headers: {
       'Content-Type': 'application/octet-stream',
       Authorization: `Bearer ${adminKey}`
     },
-    transformRequest: (d) => d
+    transformRequest: (d) => d,
+    onUploadProgress: onProgress ? (e) => onProgress(e.loaded, e.total ?? 0) : undefined,
+    signal
   })
 }
 
@@ -163,14 +166,16 @@ export async function completeFileUpload(
   adminKey: string,
   uploadId: string,
   body: { checksum_sha256?: string } = {},
-  encryptionKey?: string
+  encryptionKey?: string,
+  signal?: AbortSignal
 ): Promise<FileUploadCompleteResponse> {
   const response = await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/complete`, body, {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${adminKey}`,
       ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
-    }
+    },
+    signal
   })
   return response.data
 }
@@ -181,6 +186,18 @@ export async function abortFileUpload(
   uploadId: string
 ): Promise<void> {
   await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/abort`, null, {
+    headers: {
+      Authorization: `Bearer ${adminKey}`
+    }
+  })
+}
+
+export async function deleteFile(
+  pasteId: string,
+  adminKey: string,
+  fileId: string
+): Promise<void> {
+  await apiClient.delete(`/pastes/${pasteId}/files/${fileId}`, {
     headers: {
       Authorization: `Bearer ${adminKey}`
     }

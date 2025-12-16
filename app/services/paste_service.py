@@ -855,36 +855,28 @@ class PasteService:
         if files:
             def _manifest_fields(
                 file_id: str,
-            ) -> tuple[int | None, int | None, int | None]:
+            ) -> int | None:
                 try:
                     manifest_path = PasteService._final_manifest_path(paste_id, file_id)
                     if not manifest_path.exists():
-                        return None, None, None
+                        return None
                     data = json.loads(manifest_path.read_text(encoding="utf-8"))
                     plain_size = data.get("plain_size")
-                    chunk_size = data.get("chunk_size")
-                    total_chunks = data.get("total_chunks")
-                    return (
-                        int(plain_size) if plain_size is not None else None,
-                        int(chunk_size) if chunk_size is not None else None,
-                        int(total_chunks) if total_chunks is not None else None,
-                    )
+                    return int(plain_size) if plain_size is not None else None
                 except Exception:
-                    return None, None, None
+                    return None
 
             file_infos: list[FileInfo] = []
             for f in files:
                 file_id = str(f.id)  # type: ignore
-                plain_size, chunk_size, total_chunks = _manifest_fields(file_id)
+                plain_size = _manifest_fields(file_id)
                 file_infos.append(
                     FileInfo(
                         id=file_id,
                         size=int(f.file_size),  # type: ignore
                         encrypted_name=str(f.file_name_encrypted),  # type: ignore
-                        encrypted_url=f"/api/pastes/{paste_id}/files/{file_id}",
+                        url=f"/api/pastes/{paste_id}/files/{file_id}",
                         plain_size=plain_size,
-                        chunk_size=chunk_size,
-                        total_chunks=total_chunks,
                     )
                 )
 
