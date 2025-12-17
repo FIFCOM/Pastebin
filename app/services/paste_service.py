@@ -897,6 +897,7 @@ class PasteService:
         encrypted_content = PasteService._read_content_from_file(str(content_path))
 
         response = PasteContentResponse()
+        key_bytes: bytes | None = None
 
         # 如果提供了解密密钥，尝试解密
         if encryption_key:
@@ -931,11 +932,34 @@ class PasteService:
             for f in files:
                 file_id = str(f.id)  # type: ignore
                 plain_size = _manifest_fields(file_id)
+                encrypted_name = str(f.file_name_encrypted)  # type: ignore
+
+                if key_bytes is not None:
+                    decrypted_name: str
+                    try:
+                        encrypted_name_bytes = str_to_bytes(encrypted_name)
+                        decrypted_name_bytes = decrypt_with_key(encrypted_name_bytes, key_bytes)
+                        decrypted_name = decrypted_name_bytes.decode(errors="replace")
+                    except Exception:
+                        decrypted_name = f"mb_encrypted_{file_id}"
+
+                    file_infos.append(
+                        FileInfo(
+                            id=file_id,
+                            size=int(f.file_size),  # type: ignore
+                            encrypted_name=None,
+                            name=decrypted_name,
+                            url=f"/api/pastes/{paste_id}/files/{file_id}",
+                            plain_size=plain_size,
+                        )
+                    )
+                    continue
+
                 file_infos.append(
                     FileInfo(
                         id=file_id,
                         size=int(f.file_size),  # type: ignore
-                        encrypted_name=str(f.file_name_encrypted),  # type: ignore
+                        encrypted_name=encrypted_name,
                         url=f"/api/pastes/{paste_id}/files/{file_id}",
                         plain_size=plain_size,
                     )

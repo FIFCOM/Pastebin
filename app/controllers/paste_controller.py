@@ -44,7 +44,9 @@ from app.services.paste_service import PasteService
 router = APIRouter(prefix="/api/pastes", tags=["Paste"])
 
 
-def _build_content_disposition(filename: str) -> str:
+def _build_content_disposition(
+    filename: str, fallback_filename: str = "encrypted_file"
+) -> str:
     """
     构造安全的 Content-Disposition 头，避免 CRLF 注入，并尽量兼容非 ASCII 文件名。
 
@@ -53,26 +55,33 @@ def _build_content_disposition(filename: str) -> str:
     """
     from pathlib import Path
 
-    # 只保留文件名，避免路径穿透/分隔符
-    name = str(Path(filename).name)
+    def _sanitize_name(value: str) -> str:
+        # 只保留文件名，避免路径穿透/分隔符
+        name = str(Path(value).name)
 
-    # 移除可能造成响应头注入的字符
-    name = name.replace("\r", "_").replace("\n", "_").replace("\x00", "_")
+        # 移除可能造成响应头注入的字符
+        name = name.replace("\r", "_").replace("\n", "_").replace("\x00", "_")
 
-    # 替换不可见控制字符
-    name = "".join((ch if ord(ch) >= 32 and ord(ch) != 127 else "_") for ch in name)
+        # 替换不可见控制字符
+        name = "".join((ch if ord(ch) >= 32 and ord(ch) != 127 else "_") for ch in name)
 
-    # 避免破坏 quoted-string
-    name = name.replace("\\", "_").replace('"', "'").strip()
-    if not name:
-        name = "encrypted_file"
+        # 避免破坏 quoted-string
+        name = name.replace("\\", "_").replace('"', "'").strip()
+        if not name:
+            return ""
 
-    # 限制长度，避免异常超长 header
-    name = name[:200]
+        # 限制长度，避免异常超长 header
+        return name[:200]
+
+    safe_fallback = _sanitize_name(fallback_filename) or "encrypted_file"
+
+    name = _sanitize_name(filename) or safe_fallback
 
     ascii_fallback = name.encode("ascii", "ignore").decode("ascii").strip()
     if not ascii_fallback:
-        ascii_fallback = "encrypted_file"
+        ascii_fallback = safe_fallback.encode("ascii", "ignore").decode("ascii").strip()
+        if not ascii_fallback:
+            ascii_fallback = "encrypted_file"
     ascii_fallback = ascii_fallback.replace("\\", "_").replace('"', "'")[:200]
 
     # RFC 5987 (filename*)：UTF-8 + percent-encoding
@@ -624,26 +633,29 @@ async def get_file(
 
         # 获取文件名
         encrypted_filename = str(file_record.file_name_encrypted)  # type: ignore
-        filename = "encrypted_file"
+        placeholder_filename = f"mb_encrypted_{file_id}"
+        decrypted_filename: str | None = None
 
         key_bytes: bytes | None = None
         if encryption_key:
             try:
-                from app.core.security import (
-                    decrypt_with_key,
-                    str_to_bytes,
-                    urlsafe_str_to_key,
-                )
+                from app.core.security import urlsafe_str_to_key
 
                 key_bytes = urlsafe_str_to_key(encryption_key)
-                encrypted_name_bytes = str_to_bytes(encrypted_filename)
-                decrypted_name_bytes = decrypt_with_key(encrypted_name_bytes, key_bytes)
-                filename = decrypted_name_bytes.decode(errors="replace")
             except Exception:
                 key_bytes = None
 
+        if key_bytes is not None:
+            try:
+                from app.core.security import decrypt_with_key, str_to_bytes
+
+                encrypted_name_bytes = str_to_bytes(encrypted_filename)
+                decrypted_name_bytes = decrypt_with_key(encrypted_name_bytes, key_bytes)
+                decrypted_filename = decrypted_name_bytes.decode(errors="replace")
+            except Exception:
+                decrypted_filename = None
+
         media_type = str(file_record.mime_type) or "application/octet-stream"  # type: ignore
-        content_disposition = _build_content_disposition(filename)
 
         # 若提供了正确的解密密钥：尽可能解密后返回
         if key_bytes is not None:
@@ -662,6 +674,10 @@ async def get_file(
                     total_chunks = int(manifest.get("total_chunks"))
                     plain_size = int(manifest.get("plain_size"))
                     aad_required = bool(manifest.get("aad_required", True))
+                    content_disposition = _build_content_disposition(
+                        decrypted_filename or placeholder_filename,
+                        fallback_filename=placeholder_filename,
+                    )
 
                     def _iter_decrypted_chunks():
                         with open(file_path, "rb") as f:
@@ -699,6 +715,10 @@ async def get_file(
                 # 非分片：整体解密（AES-GCM需整体解密，存在内存开销）
                 file_content = file_path.read_bytes()
                 file_content = decrypt_with_key(file_content, key_bytes)
+                content_disposition = _build_content_disposition(
+                    decrypted_filename or placeholder_filename,
+                    fallback_filename=placeholder_filename,
+                )
                 return StreamingResponse(
                     io.BytesIO(file_content),
                     media_type=media_type,
@@ -713,6 +733,9 @@ async def get_file(
 
         # 未提供/解密失败：直接流式返回原始文件，避免一次性读入内存
         file_size = file_path.stat().st_size
+        content_disposition = _build_content_disposition(
+            placeholder_filename, fallback_filename=placeholder_filename
+        )
         return StreamingResponse(
             _iter_file(file_path),
             media_type=media_type,

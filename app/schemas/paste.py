@@ -228,7 +228,12 @@ class FileInfo(BaseModel):
 
     id: str = Field(..., description="文件ID")
     size: int = Field(..., description="文件大小（字节）")
-    encrypted_name: str = Field(..., description="加密的文件名（Base64）")
+    encrypted_name: str | None = Field(
+        default=None, description="加密的文件名（Base64；未提供解密密钥时返回）"
+    )
+    name: str | None = Field(
+        default=None, description="解密后的文件名（提供正确的解密密钥时返回）"
+    )
     url: str = Field(..., description="下载URL（不包含任何密钥）")
     plain_size: int | None = Field(
         default=None, description="原始文件大小（字节；分片上传时可用）"
