@@ -12,8 +12,20 @@
       @click="triggerFileInput"
     >
       <mdui-icon name="cloud_upload" class="drop-icon"></mdui-icon>
-      <p>拖拽/粘贴文件到此处，或点击选择文件</p>
-      <p class="hint">单个文件最大 {{ Math.round(maxFileSize / 1024 / 1024) }}MB</p>
+	      <p>拖拽/粘贴文件到此处，或点击选择文件</p>
+	      <p class="hint">单个文件最大 {{ Math.round(maxFileSize / 1024 / 1024) }}MB</p>
+      <div v-show="showCapacity" class="capacity">
+        <div class="capacity-row">
+          <span class="capacity-label">容量</span>
+          <span class="capacity-value">{{ capacityText }}</span>
+        </div>
+	        <mdui-linear-progress
+	          v-if="showCapacityBar"
+          class="capacity-bar"
+          :value="capacityUsedBytes!"
+          :max="capacityMaxBytes!"
+        ></mdui-linear-progress>
+      </div>
       <input
         ref="fileInputRef"
         type="file"
@@ -98,12 +110,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import 'mdui/components/icon.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/list.js'
 import 'mdui/components/list-item.js'
 import 'mdui/components/circular-progress.js'
+import 'mdui/components/linear-progress.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import {
   initFileUpload,
@@ -153,6 +166,8 @@ const props = defineProps<{
   pasteId: string
   adminKey: string
   encryptionKey: Uint8Array | null
+  maxTotalUploadSize: number | null
+  remainingUploadSize: number | null
   onEnsurePaste: () => Promise<boolean>
 }>()
 
@@ -230,6 +245,80 @@ const uploadSemaphore = createSemaphore(DEFAULT_UPLOAD_CONCURRENCY)
 // 动态配置
 const maxFileSize = ref(10 * 1024 * 1024) // 默认 10MB
 const maxChunkSize = ref(2 * 1024 * 1024) // 默认 2MB
+
+const maxTotalUploadBytes = ref<number | null>(props.maxTotalUploadSize ?? null)
+const remainingUploadBytes = ref<number | null>(props.remainingUploadSize ?? null)
+
+watch(
+  () => props.maxTotalUploadSize,
+  (v) => {
+    if (typeof v === 'number') maxTotalUploadBytes.value = v
+  }
+)
+watch(
+  () => props.remainingUploadSize,
+  (v) => {
+    if (v === null || typeof v === 'number') remainingUploadBytes.value = v
+  }
+)
+
+function updateCapacityFromServer(
+  max: number | undefined,
+  remaining: number | null | undefined,
+  opts: { allowIncrease: boolean }
+) {
+  if (typeof max === 'number') {
+    maxTotalUploadBytes.value = max
+  }
+  if (remaining === undefined) return
+
+  if (remaining === null || typeof remaining === 'number') {
+    const current = remainingUploadBytes.value
+    if (
+      !opts.allowIncrease &&
+      typeof current === 'number' &&
+      typeof remaining === 'number' &&
+      remaining > current
+    ) {
+      return
+    }
+    remainingUploadBytes.value = remaining
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+const capacityMaxBytes = computed(() => maxTotalUploadBytes.value)
+const capacityUsedBytes = computed(() => {
+  const max = maxTotalUploadBytes.value
+  const remaining = remainingUploadBytes.value
+  if (typeof max !== 'number' || max <= 0) return null
+  if (typeof remaining !== 'number') return null
+  return Math.max(0, Math.min(max, max - remaining))
+})
+
+const showCapacity = computed(() => !!props.pasteId && maxTotalUploadBytes.value !== null)
+const showCapacityBar = computed(() => {
+  const max = capacityMaxBytes.value
+  const used = capacityUsedBytes.value
+  return typeof max === 'number' && max > 0 && typeof used === 'number'
+})
+
+const capacityText = computed(() => {
+  const max = maxTotalUploadBytes.value
+  const remaining = remainingUploadBytes.value
+  if (max === null) return '加载中…'
+  if (max === 0) return '不限'
+  if (typeof remaining !== 'number') return `0 / ${formatBytes(max)}`
+  const used = Math.max(0, Math.min(max, max - remaining))
+  return `${formatBytes(used)} / ${formatBytes(max)}`
+})
 
 function handlePaste(e: ClipboardEvent) {
   if (!props.visible) return
@@ -384,6 +473,9 @@ async function startUpload(file: File, options?: { id?: string; resumeUploadId?:
         uploadingFile.progress = Math.round((uploadedChunks.size / total_chunks) * 100)
         lastTime = Date.now()
         lastLoaded = Math.min(status.next_index * chunk_size, file.size)
+        updateCapacityFromServer(status.max_total_upload_size, status.remaining_upload_size, {
+          allowIncrease: true
+        })
       } catch (e) {
         console.warn('Resume status failed, fallback to init:', e)
       }
@@ -409,6 +501,9 @@ async function startUpload(file: File, options?: { id?: string; resumeUploadId?:
       upload_id = initRes.upload_id
       chunk_size = initRes.chunk_size
       total_chunks = initRes.total_chunks
+      updateCapacityFromServer(initRes.max_total_upload_size, initRes.remaining_upload_size, {
+        allowIncrease: false
+      })
     }
 
     if (!upload_id) {
@@ -464,6 +559,11 @@ async function startUpload(file: File, options?: { id?: string; resumeUploadId?:
     // 完成上传
     throwIfAborted()
     const completeRes = await completeFileUpload(props.pasteId, props.adminKey, sessionUploadId, {}, undefined, abortController.signal)
+    updateCapacityFromServer(
+      completeRes.max_total_upload_size,
+      completeRes.remaining_upload_size,
+      { allowIncrease: true }
+    )
 
     // 移动到已上传列表
     uploadingFiles.value = uploadingFiles.value.filter(f => f.id !== id)
@@ -525,6 +625,9 @@ async function cancelUpload(id: string) {
       console.error('Abort failed:', e)
     }
   }
+  if (file && typeof remainingUploadBytes.value === 'number' && typeof maxTotalUploadBytes.value === 'number' && maxTotalUploadBytes.value > 0) {
+    remainingUploadBytes.value = Math.min(maxTotalUploadBytes.value, remainingUploadBytes.value + file.size)
+  }
   uploadingFiles.value = uploadingFiles.value.filter(f => f.id !== id)
 }
 
@@ -542,6 +645,9 @@ async function removeFile(id: string) {
     try {
       await deleteFile(props.pasteId, props.adminKey, file.fileId)
       uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== id)
+      if (typeof remainingUploadBytes.value === 'number' && typeof maxTotalUploadBytes.value === 'number' && maxTotalUploadBytes.value > 0) {
+        remainingUploadBytes.value = Math.min(maxTotalUploadBytes.value, remainingUploadBytes.value + file.size)
+      }
     } catch (e) {
       console.error('Delete file failed:', e)
       snackbar({ message: '删除文件失败', closeable: true })
@@ -588,6 +694,34 @@ function truncateFileName(name: string, maxLength: number = 20): string {
   padding: 0;
 }
 
+	.capacity {
+	  margin: 18px auto 0 auto;
+	  width: min(520px, 80%);
+	  pointer-events: none;
+	}
+
+	.capacity-row {
+	  display: flex;
+	  align-items: baseline;
+	  justify-content: space-between;
+	  gap: 12px;
+	  margin-bottom: 6px;
+	}
+
+	.capacity-label {
+	  font-size: 14px;
+	  color: rgb(var(--mdui-color-on-surface-variant));
+	}
+
+	.capacity-value {
+	  font-size: 14px;
+	  color: rgb(var(--mdui-color-on-surface));
+	}
+
+	.capacity-bar {
+	  width: 100%;
+	}
+
 .drop-zone {
   border: 2px dashed rgb(var(--mdui-color-outline));
   border-radius: 8px;
@@ -595,7 +729,7 @@ function truncateFileName(name: string, maxLength: number = 20): string {
   margin-top: 16px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
 }
 
 .drop-zone:hover,

@@ -82,6 +82,7 @@ class Settings:
 
     # 上传限制
     max_upload_file_size: int
+    max_paste_total_upload_size: int
     max_chunk_size: int
     upload_expire_seconds: int
     max_concurrent_uploads: int
@@ -130,6 +131,9 @@ def load_config() -> Settings:
         data_dir=os.getenv("DATA_DIR", "./data"),
         # 上传限制
         max_upload_file_size=_int_env("MAX_UPLOAD_FILE_SIZE", 100 * 1024 * 1024),
+        max_paste_total_upload_size=_int_env(
+            "MAX_PASTE_TOTAL_UPLOAD_SIZE", 1 * 1024 * 1024 * 1024
+        ),
         max_chunk_size=_int_env("MAX_CHUNK_SIZE", 2 * 1024 * 1024),
         upload_expire_seconds=_int_env("UPLOAD_EXPIRE_SECONDS", 3600),
         max_concurrent_uploads=_int_env("MAX_CONCURRENT_UPLOADS", 2000),

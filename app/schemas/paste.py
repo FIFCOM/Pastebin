@@ -73,6 +73,13 @@ class FileUploadInitResponse(BaseModel):
     chunk_size: int = Field(..., description="服务端确认的分片大小（字节，按明文分片）")
     total_chunks: int = Field(..., description="总分片数")
     expires_at: datetime = Field(..., description="上传会话过期时间")
+    max_total_upload_size: int = Field(
+        ..., description="单个Paste的上传文件总大小上限（字节；0表示不限制）"
+    )
+    remaining_upload_size: int | None = Field(
+        default=None,
+        description="剩余可用上传容量（字节；当max_total_upload_size为0时为null）",
+    )
     aad_prefix: str = Field(..., description="AAD前缀（版本化）")
     aad_required: bool = Field(..., description="是否强制AAD")
     iv_scheme: str = Field(..., description="nonce/iv方案说明")
@@ -87,6 +94,13 @@ class FileUploadStatusResponse(BaseModel):
     chunk_size: int = Field(..., description="分片大小（字节，按明文分片）")
     total_chunks: int = Field(..., description="总分片数")
     expires_at: datetime = Field(..., description="上传会话过期时间")
+    max_total_upload_size: int = Field(
+        ..., description="单个Paste的上传文件总大小上限（字节；0表示不限制）"
+    )
+    remaining_upload_size: int | None = Field(
+        default=None,
+        description="剩余可用上传容量（字节；当max_total_upload_size为0时为null）",
+    )
 
     uploaded_chunks: list[int] = Field(
         default_factory=list, description="已上传分片索引列表（升序）"
@@ -141,6 +155,13 @@ class FileUploadCompleteResponse(BaseModel):
     """分片上传完成响应"""
 
     file_id: str = Field(..., description="文件ID")
+    max_total_upload_size: int = Field(
+        ..., description="单个Paste的上传文件总大小上限（字节；0表示不限制）"
+    )
+    remaining_upload_size: int | None = Field(
+        default=None,
+        description="剩余可用上传容量（字节；当max_total_upload_size为0时为null）",
+    )
 
 
 class PastePublishRequest(BaseModel):
@@ -220,6 +241,13 @@ class PasteCreateResponse(BaseModel):
     paste_id: str = Field(..., description="Paste ID")
     admin_key: str = Field(..., description="管理密钥")
     expires_at: datetime = Field(..., description="草稿过期时间")
+    max_total_upload_size: int = Field(
+        ..., description="单个Paste的上传文件总大小上限（字节；0表示不限制）"
+    )
+    remaining_upload_size: int | None = Field(
+        default=None,
+        description="剩余可用上传容量（字节；当max_total_upload_size为0时为null）",
+    )
     timestamp: int = Field(..., description="响应时间戳（秒）")
 
 

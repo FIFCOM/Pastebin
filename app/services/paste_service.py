@@ -10,6 +10,7 @@ import string
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -67,6 +68,52 @@ class PasteService:
         return Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
 
     @staticmethod
+    def _paste_total_upload_limit_bytes() -> int:
+        return int(settings.max_paste_total_upload_size)
+
+    @staticmethod
+    def _paste_used_upload_bytes(db: Session, paste_id: str, now: datetime) -> int:
+        pending_total = (
+            db.query(func.coalesce(func.sum(FileUploadSession.file_size), 0))
+            .filter(
+                FileUploadSession.paste_id == paste_id,
+                FileUploadSession.expire_at > now,
+            )
+            .scalar()
+        )
+        pending_total_bytes = int(pending_total or 0)
+
+        existing_plain_total = 0
+        existing_files = (
+            db.query(File.id, File.file_size).filter(File.paste_id == paste_id).all()
+        )
+        for file_id, encrypted_size in existing_files:
+            plain_size: int | None = None
+            try:
+                manifest_path = PasteService._final_manifest_path(paste_id, str(file_id))
+                if manifest_path.exists():
+                    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    v = data.get("plain_size")
+                    if v is not None:
+                        plain_size = int(v)
+            except Exception:
+                plain_size = None
+
+            existing_plain_total += (
+                plain_size if plain_size is not None else int(encrypted_size or 0)
+            )
+
+        return existing_plain_total + pending_total_bytes
+
+    @staticmethod
+    def _paste_remaining_upload_bytes(db: Session, paste_id: str, now: datetime) -> int | None:
+        limit = PasteService._paste_total_upload_limit_bytes()
+        if limit <= 0:
+            return None
+        used = PasteService._paste_used_upload_bytes(db, paste_id, now)
+        return max(0, limit - used)
+
+    @staticmethod
     def _file_chunk_aad(paste_id: str, file_id: str, chunk_index: int, total_chunks: int) -> bytes:
         # AAD 约定（前后端需一致）：用于绑定 paste/file/chunk 维度，防乱序/重放/篡改
         return f"{PasteService.FILE_CHUNK_AAD_PREFIX}|paste:{paste_id}|file:{file_id}|i:{chunk_index}|n:{total_chunks}".encode()
@@ -107,6 +154,17 @@ class PasteService:
             raise ValueError(f"文件过大，最大允许 {max_file_size} 字节")
 
         now = datetime.now(UTC)
+
+        max_paste_total = PasteService._paste_total_upload_limit_bytes()
+        used_total = 0
+        if max_paste_total > 0:
+            used_total = PasteService._paste_used_upload_bytes(db, paste_id, now)
+            if used_total + int(req.file_size) > max_paste_total:
+                remaining = max(0, max_paste_total - used_total)
+                raise ValueError(
+                    f"Paste文件总大小超限：剩余可用 {remaining} 字节（单Paste上限 {max_paste_total} 字节）"
+                )
+
         active_sessions = (
             db.query(FileUploadSession)
             .filter(FileUploadSession.expire_at > now)
@@ -176,11 +234,19 @@ class PasteService:
         chunk_dir = PasteService._upload_session_dir(paste_id, upload_id) / "chunks"
         chunk_dir.mkdir(parents=True, exist_ok=True)
 
+        remaining_after: int | None
+        if max_paste_total > 0:
+            remaining_after = max(0, max_paste_total - (used_total + int(req.file_size)))
+        else:
+            remaining_after = None
+
         return FileUploadInitResponse(
             upload_id=upload_id,
             chunk_size=chunk_size,
             total_chunks=total_chunks,
             expires_at=expires_at,
+            max_total_upload_size=max_paste_total,
+            remaining_upload_size=remaining_after,
             aad_prefix=PasteService.FILE_CHUNK_AAD_PREFIX,
             aad_required=True,
             iv_scheme="prefix8=sha256(upload_id)[:8]; iv=prefix8||chunk_index_u32be",
@@ -208,6 +274,10 @@ class PasteService:
         if is_expired(session.expire_at):  # type: ignore[arg-type]
             PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
             raise ValueError("上传会话已过期")
+
+        now = datetime.now(UTC)
+        max_paste_total = PasteService._paste_total_upload_limit_bytes()
+        remaining = PasteService._paste_remaining_upload_bytes(db, paste_id, now)
 
         total_chunks = int(session.total_chunks)  # type: ignore
         chunk_size = int(session.chunk_size)  # type: ignore
@@ -240,6 +310,8 @@ class PasteService:
             chunk_size=chunk_size,
             total_chunks=total_chunks,
             expires_at=session.expire_at,  # type: ignore[arg-type]
+            max_total_upload_size=max_paste_total,
+            remaining_upload_size=remaining,
             uploaded_chunks=uploaded_list,
             uploaded_count=len(uploaded_list),
             next_index=next_index,
@@ -439,7 +511,14 @@ class PasteService:
         except Exception:
             pass
 
-        return FileUploadCompleteResponse(file_id=upload_id)
+        now = datetime.now(UTC)
+        max_paste_total = PasteService._paste_total_upload_limit_bytes()
+        remaining = PasteService._paste_remaining_upload_bytes(db, paste_id, now)
+        return FileUploadCompleteResponse(
+            file_id=upload_id,
+            max_total_upload_size=max_paste_total,
+            remaining_upload_size=remaining,
+        )
 
     @staticmethod
     def abort_file_upload(db: Session, paste_id: str, upload_id: str, admin_key: str) -> None:
@@ -609,10 +688,16 @@ class PasteService:
         db.commit()
         db.refresh(paste)
 
+        max_total_upload_size = PasteService._paste_total_upload_limit_bytes()
+        remaining_upload_size = (
+            max_total_upload_size if max_total_upload_size > 0 else None
+        )
         return PasteCreateResponse(
             paste_id=paste_id,
             admin_key=admin_key,
             expires_at=expire_at,
+            max_total_upload_size=max_total_upload_size,
+            remaining_upload_size=remaining_upload_size,
             timestamp=int(datetime.now(UTC).timestamp()),
         )
 

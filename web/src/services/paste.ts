@@ -39,10 +39,14 @@ export interface FileUploadInitResponse {
   chunk_size: number
   total_chunks: number
   expires_at: string
+  max_total_upload_size: number
+  remaining_upload_size: number | null
 }
 
 export interface FileUploadCompleteResponse {
   file_id: string
+  max_total_upload_size: number
+  remaining_upload_size: number | null
 }
 
 export interface FileUploadStatusResponse {
@@ -52,6 +56,8 @@ export interface FileUploadStatusResponse {
   chunk_size: number
   total_chunks: number
   expires_at: string
+  max_total_upload_size: number
+  remaining_upload_size: number | null
   uploaded_chunks: number[]
   uploaded_count: number
   next_index: number
@@ -61,7 +67,10 @@ export interface FileUploadStatusResponse {
 export interface CreatePasteResponse {
   paste_id: string
   admin_key: string
-  expire_at: string
+  expires_at: string
+  max_total_upload_size: number
+  remaining_upload_size: number | null
+  timestamp: number
 }
 
 export interface PublishSettings {

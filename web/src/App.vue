@@ -44,6 +44,7 @@ onMounted(() => {
 :deep(.mdui-layout-main) {
   background-color: var(--bg-color);
   transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+  scrollbar-gutter: stable;
 }
 
 /* 卡片和表面动画 */
@@ -69,6 +70,7 @@ onMounted(() => {
   margin: 0;
   padding: 0;
   transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+  scrollbar-gutter: stable;
 }
 
 /* 确保MDUI组件的动画效果 */

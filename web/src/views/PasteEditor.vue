@@ -35,6 +35,8 @@
         :paste-id="currentPasteId"
         :admin-key="currentAdminKey"
         :encryption-key="pasteKey"
+        :max-total-upload-size="maxTotalUploadSize"
+        :remaining-upload-size="remainingUploadSize"
         :on-ensure-paste="ensurePasteCreated"
         @insert-file="handleInsertFile"
       />
@@ -205,6 +207,8 @@ const currentPasteId = ref('')
 const currentAdminKey = ref('')
 const encryptionKey = ref('')
 const pasteKey = ref<Uint8Array | null>(null) // 客户端加密密钥
+const maxTotalUploadSize = ref<number | null>(null)
+const remainingUploadSize = ref<number | null>(null)
 
 // 发布配置
 const expireTime = ref('30d')
@@ -264,6 +268,8 @@ const ensurePasteCreated = async (): Promise<boolean> => {
     const createData = await createPaste('client')
     currentPasteId.value = createData.paste_id
     currentAdminKey.value = createData.admin_key
+    maxTotalUploadSize.value = createData.max_total_upload_size
+    remainingUploadSize.value = createData.remaining_upload_size
 
     const key = await generateEncryptionKey()
     pasteKey.value = key
@@ -385,6 +391,8 @@ const handleSubmit = async () => {
       const createData = await createPaste('client')
       currentPasteId.value = createData.paste_id
       currentAdminKey.value = createData.admin_key
+      maxTotalUploadSize.value = createData.max_total_upload_size
+      remainingUploadSize.value = createData.remaining_upload_size
 
       const key = await generateEncryptionKey()
       pasteKey.value = key
@@ -487,6 +495,8 @@ const resetForm = () => {
   currentAdminKey.value = ''
   encryptionKey.value = ''
   pasteKey.value = null
+  maxTotalUploadSize.value = null
+  remainingUploadSize.value = null
   expireTime.value = '30d'
   maxViews.value = -1
   accessKey.value = ''
