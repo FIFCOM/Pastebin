@@ -246,58 +246,14 @@ async def upload_file_chunk(
     """
     admin_key = _get_admin_key_from_header(authorization)
     try:
-        from app.models.paste import FileUploadSession, Paste
-
-        paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste:
-            raise ValueError("Paste不存在")
-        if not PasteService._verify_admin_key(paste, admin_key):
-            raise ValueError("管理密钥错误")
-
-        session = (
-            db.query(FileUploadSession)
-            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
-            .first()
+        # 准备上传：验证权限、Session状态，计算预期参数
+        prep = PasteService.prepare_chunk_upload(
+            db, paste_id, upload_id, index, admin_key
         )
-        if not session:
-            raise ValueError("上传会话不存在或已过期")
-
-        if is_expired(session.expire_at):  # type: ignore[arg-type]
-            PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
-            raise ValueError("上传会话已过期")
-
-        total_chunks = int(session.total_chunks)  # type: ignore
-        chunk_size = int(session.chunk_size)  # type: ignore
-        plain_size = int(session.file_size)  # type: ignore
-
-        if index < 0 or index >= total_chunks:
-            raise ValueError("分片索引越界")
-
-        expected_plain = chunk_size if index < total_chunks - 1 else plain_size - chunk_size * (total_chunks - 1)
-        if expected_plain < 0:
-            expected_plain = 0
-
-        encryption_mode = str(session.encryption_mode)
-        expected_len = expected_plain if encryption_mode == "server" else expected_plain + 12 + 16
-
-        expected_iv: bytes | None = None
-        if encryption_mode == "client":
-            import base64
-
-            iv_prefix_b64 = str(session.iv_prefix) if session.iv_prefix is not None else ""
-            try:
-                iv_prefix = base64.b64decode(iv_prefix_b64, validate=True)
-            except Exception:
-                raise ValueError("上传会话IV前缀无效") from None
-            if len(iv_prefix) != 8:
-                raise ValueError("上传会话IV前缀无效")
-            expected_iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
-
-        # 流式写入，避免一次性读入内存
-        chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
-        chunk_path.parent.mkdir(parents=True, exist_ok=True)
-        if chunk_path.exists():
-            raise ValueError("分片已存在")
+        chunk_path = prep["chunk_path"]
+        expected_len = prep["expected_len"]
+        expected_iv = prep["expected_iv"]
+        encryption_mode = prep["encryption_mode"]
 
         import secrets as _secrets
 

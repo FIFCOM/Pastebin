@@ -83,27 +83,16 @@ class PasteService:
         )
         pending_total_bytes = int(pending_total or 0)
 
-        existing_plain_total = 0
-        existing_files = (
-            db.query(File.id, File.file_size).filter(File.paste_id == paste_id).all()
+        # 直接使用数据库中的 file_size (加密后大小) 进行聚合计算
+        # 虽然比明文略大 (IV + Tag)，但作为配额限制更安全且性能更高 (避免遍历文件系统读取 manifest)
+        existing_total = (
+            db.query(func.coalesce(func.sum(File.file_size), 0))
+            .filter(File.paste_id == paste_id)
+            .scalar()
         )
-        for file_id, encrypted_size in existing_files:
-            plain_size: int | None = None
-            try:
-                manifest_path = PasteService._final_manifest_path(paste_id, str(file_id))
-                if manifest_path.exists():
-                    data = json.loads(manifest_path.read_text(encoding="utf-8"))
-                    v = data.get("plain_size")
-                    if v is not None:
-                        plain_size = int(v)
-            except Exception:
-                plain_size = None
+        existing_total_bytes = int(existing_total or 0)
 
-            existing_plain_total += (
-                plain_size if plain_size is not None else int(encrypted_size or 0)
-            )
-
-        return existing_plain_total + pending_total_bytes
+        return existing_total_bytes + pending_total_bytes
 
     @staticmethod
     def _paste_remaining_upload_bytes(db: Session, paste_id: str, now: datetime) -> int | None:
@@ -549,6 +538,80 @@ class PasteService:
                 upload_dir.rmdir()
         except Exception:
             pass
+
+    @staticmethod
+    def prepare_chunk_upload(
+        db: Session, paste_id: str, upload_id: str, index: int, admin_key: str
+    ) -> dict:
+        """
+        准备分片上传：验证权限、Session状态，计算预期参数。
+        返回包含 expected_len, expected_iv, chunk_path, encryption_mode 等信息的字典。
+        """
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise ValueError("Paste不存在")
+        if not PasteService._verify_admin_key(paste, admin_key):
+            raise ValueError("管理密钥错误")
+
+        session = (
+            db.query(FileUploadSession)
+            .filter(
+                FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id
+            )
+            .first()
+        )
+        if not session:
+            raise ValueError("上传会话不存在或已过期")
+
+        if is_expired(session.expire_at):  # type: ignore[arg-type]
+            PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
+            raise ValueError("上传会话已过期")
+
+        total_chunks = int(session.total_chunks)  # type: ignore
+        chunk_size = int(session.chunk_size)  # type: ignore
+        plain_size = int(session.file_size)  # type: ignore
+
+        if index < 0 or index >= total_chunks:
+            raise ValueError("分片索引越界")
+
+        expected_plain = (
+            chunk_size
+            if index < total_chunks - 1
+            else plain_size - chunk_size * (total_chunks - 1)
+        )
+        if expected_plain < 0:
+            expected_plain = 0
+
+        encryption_mode = str(session.encryption_mode)
+        expected_len = (
+            expected_plain if encryption_mode == "server" else expected_plain + 12 + 16
+        )
+
+        expected_iv: bytes | None = None
+        if encryption_mode == "client":
+            iv_prefix_b64 = (
+                str(session.iv_prefix) if session.iv_prefix is not None else ""
+            )
+            try:
+                iv_prefix = base64.b64decode(iv_prefix_b64, validate=True)
+            except Exception:
+                raise ValueError("上传会话IV前缀无效") from None
+            if len(iv_prefix) != 8:
+                raise ValueError("上传会话IV前缀无效")
+            expected_iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
+
+        chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
+        chunk_path.parent.mkdir(parents=True, exist_ok=True)
+        if chunk_path.exists():
+            raise ValueError("分片已存在")
+
+        return {
+            "chunk_path": chunk_path,
+            "expected_len": expected_len,
+            "expected_iv": expected_iv,
+            "encryption_mode": encryption_mode,
+        }
+
     @staticmethod
     def _get_server_key_for_write(
         db: Session, paste_id: str, encryption_key: str | None
