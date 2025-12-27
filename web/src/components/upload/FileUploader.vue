@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import 'mdui/components/icon.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/list.js'
@@ -321,11 +321,10 @@ const capacityText = computed(() => {
 })
 
 function handlePaste(e: ClipboardEvent) {
-  if (!props.visible) return
   const files = e.clipboardData?.files
   if (files && files.length > 0) {
     e.preventDefault()
-    processFiles(Array.from(files))
+    processFiles(Array.from(files), { autoInsert: true })
   }
 }
 
@@ -375,7 +374,7 @@ function handleDrop(e: DragEvent) {
   }
 }
 
-async function processFiles(files: File[]) {
+async function processFiles(files: File[], opts?: { autoInsert?: boolean }) {
   const maxSize = maxFileSize.value
   const maxSizeMB = (maxSize / 1024 / 1024).toFixed(0)
   const validFiles = files.filter(file => {
@@ -389,16 +388,22 @@ async function processFiles(files: File[]) {
   if (validFiles.length === 0) return
 
   // 确保 Paste 已创建
-  if (!props.pasteId || !props.encryptionKey) {
+  if (!props.pasteId || !props.adminKey || !props.encryptionKey) {
     const ready = await props.onEnsurePaste()
     if (!ready) {
       snackbar({ message: '创建 Paste 失败', closeable: true })
       return
     }
+    // 等待父组件状态更新，确保 props 已同步
+    await nextTick()
+    if (!props.pasteId || !props.adminKey || !props.encryptionKey) {
+      snackbar({ message: '上传信息未就绪，请稍后重试', closeable: true })
+      return
+    }
   }
 
   for (const file of validFiles) {
-    startUpload(file)
+    startUpload(file, { autoInsert: opts?.autoInsert })
   }
 }
 
@@ -408,7 +413,10 @@ function isChunkAlreadyExistsError(error: unknown): boolean {
   return err?.response?.status === 400 && typeof detail === 'string' && detail.includes('分片已存在')
 }
 
-async function startUpload(file: File, options?: { id?: string; resumeUploadId?: string }) {
+async function startUpload(
+  file: File,
+  options?: { id?: string; resumeUploadId?: string; autoInsert?: boolean }
+) {
   const id = options?.id ?? crypto.randomUUID()
   const abortController = new AbortController()
   const uploadingFile: UploadingFile = {
@@ -575,6 +583,13 @@ async function startUpload(file: File, options?: { id?: string; resumeUploadId?:
     })
 
     snackbar({ message: `${file.name} 上传成功` })
+    if (options?.autoInsert) {
+      emit('insert-file', {
+        fileId: completeRes.file_id,
+        name: file.name,
+        size: file.size
+      })
+    }
   } catch (error) {
     const isCancelled =
       cancelledUploads.has(id) ||
@@ -685,6 +700,10 @@ function truncateFileName(name: string, maxLength: number = 20): string {
   if (keepLength <= 0) return name.slice(0, maxLength - 3) + '...'
   return baseName.slice(0, keepLength) + '...' + ext
 }
+
+defineExpose({
+  processFiles
+})
 </script>
 
 <style scoped>

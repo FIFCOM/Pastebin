@@ -14,11 +14,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'paste-files', files: File[]): void
 }>()
 
 const { modelValue } = toRefs(props)
 const vditorRef = ref<HTMLElement | null>(null)
 let vditorInstance: Vditor | null = null
+let pasteInterceptor: ((e: ClipboardEvent) => void) | null = null
 
 const { actualTheme } = useTheme()
 const vditorTheme = ref<'classic' | 'dark'>('classic')
@@ -37,6 +39,7 @@ const updateTheme = () => {
 }
 
 const destroyVditor = () => {
+  unbindPasteInterceptor()
   if (vditorInstance) {
     try {
       vditorInstance.destroy()
@@ -45,6 +48,32 @@ const destroyVditor = () => {
     }
     vditorInstance = null
   }
+}
+
+const bindPasteInterceptor = () => {
+  if (!vditorRef.value) return
+
+  if (pasteInterceptor) {
+    vditorRef.value.removeEventListener('paste', pasteInterceptor, true)
+    pasteInterceptor = null
+  }
+
+  pasteInterceptor = (e: ClipboardEvent) => {
+    const files = e.clipboardData?.files
+    if (!files || files.length === 0) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    emit('paste-files', Array.from(files))
+  }
+
+  vditorRef.value.addEventListener('paste', pasteInterceptor, true)
+}
+
+const unbindPasteInterceptor = () => {
+  if (!vditorRef.value || !pasteInterceptor) return
+  vditorRef.value.removeEventListener('paste', pasteInterceptor, true)
+  pasteInterceptor = null
 }
 
 const initVditor = async () => {
@@ -85,6 +114,8 @@ const initVditor = async () => {
         if (vditorInstance) {
           emit('update:modelValue', vditorInstance.getValue())
         }
+        // 禁用 Vditor 默认粘贴图片(Base64)行为，改由外部上传逻辑处理
+        bindPasteInterceptor()
       }
     })
   }
@@ -152,6 +183,7 @@ onMounted(() => {
   
   onBeforeUnmount(() => {
     observer.disconnect()
+    unbindPasteInterceptor()
     destroyVditor()
   })
 })

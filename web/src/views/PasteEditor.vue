@@ -31,6 +31,7 @@
 
       <!-- 文件上传区域 -->
       <FileUploader
+        ref="uploaderRef"
         :visible="showUploader"
         :paste-id="currentPasteId"
         :admin-key="currentAdminKey"
@@ -48,7 +49,7 @@
 
       <!-- Markdown编辑器 -->
       <div v-show="contentType === 'md'" class="editor-section">
-        <markdown-editor v-model="markdownContent"></markdown-editor>
+        <markdown-editor v-model="markdownContent" @paste-files="handleMarkdownPasteFiles"></markdown-editor>
       </div>
 
       <!-- 操作按钮 -->
@@ -253,9 +254,18 @@ const copyToClipboard = async (text: string, successMessage: string) => {
 
 // 文件上传
 const showUploader = ref(false)
+const uploaderRef = ref<{ processFiles: (files: File[], opts?: { autoInsert?: boolean }) => Promise<void> } | null>(null)
 
 const toggleUploader = () => {
   showUploader.value = !showUploader.value
+}
+
+const handleMarkdownPasteFiles = async (files: File[]) => {
+  if (!uploaderRef.value) {
+    snackbar({ message: '上传组件未就绪', closeable: true })
+    return
+  }
+  await uploaderRef.value.processFiles(files, { autoInsert: true })
 }
 
 // 确保 Paste 已创建（供文件上传使用）
@@ -299,8 +309,6 @@ const handleInsertFile = (file: { fileId: string; name: string; size: number }) 
   } else {
     plainContent.value += '\n' + insertText
   }
-
-  snackbar({ message: '已插入文件链接' })
 }
 
 // 处理内容类型切换
