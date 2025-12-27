@@ -195,6 +195,48 @@ npm run dev
 
 若存在 manifest，服务端会按分片边界读取并使用 AAD 进行流式解密（`aad_required=true` 时不会降级为无 AAD 解密）。
 
+### 前端文件判重（仅 UI 级）
+
+当前后端不会做“重复上传”拦截；为了减少误操作与带宽浪费，前端在**同一页面会话**内做了一层判重：如果检测到重复，会**直接跳过该文件，不发起上传**，并通过 `snackbar` 提示。
+
+实现位置：`web/src/components/upload/FileUploader.vue`（`processFiles()` / `computeDedupeFingerprint()`）。
+
+#### 判重范围
+
+判重仅在当前浏览器页面/Tab 的内存状态中生效，覆盖三类列表：
+- 上传中（`uploadingFiles`）
+- 上传失败（`failedFiles`）
+- 已上传（`uploadedFiles`）
+
+同时也会对“同一次选择/拖拽/粘贴”这一批文件内部做去重。
+
+#### 指纹算法（fingerprint）
+
+判重依赖“指纹字符串”一致（而非文件名一致）。指纹的选择逻辑：
+
+- **优先使用内容哈希**：`sha256:<hex>`
+  - 条件：`0 < file.size <= 20MB` 且（来源是粘贴 `source=paste` **或**文件看起来是图片）
+  - “看起来是图片”的判断：`file.type` 以 `image/` 开头，或扩展名属于 `png/jpg/jpeg/gif/webp/bmp/svg/ico/tiff/avif`
+  - 目的：让“Ctrl+V 粘贴的图片”和“拖拽/选择的同一张图片”可以跨来源判重
+
+- **粘贴的兜底指纹**：`paste:<name>::<size>::<type>`
+  - 原因：剪贴板生成的 `File.lastModified` 经常变化，用它会导致同内容反复粘贴不命中
+
+- **选择/拖拽的元信息指纹**：`file:<name>::<size>::<lastModified>`
+  - 适用于非图片或超过 20MB 的文件（避免对大文件做全量 hash 带来内存/耗时问题）
+
+#### 行为细节
+
+- `processFiles()` 会先构建已存在指纹集合，然后为待上传文件逐个计算指纹：
+  - 若“本批次已见过”或“会话内已存在”，该文件加入 `skippedFiles` 并跳过
+  - 否则加入 `dedupedFiles` 并继续上传
+- `startUpload()` 会把指纹跟随上传状态保存到 `uploading/failed/uploaded`，保证后续不同来源的文件也能命中判重
+
+#### 已知限制
+
+- 这是**体验级**判重：不会阻止后端接受重复内容（如果你绕过前端/换浏览器/刷新页面，仍可重复上传）。
+- 非图片且 >20MB 的文件默认不算内容哈希，可能出现“内容相同但指纹不同”的漏判（例如复制文件导致 `lastModified` 不同）。
+
 ### 用户 History 管理
 
 - `GET /api/user/history` - 获取用户Paste列表（需要登录）

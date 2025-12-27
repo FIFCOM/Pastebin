@@ -127,10 +127,12 @@ import {
   deleteFile
 } from '../../services/paste'
 import { DEFAULT_UPLOAD_CONCURRENCY, getPublicConfig } from '../../services/config'
+import { isImageFileName } from '../../composables/useFile'
 import {
   encryptFileChunk,
   encryptWithKey,
-  bytesToStr
+  bytesToStr,
+  getAesGcmEncryptedLength
 } from '../../utils/crypto'
 
 interface UploadingFile {
@@ -143,6 +145,7 @@ interface UploadingFile {
   file: File
   uploadId?: string
   abortController?: AbortController
+  fingerprint?: string
 }
 
 interface UploadedFile {
@@ -150,6 +153,9 @@ interface UploadedFile {
   fileId: string
   name: string
   size: number
+  storedSize: number
+  lastModified: number
+  fingerprint: string
 }
 
 interface FailedFile {
@@ -159,6 +165,7 @@ interface FailedFile {
   error: string
   file: File
   uploadId?: string
+  fingerprint?: string
 }
 
 const props = defineProps<{
@@ -182,6 +189,80 @@ const uploadingFiles = ref<UploadingFile[]>([])
 const uploadedFiles = ref<UploadedFile[]>([])
 const failedFiles = ref<FailedFile[]>([])
 const cancelledUploads = new Set<string>()
+
+function fileFingerprintParts(name: string, size: number, lastModified: number): string {
+  return `${name}::${size}::${lastModified}`
+}
+
+function fileFingerprint(file: File): string {
+  return fileFingerprintParts(file.name, file.size, file.lastModified)
+}
+
+async function sha256HexOfFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', buf)
+  const bytes = new Uint8Array(digest)
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+const HASH_DEDUPE_MAX_BYTES = 10 * 1024 * 1024 // 10MB
+const UPLOAD_SPEED_UPDATE_MIN_INTERVAL_SEC = 0.1
+
+function isLikelyImageFile(file: File): boolean {
+  if (file.type && file.type.startsWith('image/')) return true
+  return isImageFileName(file.name)
+}
+
+async function computeDedupeFingerprint(
+  file: File,
+  source?: 'paste' | 'select' | 'drop'
+): Promise<string> {
+  const shouldHash =
+    file.size > 0 &&
+    file.size <= HASH_DEDUPE_MAX_BYTES &&
+    (source === 'paste' || isLikelyImageFile(file))
+  if (shouldHash) {
+    try {
+      const hex = await sha256HexOfFile(file)
+      return `sha256:${hex}`
+    } catch {
+      // fallback below
+    }
+  }
+
+  if (source === 'paste') {
+    // Clipboard生成的File通常lastModified会变化；用稳定元信息兜底去重
+    return `paste:${file.name}::${file.size}::${file.type || ''}`
+  }
+
+  return `file:${fileFingerprint(file)}`
+}
+
+function formatSkippedFileNames(files: File[], maxNames: number = 3): string {
+  const names = files.map(f => f.name)
+  if (names.length <= maxNames) return names.join('、')
+  return `${names.slice(0, maxNames).join('、')} 等`
+}
+
+function calcStoredBytesForAesGcmChunks(
+  plainSize: number,
+  chunkSize: number,
+  totalChunks: number
+): number {
+  if (!Number.isFinite(plainSize) || plainSize < 0) return 0
+  if (!Number.isFinite(chunkSize) || chunkSize <= 0) return plainSize
+  if (!Number.isFinite(totalChunks) || totalChunks <= 0) return plainSize
+
+  let total = 0
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * chunkSize
+    const plainLen = Math.max(0, Math.min(chunkSize, plainSize - start))
+    total += getAesGcmEncryptedLength(plainLen)
+  }
+  return total
+}
 
 function createSemaphore(maxConcurrent: number) {
   let active = 0
@@ -324,7 +405,7 @@ function handlePaste(e: ClipboardEvent) {
   const files = e.clipboardData?.files
   if (files && files.length > 0) {
     e.preventDefault()
-    processFiles(Array.from(files), { autoInsert: true })
+    processFiles(Array.from(files), { autoInsert: true, source: 'paste' })
   }
 }
 
@@ -346,7 +427,7 @@ function triggerFileInput() {
 function handleFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files) {
-    processFiles(Array.from(input.files))
+    processFiles(Array.from(input.files), { source: 'select' })
     input.value = ''
   }
 }
@@ -370,11 +451,14 @@ function handleDrop(e: DragEvent) {
   dragEnterDepth = 0
   isDragOver.value = false
   if (e.dataTransfer?.files) {
-    processFiles(Array.from(e.dataTransfer.files))
+    processFiles(Array.from(e.dataTransfer.files), { source: 'drop' })
   }
 }
 
-async function processFiles(files: File[], opts?: { autoInsert?: boolean }) {
+async function processFiles(
+  files: File[],
+  opts?: { autoInsert?: boolean; source?: 'paste' | 'select' | 'drop' }
+) {
   const maxSize = maxFileSize.value
   const maxSizeMB = (maxSize / 1024 / 1024).toFixed(0)
   const validFiles = files.filter(file => {
@@ -386,6 +470,41 @@ async function processFiles(files: File[], opts?: { autoInsert?: boolean }) {
   })
 
   if (validFiles.length === 0) return
+
+  // 前端去重：避免同一会话重复上传相同本地文件（不做内容级校验）
+  const existingFingerprints = new Set<string>()
+  for (const f of uploadingFiles.value) {
+    existingFingerprints.add(f.fingerprint ?? `file:${fileFingerprint(f.file)}`)
+  }
+  for (const f of failedFiles.value) {
+    existingFingerprints.add(f.fingerprint ?? `file:${fileFingerprint(f.file)}`)
+  }
+  for (const f of uploadedFiles.value) existingFingerprints.add(f.fingerprint)
+
+  const seenFingerprints = new Set<string>()
+  const dedupedFiles: File[] = []
+  const skippedFiles: File[] = []
+  const fingerprintsByFile = new Map<File, string>()
+  for (const file of validFiles) {
+    const fp = await computeDedupeFingerprint(file, opts?.source)
+    fingerprintsByFile.set(file, fp)
+    if (seenFingerprints.has(fp) || existingFingerprints.has(fp)) {
+      skippedFiles.push(file)
+      continue
+    }
+    seenFingerprints.add(fp)
+    dedupedFiles.push(file)
+  }
+
+  if (skippedFiles.length > 0) {
+    const msg =
+      skippedFiles.length === 1
+        ? `已跳过重复文件：${skippedFiles[0]!.name}`
+        : `已跳过 ${skippedFiles.length} 个重复文件：${formatSkippedFileNames(skippedFiles)}`
+    snackbar({ message: msg, closeable: true })
+  }
+
+  if (dedupedFiles.length === 0) return
 
   // 确保 Paste 已创建
   if (!props.pasteId || !props.adminKey || !props.encryptionKey) {
@@ -402,8 +521,8 @@ async function processFiles(files: File[], opts?: { autoInsert?: boolean }) {
     }
   }
 
-  for (const file of validFiles) {
-    startUpload(file, { autoInsert: opts?.autoInsert })
+  for (const file of dedupedFiles) {
+    startUpload(file, { autoInsert: opts?.autoInsert, fingerprint: fingerprintsByFile.get(file) })
   }
 }
 
@@ -415,7 +534,7 @@ function isChunkAlreadyExistsError(error: unknown): boolean {
 
 async function startUpload(
   file: File,
-  options?: { id?: string; resumeUploadId?: string; autoInsert?: boolean }
+  options?: { id?: string; resumeUploadId?: string; autoInsert?: boolean; fingerprint?: string }
 ) {
   const id = options?.id ?? crypto.randomUUID()
   const abortController = new AbortController()
@@ -427,7 +546,8 @@ async function startUpload(
     speed: 0,
     state: 'queued',
     file,
-    abortController
+    abortController,
+    fingerprint: options?.fingerprint
   }
   let lastTime = Date.now()
   let lastLoaded = 0
@@ -549,7 +669,7 @@ async function startUpload(
           const now = Date.now()
           const totalLoaded = start + loaded
           const timeDiff = (now - lastTime) / 1000
-          if (timeDiff > 0.1) {
+          if (timeDiff > UPLOAD_SPEED_UPDATE_MIN_INTERVAL_SEC) {
             file.speed = (totalLoaded - lastLoaded) / timeDiff
             lastTime = now
             lastLoaded = totalLoaded
@@ -573,13 +693,18 @@ async function startUpload(
       { allowIncrease: true }
     )
 
+    const storedSize = calcStoredBytesForAesGcmChunks(file.size, chunk_size, total_chunks)
+
     // 移动到已上传列表
     uploadingFiles.value = uploadingFiles.value.filter(f => f.id !== id)
     uploadedFiles.value.push({
       id,
       fileId: completeRes.file_id,
       name: file.name,
-      size: file.size
+      size: file.size,
+      storedSize,
+      lastModified: file.lastModified,
+      fingerprint: uploadingFile.fingerprint ?? `file:${fileFingerprint(file)}`
     })
 
     snackbar({ message: `${file.name} 上传成功` })
@@ -622,7 +747,8 @@ async function startUpload(
       size: file.size,
       error: error instanceof Error ? error.message : '上传失败',
       file,
-      uploadId: uploadingFile.uploadId
+      uploadId: uploadingFile.uploadId,
+      fingerprint: uploadingFile.fingerprint
     })
   } finally {
     releaseSlot?.()
@@ -661,7 +787,7 @@ async function removeFile(id: string) {
       await deleteFile(props.pasteId, props.adminKey, file.fileId)
       uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== id)
       if (typeof remainingUploadBytes.value === 'number' && typeof maxTotalUploadBytes.value === 'number' && maxTotalUploadBytes.value > 0) {
-        remainingUploadBytes.value = Math.min(maxTotalUploadBytes.value, remainingUploadBytes.value + file.size)
+        remainingUploadBytes.value = Math.min(maxTotalUploadBytes.value, remainingUploadBytes.value + file.storedSize)
       }
     } catch (e) {
       console.error('Delete file failed:', e)
@@ -672,7 +798,7 @@ async function removeFile(id: string) {
 
 function retryUpload(file: FailedFile) {
   failedFiles.value = failedFiles.value.filter(f => f.id !== file.id)
-  startUpload(file.file, { id: file.id, resumeUploadId: file.uploadId })
+  startUpload(file.file, { id: file.id, resumeUploadId: file.uploadId, fingerprint: file.fingerprint })
 }
 
 function dismissFailed(id: string) {

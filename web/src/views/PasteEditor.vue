@@ -182,6 +182,7 @@ import { snackbar } from 'mdui/functions/snackbar.js'
 import PlainEditor from '../components/editors/Plain.vue'
 import MarkdownEditor from '../components/editors/Markdown.vue'
 import FileUploader from '../components/upload/FileUploader.vue'
+import { isImageFileName } from '../composables/useFile'
 import {
   generateRandomId,
   generateEncryptionKey,
@@ -300,7 +301,7 @@ const handleInsertFile = (file: { fileId: string; name: string; size: number }) 
   const fileUrl = `/api/pastes/${currentPasteId.value}/files/${file.fileId}`
 
   // 统一使用 Markdown 格式：图片用 ![](url)，其他用 [](url)
-  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(file.name)
+  const isImage = isImageFileName(file.name)
   const insertText = isImage ? `![${file.name}](${fileUrl})` : `[${file.name}](${fileUrl})`
 
   // 插入到当前编辑器
