@@ -14,13 +14,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
-  (e: 'paste-files', files: File[]): void
+  (e: 'paste-files', files: File[], meta: { source: 'paste' | 'drop' }): void
 }>()
 
 const { modelValue } = toRefs(props)
 const vditorRef = ref<HTMLElement | null>(null)
 let vditorInstance: Vditor | null = null
 let pasteInterceptor: ((e: ClipboardEvent) => void) | null = null
+let dropInterceptor: ((e: DragEvent) => void) | null = null
 
 const { actualTheme } = useTheme()
 const vditorTheme = ref<'classic' | 'dark'>('classic')
@@ -40,6 +41,7 @@ const updateTheme = () => {
 
 const destroyVditor = () => {
   unbindPasteInterceptor()
+  unbindDropInterceptor()
   if (vditorInstance) {
     try {
       vditorInstance.destroy()
@@ -64,7 +66,7 @@ const bindPasteInterceptor = () => {
 
     e.preventDefault()
     e.stopPropagation()
-    emit('paste-files', Array.from(files))
+    emit('paste-files', Array.from(files), { source: 'paste' })
   }
 
   vditorRef.value.addEventListener('paste', pasteInterceptor, true)
@@ -74,6 +76,32 @@ const unbindPasteInterceptor = () => {
   if (!vditorRef.value || !pasteInterceptor) return
   vditorRef.value.removeEventListener('paste', pasteInterceptor, true)
   pasteInterceptor = null
+}
+
+const bindDropInterceptor = () => {
+  if (!vditorRef.value) return
+
+  if (dropInterceptor) {
+    vditorRef.value.removeEventListener('drop', dropInterceptor, true)
+    dropInterceptor = null
+  }
+
+  dropInterceptor = (e: DragEvent) => {
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    emit('paste-files', Array.from(files), { source: 'drop' })
+  }
+
+  vditorRef.value.addEventListener('drop', dropInterceptor, true)
+}
+
+const unbindDropInterceptor = () => {
+  if (!vditorRef.value || !dropInterceptor) return
+  vditorRef.value.removeEventListener('drop', dropInterceptor, true)
+  dropInterceptor = null
 }
 
 const initVditor = async () => {
@@ -116,6 +144,8 @@ const initVditor = async () => {
         }
         // 禁用 Vditor 默认粘贴图片(Base64)行为，改由外部上传逻辑处理
         bindPasteInterceptor()
+        // 禁用 Vditor 默认拖拽图片(Base64)行为，改由外部上传逻辑处理
+        bindDropInterceptor()
       }
     })
   }
@@ -184,6 +214,7 @@ onMounted(() => {
   onBeforeUnmount(() => {
     observer.disconnect()
     unbindPasteInterceptor()
+    unbindDropInterceptor()
     destroyVditor()
   })
 })

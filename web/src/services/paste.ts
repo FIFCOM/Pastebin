@@ -36,6 +36,7 @@ export interface FileUploadInitRequest {
 
 export interface FileUploadInitResponse {
   upload_id: string
+  file_id?: string
   chunk_size: number
   total_chunks: number
   expires_at: string

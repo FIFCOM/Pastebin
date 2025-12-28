@@ -44,7 +44,7 @@
 
       <!-- Plain文本输入框 -->
       <div v-show="contentType === 'txt'" class="editor-section">
-        <plain-editor v-model="plainContent"></plain-editor>
+        <plain-editor v-model="plainContent" @paste-files="handleMarkdownPasteFiles"></plain-editor>
       </div>
 
       <!-- Markdown编辑器 -->
@@ -54,15 +54,20 @@
 
       <!-- 操作按钮 -->
       <div class="editor-actions">
-        <mdui-button
-          variant="filled"
-          @click="handleSubmit"
-          :disabled="!canSubmit || isSubmitting"
-          :loading="isSubmitting"
+        <div
+          class="submit-wrapper"
+          :class="{ disabled: isSubmitDisabled }"
+          @click="handleSubmitClick"
         >
-          <mdui-icon slot="icon" name="send"></mdui-icon>
-          提交
-        </mdui-button>
+          <mdui-button
+            variant="filled"
+            :disabled="isSubmitDisabled"
+            :loading="isSubmitting"
+          >
+            <mdui-icon slot="icon" name="send"></mdui-icon>
+            提交
+          </mdui-button>
+        </div>
       </div>
 
       <!-- 发布配置Dialog -->
@@ -255,18 +260,42 @@ const copyToClipboard = async (text: string, successMessage: string) => {
 
 // 文件上传
 const showUploader = ref(false)
-const uploaderRef = ref<{ processFiles: (files: File[], opts?: { autoInsert?: boolean }) => Promise<void> } | null>(null)
+const uploaderRef = ref<{
+  processFiles: (
+    files: File[],
+    opts?: { autoInsert?: boolean; source?: 'paste' | 'select' | 'drop' }
+  ) => Promise<void>
+  isUploading: boolean
+} | null>(null)
+const isUploaderUploading = computed(() => uploaderRef.value?.isUploading ?? false)
+const isSubmitDisabled = computed(() => !canSubmit.value || isSubmitting.value || isUploaderUploading.value)
+
+const handleSubmitClick = async () => {
+  if (!isSubmitDisabled.value) {
+    await handleSubmit()
+    return
+  }
+  if (isSubmitting.value) {
+    snackbar({ message: '提交中，请稍候…', closeable: true })
+    return
+  }
+  if (isUploaderUploading.value) {
+    snackbar({ message: '文件上传中，请等待上传完成后再提交', closeable: true })
+    return
+  }
+  snackbar({ message: '内容不能为空', closeable: true })
+}
 
 const toggleUploader = () => {
   showUploader.value = !showUploader.value
 }
 
-const handleMarkdownPasteFiles = async (files: File[]) => {
+const handleMarkdownPasteFiles = async (files: File[], meta?: { source: 'paste' | 'drop' }) => {
   if (!uploaderRef.value) {
     snackbar({ message: '上传组件未就绪', closeable: true })
     return
   }
-  await uploaderRef.value.processFiles(files, { autoInsert: true })
+  await uploaderRef.value.processFiles(files, { autoInsert: true, source: meta?.source })
 }
 
 // 确保 Paste 已创建（供文件上传使用）
@@ -377,6 +406,10 @@ const insertTabInMduiField = (fieldRef: any, model: any, isUnindent: boolean = f
 // 处理提交
 const handleSubmit = async () => {
   if (!canSubmit.value || isSubmitting.value) {
+    return
+  }
+  if (isUploaderUploading.value) {
+    snackbar({ message: '文件上传中，请等待上传完成后再提交', closeable: true })
     return
   }
   
@@ -566,6 +599,18 @@ onMounted(() => {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--mdui-color-outline-variant);
+}
+
+.submit-wrapper {
+  display: inline-block;
+}
+
+.submit-wrapper.disabled {
+  cursor: not-allowed;
+}
+
+.submit-wrapper.disabled :deep(mdui-button[disabled]) {
+  pointer-events: none;
 }
 
 /* Dialog样式 */

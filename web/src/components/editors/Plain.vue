@@ -1,5 +1,5 @@
 <template>
-  <div class="plain-editor">
+  <div ref="rootRef" class="plain-editor">
     <mdui-text-field
       ref="contentInputRef"
       :value="modelValue"
@@ -15,18 +15,72 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import 'mdui/components/text-field.js'
 
 defineProps<{
   modelValue: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'paste-files', files: File[], meta: { source: 'drop' }): void
 }>()
 
 const contentInputRef = ref<any>(null);
+const rootRef = ref<HTMLElement | null>(null)
+let dropInterceptor: ((e: DragEvent) => void) | null = null
+let dragOverInterceptor: ((e: DragEvent) => void) | null = null
+
+function bindDropInterceptor() {
+  if (!rootRef.value) return
+
+  if (dropInterceptor) {
+    rootRef.value.removeEventListener('drop', dropInterceptor, true)
+    dropInterceptor = null
+  }
+  if (dragOverInterceptor) {
+    rootRef.value.removeEventListener('dragover', dragOverInterceptor, true)
+    dragOverInterceptor = null
+  }
+
+  dragOverInterceptor = (e: DragEvent) => {
+    const hasFiles =
+      (e.dataTransfer?.files && e.dataTransfer.files.length > 0) ||
+      (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files'))
+    if (!hasFiles) return
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  }
+
+  dropInterceptor = (e: DragEvent) => {
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    emit('paste-files', Array.from(files), { source: 'drop' })
+  }
+
+  rootRef.value.addEventListener('dragover', dragOverInterceptor, true)
+  rootRef.value.addEventListener('drop', dropInterceptor, true)
+}
+
+function unbindDropInterceptor() {
+  if (!rootRef.value) return
+  if (dropInterceptor) rootRef.value.removeEventListener('drop', dropInterceptor, true)
+  if (dragOverInterceptor) rootRef.value.removeEventListener('dragover', dragOverInterceptor, true)
+  dropInterceptor = null
+  dragOverInterceptor = null
+}
+
+onMounted(() => {
+  bindDropInterceptor()
+})
+
+onBeforeUnmount(() => {
+  unbindDropInterceptor()
+})
 
 // 处理内容输入框的 Tab 键
 const handleContentTabKey = (e: KeyboardEvent) => {
