@@ -88,6 +88,14 @@ export interface PublishResponse {
   encryption_key?: string
 }
 
+export interface PasteUpdateRequest {
+  title?: string
+  type?: 'txt' | 'md'
+  expire_time?: '7d' | '30d' | '1y' | 'never'
+  max_views?: number
+  access_key?: string | null
+}
+
 export async function createPaste(encryptionMode: 'client' | 'server' = 'client'): Promise<CreatePasteResponse> {
   const response = await apiClient.post('/pastes', {
     encryption_mode: encryptionMode
@@ -130,6 +138,23 @@ export async function publishPaste(
     }
   )
   return response.data
+}
+
+export async function updatePaste(
+  pasteId: string,
+  adminKey: string,
+  update: PasteUpdateRequest
+): Promise<void> {
+  await apiClient.put(
+    `/pastes/${pasteId}`,
+    update,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminKey}`
+      }
+    }
+  )
 }
 
 export async function getPaste(pasteId: string, accessKey?: string): Promise<PasteData> {

@@ -12,6 +12,7 @@
           variant="outlined"
           class="title-input"
           @keydown="handleTitleTabKey"
+          :readonly="showPublishPanel"
         ></mdui-text-field>
       </div>
 
@@ -21,8 +22,9 @@
         <mdui-switch
           :checked="contentType === 'md'"
           @change="handleContentTypeChange"
+          :disabled="showPublishPanel"
         ></mdui-switch>
-        <mdui-button class="upload-btn" @click="toggleUploader" variant="tonal">
+        <mdui-button class="upload-btn" @click="toggleUploader" variant="tonal" :disabled="showPublishPanel">
           <mdui-icon slot="icon" name="upload"></mdui-icon>
           上传文件
           <mdui-icon slot="end-icon" :name="showUploader ? 'expand_less' : 'expand_more'"></mdui-icon>
@@ -32,7 +34,7 @@
       <!-- 文件上传区域 -->
       <FileUploader
         ref="uploaderRef"
-        :visible="showUploader"
+        :visible="showUploader && !showPublishPanel"
         :paste-id="currentPasteId"
         :admin-key="currentAdminKey"
         :encryption-key="pasteKey"
@@ -42,18 +44,48 @@
         @insert-file="handleInsertFile"
       />
 
-      <!-- Plain文本输入框 -->
-      <div v-show="contentType === 'txt'" class="editor-section">
-        <plain-editor v-model="plainContent" @paste-files="handleMarkdownPasteFiles"></plain-editor>
-      </div>
+      <div class="editor-swap">
+        <div class="editor-wrapper" :class="{ collapsed: showPublishPanel }">
+          <div class="editor-inner">
+            <!-- Plain文本输入框 -->
+            <div v-show="contentType === 'txt'" class="editor-section">
+              <plain-editor v-model="plainContent" @paste-files="handleMarkdownPasteFiles"></plain-editor>
+            </div>
 
-      <!-- Markdown编辑器 -->
-      <div v-show="contentType === 'md'" class="editor-section">
-        <markdown-editor v-model="markdownContent" @paste-files="handleMarkdownPasteFiles"></markdown-editor>
+            <!-- Markdown编辑器 -->
+            <div v-show="contentType === 'md'" class="editor-section">
+              <markdown-editor
+                v-model="markdownContent"
+                @paste-files="handleMarkdownPasteFiles"
+              ></markdown-editor>
+            </div>
+          </div>
+        </div>
+
+        <div class="publish-panel-wrapper" :class="{ expanded: showPublishPanel }">
+          <div class="publish-panel-inner">
+            <PublishPanel
+              :visible="showPublishPanel"
+              :paste-id="currentPasteId"
+              :admin-key="currentAdminKey"
+              :paste-url="pasteUrl"
+              :title="title.trim()"
+              :type="contentType === 'md' ? 'md' : 'txt'"
+              :expire-time="expireTime"
+              :access-key="accessKey"
+              :max-views="maxViews"
+              @update:expire-time="expireTime = $event"
+              @update:access-key="accessKey = $event"
+              @update:max-views="maxViews = $event"
+              @edit="handleEditExisting"
+              @new="handleCreateNew"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- 操作按钮 -->
-      <div class="editor-actions">
+      <div v-if="!showPublishPanel" class="editor-actions">
         <div
           class="submit-wrapper"
           :class="{ disabled: isSubmitDisabled }"
@@ -65,110 +97,10 @@
             :loading="isSubmitting"
           >
             <mdui-icon slot="icon" name="send"></mdui-icon>
-            提交
+            {{ isEditingExisting ? '保存修改' : '提交' }}
           </mdui-button>
         </div>
       </div>
-
-      <!-- 发布配置Dialog -->
-      <mdui-dialog
-        ref="publishConfigDialogRef"
-        headline="配置发布选项"
-        close-on-overlay-click
-      >
-        <div class="dialog-content">
-          <!-- 过期时间选择 -->
-          <div class="config-section">
-            <div class="config-label">过期时间</div>
-            <mdui-segmented-button-group :value="expireTime" @change="expireTime = $event.target.value" selects="single">
-              <mdui-segmented-button value="7d">7天</mdui-segmented-button>
-              <mdui-segmented-button value="30d">30天</mdui-segmented-button>
-              <mdui-segmented-button value="1y">1年</mdui-segmented-button>
-              <mdui-segmented-button value="never">永久</mdui-segmented-button>
-            </mdui-segmented-button-group>
-          </div>
-
-          <!-- 最大查看次数 -->
-          <div class="config-section">
-            <mdui-text-field
-              :value="maxViews"
-              @input="maxViews = Number($event.target.value)"
-              label="最大查看次数"
-              type="number"
-              helper="1表示阅后即焚，-1表示无限制"
-              variant="outlined"
-              min="-1"
-              step="1"
-            ></mdui-text-field>
-          </div>
-
-          <!-- 访问密钥输入框 -->
-          <div class="config-section">
-            <mdui-text-field
-              :value="accessKey"
-              @input="accessKey = $event.target.value"
-              label="访问密钥"
-              type="password"
-              helper="设置后访问者需要输入密钥才能查看（最多72个字符）"
-              variant="outlined"
-              clearable
-              maxlength="72"
-            ></mdui-text-field>
-          </div>
-        </div>
-
-        <mdui-button slot="action" variant="text" @click="closePublishConfigDialog">取消</mdui-button>
-        <mdui-button 
-          slot="action" 
-          variant="tonal" 
-          @click="handlePublish"
-          :disabled="isPublishing"
-          :loading="isPublishing"
-        >发布</mdui-button>
-      </mdui-dialog>
-
-      <!-- 发布成功Dialog -->
-      <mdui-dialog
-        ref="publishSuccessDialogRef"
-        headline="发布成功"
-        close-on-overlay-click
-      >
-        <mdui-icon slot="icon" name="check_circle" class="success-icon"></mdui-icon>
-        <div class="dialog-content">
-          <div class="info-section">
-            <div class="info-item">
-                <mdui-text-field
-                    label="分享链接"
-                    readonly
-                    :value="pasteUrl"
-                    style="width: 100%;"
-                >
-                    <mdui-button-icon
-                        slot="suffix"
-                        icon="content_copy"
-                        @click="copyToClipboard(pasteUrl, '分享链接已复制')"
-                    ></mdui-button-icon>
-                </mdui-text-field>
-            </div>
-            <div class="info-item">
-                <mdui-text-field
-                    label="Admin Key (请妥善保管)"
-                    readonly
-                    :value="currentAdminKey"
-                    style="width: 100%;"
-                >
-                    <mdui-button-icon
-                        slot="suffix"
-                        icon="content_copy"
-                        @click="copyToClipboard(currentAdminKey, 'Admin Key 已复制')"
-                    ></mdui-button-icon>
-                </mdui-text-field>
-            </div>
-          </div>
-        </div>
-
-        <mdui-button slot="action" variant="tonal" @click="closeSuccessDialog">关闭</mdui-button>
-      </mdui-dialog>
   </div>
 </template>
 
@@ -176,17 +108,13 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
-import 'mdui/components/card.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
-import 'mdui/components/dialog.js'
-import 'mdui/components/segmented-button-group.js'
-import 'mdui/components/segmented-button.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import PlainEditor from '../components/editors/Plain.vue'
 import MarkdownEditor from '../components/editors/Markdown.vue'
 import FileUploader from '../components/upload/FileUploader.vue'
+import PublishPanel from '../components/editors/PublishPanel.vue'
 import { isImageFileName } from '../composables/useFile'
 import {
   generateRandomId,
@@ -197,7 +125,8 @@ import {
 import {
   createPaste,
   uploadPasteContent,
-  publishPaste
+  publishPaste,
+  updatePaste
 } from '../services/paste'
 
 // 数据定义
@@ -207,7 +136,8 @@ const plainContent = ref('')
 const markdownContent = ref('')
 const titleInputRef = ref<any>(null)
 const isSubmitting = ref(false)
-const isPublishing = ref(false)
+const showPublishPanel = ref(false)
+const isEditingExisting = ref(false)
 
 // Paste信息
 const currentPasteId = ref('')
@@ -218,13 +148,9 @@ const maxTotalUploadSize = ref<number | null>(null)
 const remainingUploadSize = ref<number | null>(null)
 
 // 发布配置
-const expireTime = ref('30d')
+const expireTime = ref<'7d' | '30d' | '1y' | 'never'>('30d')
 const maxViews = ref(-1)
 const accessKey = ref('')
-
-// Dialog引用
-const publishConfigDialogRef = ref<any>(null)
-const publishSuccessDialogRef = ref<any>(null)
 
 // 计算属性：是否可以提交
 const canSubmit = computed(() => {
@@ -247,17 +173,6 @@ const pasteUrl = computed(() => {
   return url
 })
 
-// 复制到剪贴板
-const copyToClipboard = async (text: string, successMessage: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    snackbar({ message: successMessage });
-  } catch (err) {
-    console.error('Failed to copy: ', err);
-    snackbar({ message: '复制失败', closeable: true });
-  }
-};
-
 // 文件上传
 const showUploader = ref(false)
 const uploaderRef = ref<{
@@ -268,7 +183,9 @@ const uploaderRef = ref<{
   isUploading: boolean
 } | null>(null)
 const isUploaderUploading = computed(() => uploaderRef.value?.isUploading ?? false)
-const isSubmitDisabled = computed(() => !canSubmit.value || isSubmitting.value || isUploaderUploading.value)
+const isSubmitDisabled = computed(
+  () => showPublishPanel.value || !canSubmit.value || isSubmitting.value || isUploaderUploading.value
+)
 
 const handleSubmitClick = async () => {
   if (!isSubmitDisabled.value) {
@@ -287,6 +204,7 @@ const handleSubmitClick = async () => {
 }
 
 const toggleUploader = () => {
+  if (showPublishPanel.value) return
   showUploader.value = !showUploader.value
 }
 
@@ -429,17 +347,8 @@ const handleSubmit = async () => {
 
   try {
     // 1. 确保 Paste 已创建（可能已通过文件上传创建）
-    if (!currentPasteId.value || !pasteKey.value) {
-      const createData = await createPaste('client')
-      currentPasteId.value = createData.paste_id
-      currentAdminKey.value = createData.admin_key
-      maxTotalUploadSize.value = createData.max_total_upload_size
-      remainingUploadSize.value = createData.remaining_upload_size
-
-      const key = await generateEncryptionKey()
-      pasteKey.value = key
-      encryptionKey.value = keyToUrlSafeStr(key)
-    }
+    const ensured = await ensurePasteCreated()
+    if (!ensured || !pasteKey.value) return
 
     // 2. 加密并上传内容
     const encryptedContent = await encryptContent(content, pasteKey.value)
@@ -447,9 +356,30 @@ const handleSubmit = async () => {
       encrypted_content: encryptedContent
     })
 
-    // 4. 显示发布配置 Dialog
-    snackbar({ message: 'Paste创建成功，请配置发布选项' })
-    openPublishConfigDialog()
+    if (!isEditingExisting.value) {
+      // 3. 立即发布，并展示发布面板
+      await publishPaste(currentPasteId.value, currentAdminKey.value, {
+        title: title.value.trim(),
+        type: contentType.value === 'md' ? 'md' : 'txt',
+        expire_time: expireTime.value,
+        max_views: maxViews.value,
+        access_key: accessKey.value || undefined
+      })
+    } else {
+      // 已发布/已编辑的 Paste：通过 update 接口更新设置（避免重复 publish）
+      await updatePaste(currentPasteId.value, currentAdminKey.value, {
+        title: title.value.trim(),
+        type: contentType.value === 'md' ? 'md' : 'txt',
+        expire_time: expireTime.value,
+        max_views: maxViews.value,
+        access_key: accessKey.value
+      })
+    }
+
+    showUploader.value = false
+    showPublishPanel.value = true
+    isEditingExisting.value = false
+    snackbar({ message: '已保存' })
   } catch (error) {
     console.error('提交失败:', error)
     snackbar({ 
@@ -461,71 +391,17 @@ const handleSubmit = async () => {
   }
 }
 
-// 打开发布配置Dialog
-const openPublishConfigDialog = () => {
-  if (publishConfigDialogRef.value) {
-    publishConfigDialogRef.value.open = true
-  }
-}
-
-// 关闭发布配置Dialog
-const closePublishConfigDialog = () => {
-  if (publishConfigDialogRef.value) {
-    publishConfigDialogRef.value.open = false
-  }
-}
-
-// 处理发布
-const handlePublish = async () => {
-  if (isPublishing.value) return
-
-  isPublishing.value = true
-
-  try {
-    await publishPaste(
-      currentPasteId.value,
-      currentAdminKey.value,
-      {
-        title: title.value.trim(),
-        type: contentType.value === 'md' ? 'md' : 'txt',
-        expire_time: expireTime.value as any,
-        max_views: maxViews.value,
-        access_key: accessKey.value || undefined
-      }
-    )
-
-    // 关闭配置 Dialog
-    closePublishConfigDialog()
-
-    // 显示成功 Dialog
-    snackbar({ message: '发布成功！' })
-    openSuccessDialog()
-  } catch (error) {
-    console.error('发布失败:', error)
-    snackbar({ 
-      message: `发布失败: ${error instanceof Error ? error.message : '未知错误'}`,
-      closeable: true
-    })
-  } finally {
-    isPublishing.value = false
-  }
-}
-
-// 打开成功Dialog
-const openSuccessDialog = () => {
-  if (publishSuccessDialogRef.value) {
-    publishSuccessDialogRef.value.open = true
-  }
-}
-
-// 关闭成功Dialog
-const closeSuccessDialog = () => {
-  if (publishSuccessDialogRef.value) {
-    publishSuccessDialogRef.value.open = false
-  }
-  
-  // 重置表单
+const handleCreateNew = () => {
+  showPublishPanel.value = false
+  showUploader.value = false
+  isEditingExisting.value = false
   resetForm()
+}
+
+const handleEditExisting = () => {
+  showPublishPanel.value = false
+  showUploader.value = false
+  isEditingExisting.value = true
 }
 
 // 重置表单
@@ -613,108 +489,51 @@ onMounted(() => {
   pointer-events: none;
 }
 
-/* Dialog样式 */
-.dialog-content {
-  padding: 16px 0;
+.editor-swap {
+  display: grid;
+  gap: 0;
 }
 
-.info-section {
-  background-color: var(--mdui-color-surface-variant);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
+.editor-wrapper,
+.publish-panel-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.35s var(--mdui-motion-easing-standard);
+  will-change: grid-template-rows;
 }
 
-.info-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
+.editor-wrapper.collapsed {
+  grid-template-rows: 0fr;
 }
 
-.info-item:last-child {
-  margin-bottom: 0;
+.publish-panel-wrapper {
+  grid-template-rows: 0fr;
 }
 
-.info-label {
-  font-weight: 500;
-  color: var(--mdui-color-on-surface-variant);
-  min-width: 120px;
+.publish-panel-wrapper.expanded {
+  grid-template-rows: 1fr;
+  margin-bottom: 16px;
 }
 
-.info-value {
-  color: var(--mdui-color-on-surface);
-  word-break: break-all;
+.editor-inner,
+.publish-panel-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
-.monospace {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 14px;
+.editor-wrapper:not(.collapsed) > .editor-inner {
+  overflow: visible;
 }
 
-.config-section {
-  margin-bottom: 20px;
+.editor-wrapper.collapsed > .editor-inner {
+  pointer-events: none;
 }
 
-.config-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--mdui-color-on-surface);
-  margin-bottom: 8px;
+.publish-panel-wrapper > .publish-panel-inner {
+  pointer-events: none;
 }
 
-.success-message {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.success-message p {
-  font-size: 16px;
-  color: var(--mdui-color-on-surface);
-  margin: 0;
-}
-
-.warning-message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background-color: var(--mdui-color-error-container);
-  color: var(--mdui-color-on-error-container);
-  border-radius: 8px;
-  margin-top: 24px;
-}
-
-.warning-message mdui-icon {
-  flex-shrink: 0;
-}
-
-.warning-message p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* 成功图标样式和动画 */
-.success-icon {
-  font-size: 48px;
-  color: var(--mdui-color-primary);
-  animation: successIconAnimation 0.6s ease-out;
-}
-
-@keyframes successIconAnimation {
-  0% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-  70% {
-    transform: scale(0.9);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+.publish-panel-wrapper.expanded > .publish-panel-inner {
+  pointer-events: auto;
 }
 </style>
