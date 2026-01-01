@@ -385,7 +385,6 @@ syncMaxViewsModeFromValue()
 .publish-panel {
   background: rgb(var(--mdui-color-background));
   border-radius: 12px;
-  padding: 16px;
   border: 1px solid var(--mdui-color-outline-variant);
 }
 

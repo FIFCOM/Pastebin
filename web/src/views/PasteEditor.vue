@@ -1,106 +1,103 @@
 <template>
   <div class="paste-editor">
-      <!-- 标题输入框 -->
-      <br></br>
-      <div class="editor-section">
-        <mdui-text-field
-          ref="titleInputRef"
-          v-model="title"
-          label="标题"
-          placeholder="请输入Paste标题"
-          clearable
-          variant="outlined"
-          class="title-input"
-          @keydown="handleTitleTabKey"
-          :readonly="showPublishPanel"
-        ></mdui-text-field>
-      </div>
-
-      <!-- 内容类型选择 -->
-      <div class="editor-section content-type-switch">
-        <span>Markdown</span>
-        <mdui-switch
-          :checked="contentType === 'md'"
-          @change="handleContentTypeChange"
-          :disabled="showPublishPanel"
-        ></mdui-switch>
-        <mdui-button class="upload-btn" @click="toggleUploader" variant="tonal" :disabled="showPublishPanel">
-          <mdui-icon slot="icon" name="upload"></mdui-icon>
-          上传文件
-          <mdui-icon slot="end-icon" :name="showUploader ? 'expand_less' : 'expand_more'"></mdui-icon>
-        </mdui-button>
-      </div>
-
-      <!-- 文件上传区域 -->
-      <FileUploader
-        ref="uploaderRef"
-        :visible="showUploader && !showPublishPanel"
-        :paste-id="currentPasteId"
-        :admin-key="currentAdminKey"
-        :encryption-key="pasteKey"
-        :max-total-upload-size="maxTotalUploadSize"
-        :remaining-upload-size="remainingUploadSize"
-        :on-ensure-paste="ensurePasteCreated"
-        @insert-file="handleInsertFile"
-      />
-
-      <div class="editor-swap">
-        <div class="editor-wrapper" :class="{ collapsed: showPublishPanel }">
-          <div class="editor-inner">
-            <!-- Plain文本输入框 -->
-            <div v-show="contentType === 'txt'" class="editor-section">
-              <plain-editor v-model="plainContent" @paste-files="handleMarkdownPasteFiles"></plain-editor>
-            </div>
-
-            <!-- Markdown编辑器 -->
-            <div v-show="contentType === 'md'" class="editor-section">
-              <markdown-editor
-                v-model="markdownContent"
-                @paste-files="handleMarkdownPasteFiles"
-              ></markdown-editor>
-            </div>
+    <div class="editor-swap">
+      <div class="editor-wrapper" :class="{ collapsed: showPublishPanel }">
+        <div class="editor-inner">
+          <!-- 标题输入框 -->
+          <br />
+          <div class="editor-section">
+            <mdui-text-field
+              ref="titleInputRef"
+              v-model="title"
+              label="标题"
+              placeholder="请输入Paste标题"
+              clearable
+              variant="outlined"
+              class="title-input"
+              @keydown="handleTitleTabKey"
+              :readonly="showPublishPanel"
+            ></mdui-text-field>
           </div>
-        </div>
 
-        <div class="publish-panel-wrapper" :class="{ expanded: showPublishPanel }">
-          <div class="publish-panel-inner">
-            <PublishPanel
-              :visible="showPublishPanel"
-              :paste-id="currentPasteId"
-              :admin-key="currentAdminKey"
-              :paste-url="pasteUrl"
-              :title="title.trim()"
-              :type="contentType === 'md' ? 'md' : 'txt'"
-              :expire-time="expireTime"
-              :access-key="accessKey"
-              :max-views="maxViews"
-              @update:expire-time="expireTime = $event"
-              @update:access-key="accessKey = $event"
-              @update:max-views="maxViews = $event"
-              @edit="handleEditExisting"
-              @new="handleCreateNew"
-            />
+          <!-- 内容类型选择 -->
+          <div class="editor-section content-type-switch">
+            <span>Markdown</span>
+            <mdui-switch
+              :checked="contentType === 'md'"
+              @change="handleContentTypeChange"
+              :disabled="showPublishPanel"
+            ></mdui-switch>
+            <mdui-button
+              class="upload-btn"
+              @click="toggleUploader"
+              variant="tonal"
+              :disabled="showPublishPanel"
+            >
+              <mdui-icon slot="icon" name="upload"></mdui-icon>
+              上传文件
+              <mdui-icon slot="end-icon" :name="showUploader ? 'expand_less' : 'expand_more'"></mdui-icon>
+            </mdui-button>
+          </div>
+
+          <!-- 文件上传区域 -->
+          <FileUploader
+            ref="uploaderRef"
+            :visible="showUploader && !showPublishPanel"
+            :paste-id="currentPasteId"
+            :admin-key="currentAdminKey"
+            :encryption-key="pasteKey"
+            :max-total-upload-size="maxTotalUploadSize"
+            :remaining-upload-size="remainingUploadSize"
+            :on-ensure-paste="ensurePasteCreated"
+            @insert-file="handleInsertFile"
+          />
+
+          <!-- Plain文本输入框 -->
+          <div v-show="contentType === 'txt'" class="editor-section">
+            <plain-editor v-model="plainContent" @paste-files="handleMarkdownPasteFiles"></plain-editor>
+          </div>
+
+          <!-- Markdown编辑器 -->
+          <div v-show="contentType === 'md'" class="editor-section">
+            <markdown-editor
+              v-model="markdownContent"
+              @paste-files="handleMarkdownPasteFiles"
+            ></markdown-editor>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="editor-actions">
+            <div class="submit-wrapper" :class="{ disabled: isSubmitDisabled }" @click="handleSubmitClick">
+              <mdui-button variant="filled" :disabled="isSubmitDisabled" :loading="isSubmitting">
+                <mdui-icon slot="icon" name="send"></mdui-icon>
+                {{ isEditingExisting ? '保存修改' : '提交' }}
+              </mdui-button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 操作按钮 -->
-      <div v-if="!showPublishPanel" class="editor-actions">
-        <div
-          class="submit-wrapper"
-          :class="{ disabled: isSubmitDisabled }"
-          @click="handleSubmitClick"
-        >
-          <mdui-button
-            variant="filled"
-            :disabled="isSubmitDisabled"
-            :loading="isSubmitting"
-          >
-            <mdui-icon slot="icon" name="send"></mdui-icon>
-            {{ isEditingExisting ? '保存修改' : '提交' }}
-          </mdui-button>
+      <div class="publish-panel-wrapper" :class="{ expanded: showPublishPanel }">
+        <div class="publish-panel-inner">
+          <PublishPanel
+            :visible="showPublishPanel"
+            :paste-id="currentPasteId"
+            :admin-key="currentAdminKey"
+            :paste-url="pasteUrl"
+            :title="title.trim()"
+            :type="contentType === 'md' ? 'md' : 'txt'"
+            :expire-time="expireTime"
+            :access-key="accessKey"
+            :max-views="maxViews"
+            @update:expire-time="expireTime = $event"
+            @update:access-key="accessKey = $event"
+            @update:max-views="maxViews = $event"
+            @edit="handleEditExisting"
+            @new="handleCreateNew"
+          />
         </div>
       </div>
+    </div>
   </div>
 </template>
 
@@ -472,8 +469,6 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 16px;
   border-top: 1px solid var(--mdui-color-outline-variant);
 }
 

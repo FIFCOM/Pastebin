@@ -157,7 +157,8 @@ function goLogin() {
 
 <style scoped>
 .auth-page {
-  min-height: calc(100vh - 64px);
+  min-height: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;

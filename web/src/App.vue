@@ -1,11 +1,13 @@
 <template>
-  <GlobalHeader></GlobalHeader>
-  <mdui-layout>
-    <mdui-layout-main class="mdui-container">
-      <router-view />
-    </mdui-layout-main>
-  </mdui-layout>
-  <GlobalFooter></GlobalFooter>
+  <div class="app-shell">
+    <GlobalHeader></GlobalHeader>
+    <mdui-layout class="app-layout">
+      <mdui-layout-main class="mdui-container app-main">
+        <router-view />
+      </mdui-layout-main>
+    </mdui-layout>
+    <GlobalFooter></GlobalFooter>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -27,6 +29,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app-main {
+  min-height: 0;
+}
+
 /* 主题动画过渡 */
 :deep(html), :deep(body) {
   transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1),
