@@ -60,6 +60,56 @@ class UserSession(Base):
 
     # 关系
     user = relationship("User", back_populates="sessions")
+    session_key = relationship(
+        "UserSessionKey",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    used_refresh_tokens = relationship(
+        "UsedRefreshToken", back_populates="session", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<UserSession(id={self.id}, user_id={self.user_id}, expires_at={self.expires_at})>"
+
+
+class UserSessionKey(Base):
+    """用户会话密钥表模型（用于服务端恢复 user_key）"""
+
+    __tablename__ = "user_session_keys"
+
+    session_id = Column(
+        String(36),
+        ForeignKey("user_sessions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    encrypted_session_key = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    session = relationship("UserSession", back_populates="session_key")
+
+    def __repr__(self):
+        return f"<UserSessionKey(session_id={self.session_id})>"
+
+
+class UsedRefreshToken(Base):
+    """已使用（被旋转替换）的 refresh token 哈希，用于检测复用"""
+
+    __tablename__ = "used_refresh_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(
+        String(36),
+        ForeignKey("user_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    replaced_by_hash = Column(String(64), nullable=False)
+    used_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    session = relationship("UserSession", back_populates="used_refresh_tokens")
+
+    def __repr__(self):
+        return f"<UsedRefreshToken(id={self.id}, session_id={self.session_id}, used_at={self.used_at})>"

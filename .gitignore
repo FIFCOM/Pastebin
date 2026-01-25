@@ -200,5 +200,5 @@ local/
 .local/pipx/
 
 data/
-
+docs/
 AGENT.md

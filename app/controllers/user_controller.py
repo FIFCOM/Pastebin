@@ -2,7 +2,7 @@
 用户控制器 - REST API路由
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -10,6 +10,8 @@ from app.core.dependencies import get_current_user
 from app.schemas.common import MessageResponse
 from app.schemas.user import (
     LoginResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
     SessionResponse,
     TotpSetupResponse,
     TotpStatusResponse,
@@ -23,6 +25,26 @@ from app.schemas.user import (
     UserUpdateRequest,
 )
 from app.services.user_service import UserService
+from config.config import settings
+
+REFRESH_TOKEN_COOKIE_NAME = "mb_refresh_token"
+
+
+def _set_refresh_token_cookie(response: Response, refresh_token: str) -> None:
+    max_age = settings.refresh_token_expire_days * 24 * 60 * 60
+    response.set_cookie(
+        key=REFRESH_TOKEN_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        max_age=max_age,
+        path="/api/users",
+    )
+
+
+def _clear_refresh_token_cookie(response: Response) -> None:
+    response.delete_cookie(key=REFRESH_TOKEN_COOKIE_NAME, path="/api/users")
 
 # 创建路由器
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
@@ -48,7 +70,11 @@ async def register_user(user_data: UserRegisterRequest, db: Session = Depends(ge
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)):
+async def login_user(
+    login_data: UserLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """
     用户登录
 
@@ -57,6 +83,7 @@ async def login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)
     """
     try:
         login_response = UserService.login_user(db, login_data)
+        _set_refresh_token_cookie(response, login_response.refresh_token)
         return login_response
     except ValueError as e:
         raise HTTPException(
@@ -68,7 +95,9 @@ async def login_user(login_data: UserLoginRequest, db: Session = Depends(get_db)
 
 @router.post("/login-totp", response_model=LoginResponse)
 async def login_user_with_totp(
-    login_data: UserLoginWithTotpRequest, db: Session = Depends(get_db)
+    login_data: UserLoginWithTotpRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     """
     用户TOTP登录
@@ -79,6 +108,7 @@ async def login_user_with_totp(
     """
     try:
         login_response = UserService.login_user_with_totp(db, login_data)
+        _set_refresh_token_cookie(response, login_response.refresh_token)
         return login_response
     except ValueError as e:
         raise HTTPException(
@@ -86,6 +116,72 @@ async def login_user_with_totp(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
+
+
+@router.post("/refresh", response_model=RefreshTokenResponse)
+async def refresh_access_token(
+    response: Response,
+    refresh_token: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE_NAME),
+    refresh_data: RefreshTokenRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    使用 refresh token 续期 access token（并旋转 refresh token）
+
+    - 优先使用 HttpOnly Cookie: mb_refresh_token
+    - 若 Cookie 不存在，可在 JSON body 提供 refresh_token（适用于移动端等非浏览器场景）
+    """
+    token = refresh_token or (refresh_data.refresh_token if refresh_data else None)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少 refresh token"
+        )
+
+    try:
+        access_token, new_refresh_token = UserService.refresh_access_token(db, token)
+        _set_refresh_token_cookie(response, new_refresh_token)
+        return RefreshTokenResponse(
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer",
+        )
+    except ValueError as e:
+        _clear_refresh_token_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
+        ) from None
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE_NAME),
+    refresh_data: RefreshTokenRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    主动登出（撤销当前会话 refresh token）
+
+    - 优先使用 HttpOnly Cookie: mb_refresh_token
+    - 若 Cookie 不存在，可在 JSON body 提供 refresh_token
+    """
+    token = refresh_token or (refresh_data.refresh_token if refresh_data else None)
+    if token:
+        UserService.logout_by_refresh_token(db, token)
+    _clear_refresh_token_cookie(response)
+    return MessageResponse(message="已登出")
+
+
+@router.post("/logout-all", response_model=MessageResponse)
+async def logout_all(
+    response: Response,
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """全部设备登出（撤销用户所有会话）"""
+    count = UserService.logout_all_sessions(db, current_user.id)
+    _clear_refresh_token_cookie(response)
+    return MessageResponse(message=f"已撤销 {count} 个会话")
 
 
 @router.get("/me", response_model=UserResponse)
@@ -240,8 +336,11 @@ async def cleanup_expired_sessions(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """清理过期会话（管理功能）"""
-    count = UserService.cleanup_expired_sessions(db)
-    return MessageResponse(message=f"已清理 {count} 个过期会话")
+    sessions_count = UserService.cleanup_expired_sessions(db)
+    used_tokens_count = UserService.cleanup_expired_used_refresh_tokens(db)
+    return MessageResponse(
+        message=f"已清理 {sessions_count} 个过期会话，{used_tokens_count} 条 refresh token 记录"
+    )
 
 
 @router.get("/me/totp", response_model=TotpStatusResponse)

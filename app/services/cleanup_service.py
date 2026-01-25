@@ -3,12 +3,13 @@
 """
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.models.collab_room import CollabRoom, Member, RoomMember
 from app.models.paste import File, FileUploadSession, Paste
+from app.models.user import UsedRefreshToken, UserSession
 from app.schemas.cleanup import CleanupResponse, CleanupTaskResult
 from config.config import settings
 
@@ -258,6 +259,58 @@ class CleanupService:
             )
 
     @staticmethod
+    def cleanup_expired_user_sessions(db: Session) -> CleanupTaskResult:
+        """清理过期用户会话（refresh token 过期后）"""
+        try:
+            now = datetime.now(UTC)
+            q = db.query(UserSession).filter(UserSession.expires_at < now)
+            deleted_count = q.count()
+            q.delete(synchronize_session=False)
+            db.commit()
+            return CleanupTaskResult(
+                task_name="expired_user_sessions",
+                success=True,
+                deleted_count=deleted_count,
+                message=f"成功清理 {deleted_count} 个过期用户会话",
+                error=None,
+            )
+        except Exception as e:
+            db.rollback()
+            return CleanupTaskResult(
+                task_name="expired_user_sessions",
+                success=False,
+                deleted_count=0,
+                message="清理过期用户会话失败",
+                error=str(e),
+            )
+
+    @staticmethod
+    def cleanup_expired_used_refresh_tokens(db: Session) -> CleanupTaskResult:
+        """清理过期 refresh token 使用记录（避免 UsedRefreshToken 表无限增长）"""
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=settings.refresh_token_expire_days)
+            q = db.query(UsedRefreshToken).filter(UsedRefreshToken.used_at < cutoff)
+            deleted_count = q.count()
+            q.delete(synchronize_session=False)
+            db.commit()
+            return CleanupTaskResult(
+                task_name="expired_used_refresh_tokens",
+                success=True,
+                deleted_count=deleted_count,
+                message=f"成功清理 {deleted_count} 条 refresh token 记录",
+                error=None,
+            )
+        except Exception as e:
+            db.rollback()
+            return CleanupTaskResult(
+                task_name="expired_used_refresh_tokens",
+                success=False,
+                deleted_count=0,
+                message="清理 refresh token 记录失败",
+                error=str(e),
+            )
+
+    @staticmethod
     def _delete_paste_files(paste_id: str, db: Session) -> None:
         """
         删除paste关联的物理文件
@@ -340,6 +393,8 @@ class CleanupService:
             "expired_pastes": CleanupService.cleanup_expired_pastes,
             "expired_members": CleanupService.cleanup_expired_members,
             "expired_uploads": CleanupService.cleanup_expired_uploads,
+            "expired_user_sessions": CleanupService.cleanup_expired_user_sessions,
+            "expired_used_refresh_tokens": CleanupService.cleanup_expired_used_refresh_tokens,
         }
 
         task_results = []

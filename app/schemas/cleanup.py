@@ -12,6 +12,8 @@ class CleanupTaskEnum:
     EXPIRED_PASTES = "expired_pastes"
     EXPIRED_MEMBERS = "expired_members"
     EXPIRED_UPLOADS = "expired_uploads"
+    EXPIRED_USER_SESSIONS = "expired_user_sessions"
+    EXPIRED_USED_REFRESH_TOKENS = "expired_used_refresh_tokens"
 
 
 class CleanupRequest(BaseModel):

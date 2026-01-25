@@ -1,8 +1,4 @@
-import axios from 'axios'
-
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
-})
+import { apiHttp, authHttp } from './http'
 
 export interface UserResponse {
   id: number
@@ -14,11 +10,10 @@ export interface UserResponse {
 
 export interface LoginResponse {
   access_token: string
+  refresh_token: string
   token_type: string
   user: UserResponse
 }
-
-const TOKEN_STORAGE_KEY = 'mb_access_token'
 
 export async function sha256Hex(plain: string): Promise<string> {
   const encoder = new TextEncoder()
@@ -30,34 +25,9 @@ export async function sha256Hex(plain: string): Promise<string> {
     .join('')
 }
 
-export function saveToken(token: string): void {
-  try {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token)
-  } catch (e) {
-    console.error('Failed to save token to localStorage', e)
-  }
-}
-
-export function loadToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_STORAGE_KEY)
-  } catch (e) {
-    console.error('Failed to load token from localStorage', e)
-    return null
-  }
-}
-
-export function clearToken(): void {
-  try {
-    localStorage.removeItem(TOKEN_STORAGE_KEY)
-  } catch (e) {
-    console.error('Failed to clear token from localStorage', e)
-  }
-}
-
 export async function registerUser(email: string, password: string): Promise<UserResponse> {
   const passwordHash = await sha256Hex(password)
-  const response = await apiClient.post('/users/register', {
+  const response = await authHttp.post('/users/register', {
     email,
     password: passwordHash
   })
@@ -69,18 +39,36 @@ export async function loginUser(
   password: string
 ): Promise<LoginResponse> {
   const passwordHash = await sha256Hex(password)
-  const response = await apiClient.post('/users/login', {
+  const response = await authHttp.post('/users/login', {
     email,
     password: passwordHash
   })
   return response.data
 }
 
-export async function fetchCurrentUser(token: string): Promise<UserResponse> {
-  const response = await apiClient.get('/users/me', {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+export async function loginUserWithTotp(
+  email: string,
+  password: string,
+  totpCode: string
+): Promise<LoginResponse> {
+  const passwordHash = await sha256Hex(password)
+  const response = await authHttp.post('/users/login-totp', {
+    email,
+    password: passwordHash,
+    totp_code: totpCode
   })
   return response.data
+}
+
+export async function fetchCurrentUser(): Promise<UserResponse> {
+  const response = await apiHttp.get('/users/me')
+  return response.data
+}
+
+export async function logoutSession(): Promise<void> {
+  await authHttp.post('/users/logout')
+}
+
+export async function logoutAllSessions(): Promise<void> {
+  await apiHttp.post('/users/logout-all')
 }

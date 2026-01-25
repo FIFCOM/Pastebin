@@ -56,7 +56,14 @@ async def execute_cleanup_tasks(
     """
     try:
         # 验证任务类型
-        valid_tasks = {"expired_drafts", "expired_pastes", "expired_members"}
+        valid_tasks = {
+            "expired_drafts",
+            "expired_pastes",
+            "expired_members",
+            "expired_uploads",
+            "expired_user_sessions",
+            "expired_used_refresh_tokens",
+        }
         invalid_tasks = set(cleanup_request.tasks) - valid_tasks
 
         if invalid_tasks:
@@ -90,6 +97,13 @@ async def get_cleanup_status(_: None = Depends(verify_internal_token)) -> dict:
     """
     return {
         "message": "清理任务服务运行正常",
-        "supported_tasks": ["expired_drafts", "expired_pastes", "expired_members"],
+        "supported_tasks": [
+            "expired_drafts",
+            "expired_pastes",
+            "expired_members",
+            "expired_uploads",
+            "expired_user_sessions",
+            "expired_used_refresh_tokens",
+        ],
         "data_directory": settings.data_dir,
     }

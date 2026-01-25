@@ -66,9 +66,11 @@ app = FastAPI(
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"]
+    # Cookie 续期（refresh token）需要 allow_credentials=True 且不能使用 allow_origins=["*"]
+    allow_origins=[] if settings.debug else ["http://localhost:3000"],  # 生产环境需要限制
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
     if settings.debug
-    else ["http://localhost:3000"],  # 生产环境需要限制
+    else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

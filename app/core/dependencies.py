@@ -7,9 +7,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import decrypt_with_key, str_to_bytes, verify_token
+from app.core.security import (
+    decrypt_session_key,
+    decrypt_with_key,
+    str_to_bytes,
+    verify_token,
+)
 from app.core.time_utils import is_expired
-from app.models.user import UserSession
+from app.models.user import UserSession, UserSessionKey
 from app.schemas.user import UserResponse
 from app.services.api_key_service import ApiKeyService
 from app.services.user_service import UserService
@@ -64,9 +69,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 获取用户名
     username: str | None = payload.get("sub")
-    if username is None:
+    session_id: str | None = payload.get("session_id")
+    token_type: str | None = payload.get("type")
+
+    if username is None or session_id is None or token_type != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的认证凭据",
@@ -79,6 +86,19 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 校验会话有效性（支持主动登出/单设备登出/风控撤销等）
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.id == session_id, UserSession.user_id == user.id)
+        .first()
+    )
+    if session is None or is_expired(session.expires_at):  # type: ignore[arg-type]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="会话不存在或已过期",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -147,12 +167,12 @@ async def get_current_user_with_key(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 获取用户名、会话ID和会话密钥
+    # 获取用户名和会话ID
     username: str | None = payload.get("sub")
     session_id: str | None = payload.get("session_id")
-    session_key_str: str | None = payload.get("session_key")
+    token_type: str | None = payload.get("type")
 
-    if username is None or session_id is None or session_key_str is None:
+    if username is None or session_id is None or token_type != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的认证凭据，缺少必要信息",
@@ -189,9 +209,21 @@ async def get_current_user_with_key(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    session_key_record = (
+        db.query(UserSessionKey).filter(UserSessionKey.session_id == session_id).first()
+    )
+    if session_key_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="会话密钥不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # 恢复用户密钥
     try:
-        session_key_bytes = str_to_bytes(session_key_str)
+        session_key_bytes = decrypt_session_key(
+            str(session_key_record.encrypted_session_key), session_id
+        )
         encrypted_user_key_bytes = str_to_bytes(str(session.encrypted_session_key))  # type: ignore
         user_key = decrypt_with_key(encrypted_user_key_bytes, session_key_bytes)
         return user, user_key

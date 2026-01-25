@@ -65,6 +65,7 @@ class Settings:
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+    refresh_token_expire_days: int
     member_token_secret_key: str
 
     # 加密设置
@@ -114,6 +115,7 @@ def load_config() -> Settings:
         secret_key=secret_key,
         algorithm=os.getenv("ALGORITHM", "HS256"),
         access_token_expire_minutes=_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 30),
+        refresh_token_expire_days=_int_env("REFRESH_TOKEN_EXPIRE_DAYS", 30),
         # 协作房间 member token（必须显式设置，且建议与 SECRET_KEY 分离）
         member_token_secret_key=os.getenv(
             "MEMBER_TOKEN_SECRET_KEY",

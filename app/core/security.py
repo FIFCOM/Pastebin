@@ -3,6 +3,7 @@
 """
 
 import base64
+import hashlib
 import os
 import secrets
 import string
@@ -217,6 +218,45 @@ def verify_token(token: str) -> dict | None:
 def generate_session_token() -> str:
     """生成会话令牌"""
     return secrets.token_urlsafe(32)
+
+
+def generate_refresh_token() -> str:
+    """生成 refresh token（不自描述的随机串）"""
+    return secrets.token_urlsafe(64)
+
+
+def hash_refresh_token(refresh_token: str) -> str:
+    """对 refresh token 做不可逆哈希后存储（SHA-256 十六进制）"""
+    return hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
+
+
+def _server_session_key_encryption_key() -> bytes:
+    """
+    用于加密 session_key 的服务端密钥（从 SECRET_KEY 派生）。
+
+    注意：这是服务端内部用途，与用户密码派生的 master_key 无关。
+    """
+    return hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
+
+
+def encrypt_session_key(session_key: bytes, session_id: str) -> str:
+    """加密 session_key 并返回可存储的 base64 字符串"""
+    encrypted = encrypt_with_key(
+        session_key,
+        _server_session_key_encryption_key(),
+        aad=session_id.encode("utf-8"),
+    )
+    return bytes_to_str(encrypted)
+
+
+def decrypt_session_key(encrypted_session_key: str, session_id: str) -> bytes:
+    """解密 session_key（输入为 base64 字符串）"""
+    encrypted_bytes = str_to_bytes(encrypted_session_key)
+    return decrypt_with_key(
+        encrypted_bytes,
+        _server_session_key_encryption_key(),
+        aad=session_id.encode("utf-8"),
+    )
 
 
 def generate_api_key() -> str:

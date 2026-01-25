@@ -38,6 +38,9 @@
           <mdui-menu-item disabled>
             已登录为：{{ currentUser?.username }}
           </mdui-menu-item>
+          <mdui-menu-item @click="goUserManagement">
+            用户管理
+          </mdui-menu-item>
           <mdui-menu-item @click="handleLogout">
             退出登录
           </mdui-menu-item>
@@ -94,6 +97,10 @@ const handleLogout = () => {
   logout()
   snackbar({ message: '已退出登录' })
   router.push('/')
+}
+
+const goUserManagement = () => {
+  router.push('/users')
 }
 </script>
 

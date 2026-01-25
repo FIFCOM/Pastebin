@@ -26,6 +26,18 @@
             @keydown.enter="handleSubmit"
           ></mdui-text-field>
 
+          <mdui-text-field
+            v-if="requireTotp"
+            v-model="totpCode"
+            label="验证码"
+            placeholder="6 位数字"
+            type="text"
+            variant="outlined"
+            maxlength="6"
+            :disabled="isSubmitting"
+            @keydown.enter="handleSubmit"
+          ></mdui-text-field>
+
           <div v-if="errorMessage" class="error-message">
             {{ errorMessage }}
           </div>
@@ -37,7 +49,7 @@
             :disabled="!canSubmit || isSubmitting"
             :loading="isSubmitting"
           >
-            登录
+            {{ requireTotp ? '验证并登录' : '登录' }}
           </mdui-button>
         </form>
 
@@ -51,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/text-field.js'
@@ -62,15 +74,29 @@ import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
-const { login } = useAuth()
+const { login, loginWithTotp } = useAuth()
 
 const email = ref('')
 const password = ref('')
+const totpCode = ref('')
+const requireTotp = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
 const canSubmit = computed(() => {
-  return email.value.trim().length > 0 && password.value.length > 0
+  if (email.value.trim().length === 0) return false
+  if (password.value.length === 0) return false
+  if (requireTotp.value) {
+    return /^\d{6}$/.test(totpCode.value.trim())
+  }
+  return true
+})
+
+watch(email, () => {
+  // 账号切换时清理 TOTP 状态
+  requireTotp.value = false
+  totpCode.value = ''
+  errorMessage.value = ''
 })
 
 async function handleSubmit() {
@@ -82,23 +108,36 @@ async function handleSubmit() {
   errorMessage.value = ''
  
   try {
-    await login(email.value.trim(), password.value)
+    if (requireTotp.value) {
+      await loginWithTotp(email.value.trim(), password.value, totpCode.value.trim())
+    } else {
+      await login(email.value.trim(), password.value)
+    }
     snackbar({ message: '登录成功' })
  
     const redirect = (route.query.redirect as string | undefined) || '/'
     await router.replace(redirect)
   } catch (e: any) {
-    let msg = '登录失败，请检查邮箱或密码'
-    if (e?.response?.data?.detail) {
-      // 后端显式返回的业务错误信息
-      msg = e.response.data.detail
+    const detail = e?.response?.data?.detail
+
+    if (!requireTotp.value && typeof detail === 'string' && detail.includes('两步验证')) {
+      requireTotp.value = true
+      totpCode.value = ''
+      const msg = '此账户启用了两步验证，请输入 6 位验证码'
+      errorMessage.value = msg
+      snackbar({ message: msg, closeable: true })
+      return
+    }
+
+    let msg = requireTotp.value ? '登录失败，请检查验证码' : '登录失败，请检查邮箱或密码'
+    if (detail) {
+      msg = detail
     } else if (e?.response?.status === 401) {
-      // 未授权统一视为邮箱或密码错误
-      msg = '邮箱或密码错误'
+      msg = requireTotp.value ? '邮箱、密码或验证码错误' : '邮箱或密码错误'
     } else if (e instanceof Error) {
-      // 其它网络错误等情况
       msg = '登录失败：' + e.message
     }
+
     errorMessage.value = msg
     snackbar({ message: msg, closeable: true })
   } finally {

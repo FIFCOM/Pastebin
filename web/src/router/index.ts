@@ -14,6 +14,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/PasteViewer.vue')
   },
   {
+    path: '/users',
+    name: 'UserManagement',
+    component: () => import('../views/UserManagement.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
@@ -42,6 +48,14 @@ router.beforeEach(async (to, _from, next) => {
     } catch (e) {
       console.error('Auth init failed in router guard', e)
     }
+  }
+
+  if (to.meta.requiresAuth && !isLoggedIn.value) {
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath }
+    })
+    return
   }
 
   if (to.meta.guestOnly && isLoggedIn.value) {
