@@ -89,7 +89,7 @@ export interface TotpStatusResponse {
 
 export interface TotpSetupResponse {
   secret: string
-  qr_code_url: string
+  provisioning_uri: string
 }
 
 export async function getTotpStatus(): Promise<TotpStatusResponse> {

@@ -67,7 +67,9 @@
         <div class="setup-title">扫码绑定</div>
 
         <div class="qr-wrap">
-          <img :src="setupInfo.qr_code_url" alt="TOTP QR Code" class="qr" />
+          <div class="qr-box">
+            <QrCode :value="setupInfo.provisioning_uri" :size="220" />
+          </div>
         </div>
 
         <div class="secret-row">
@@ -113,6 +115,7 @@ import 'mdui/components/text-field.js'
 import { useAuth } from '../../composables/useAuth'
 import { disableTotp, getTotpStatus, setupTotp, verifyTotp } from '../../services/user'
 import type { TotpSetupResponse, TotpStatusResponse } from '../../services/user'
+import QrCode from '../common/QrCode.vue'
 
 const { currentUser } = useAuth()
 
@@ -290,9 +293,7 @@ onMounted(() => {
   padding: 12px;
 }
 
-.qr {
-  width: 220px;
-  height: 220px;
+.qr-box {
   background: #fff;
   border-radius: 12px;
   padding: 12px;

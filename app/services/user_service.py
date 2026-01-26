@@ -15,7 +15,7 @@ from app.core.security import (
     encrypt_with_key,
     generate_refresh_token,
     generate_session_key,
-    generate_totp_qr_code_url,
+    generate_totp_provisioning_uri,
     generate_totp_secret,
     generate_username,
     hash_password,
@@ -437,7 +437,7 @@ class UserService:
             user_id: 用户ID
 
         Returns:
-            TOTP设置信息（包含密钥和二维码）
+            TOTP设置信息（包含密钥与 provisioning URI，前端生成二维码展示）
 
         Raises:
             ValueError: 当用户不存在时
@@ -449,14 +449,15 @@ class UserService:
         # 生成新的TOTP密钥
         totp_secret = generate_totp_secret()
 
-        # 生成二维码
-        qr_code_url = generate_totp_qr_code_url(totp_secret, user.username)  # type: ignore
+        provisioning_uri = generate_totp_provisioning_uri(
+            totp_secret, user.username  # type: ignore[arg-type]
+        )
 
         # 保存TOTP密钥到数据库（但不启用，需要验证后才启用）
         user.totp_secret = totp_secret  # type: ignore[assignment]
         db.commit()
 
-        return TotpSetupResponse(secret=totp_secret, qr_code_url=qr_code_url)
+        return TotpSetupResponse(secret=totp_secret, provisioning_uri=provisioning_uri)
 
     @staticmethod
     def verify_and_enable_totp(

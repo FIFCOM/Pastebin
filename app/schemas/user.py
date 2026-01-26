@@ -168,7 +168,7 @@ class TotpSetupResponse(BaseModel):
     """TOTP设置响应"""
 
     secret: str = Field(..., description="TOTP密钥")
-    qr_code_url: str = Field(..., description="二维码图片的base64编码")
+    provisioning_uri: str = Field(..., description="用于生成二维码的 otpauth URI")
 
 
 class TotpVerifyRequest(BaseModel):

@@ -11,6 +11,12 @@
     </div>
 
     <div class="info-section">
+      <div v-if="pasteUrl" class="qr-section">
+        <div class="qr-box">
+          <QrCode :value="pasteUrl" :size="180" />
+        </div>
+      </div>
+
       <mdui-text-field
         label="分享链接"
         readonly
@@ -117,6 +123,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import QrCode from '../common/QrCode.vue'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
@@ -444,6 +451,23 @@ syncMaxViewsModeFromValue()
   display: grid;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.qr-section {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mdui-color-outline-variant);
+  background: rgb(var(--mdui-color-surface));
+}
+
+.qr-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .advanced-section {

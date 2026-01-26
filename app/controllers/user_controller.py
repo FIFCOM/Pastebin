@@ -367,7 +367,7 @@ async def setup_totp(
     """
     设置TOTP两步验证
 
-    返回TOTP密钥和二维码，用户需要用验证器应用扫描后调用verify接口验证启用
+    返回 TOTP 密钥与 provisioning URI（前端生成二维码展示），用户扫码后调用 verify 接口验证启用
     """
     try:
         return UserService.setup_totp(db, current_user.id)

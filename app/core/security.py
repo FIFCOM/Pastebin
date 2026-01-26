@@ -8,11 +8,9 @@ import os
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
-from io import BytesIO
 
 import bcrypt
 import pyotp
-import qrcode
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -419,39 +417,13 @@ def verify_totp_code(secret: str, token: str, window: int = 1) -> bool:
         return False
 
 
-def generate_totp_qr_code_url(
+def generate_totp_provisioning_uri(
     secret: str, username: str, app_name: str = "MaterialBin"
 ) -> str:
     """
-    生成TOTP二维码URL
+    生成用于二维码的 TOTP provisioning URI（otpauth://...）
 
-    Args:
-        secret: TOTP密钥
-        username: 用户名
-        app_name: 应用名称
-
-    Returns:
-        二维码图片的base64编码字符串
+    前端可据此自行生成二维码展示。
     """
     totp = pyotp.TOTP(secret)
-    provisioning_uri = totp.provisioning_uri(name=username, issuer_name=app_name)
-
-    # 生成二维码
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(provisioning_uri)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white")
-
-    # 转换为base64字符串
-    buffer = BytesIO()
-    img.save(buffer, "PNG")
-    buffer.seek(0)
-
-    img_base64 = base64.b64encode(buffer.read()).decode()
-    return f"data:image/png;base64,{img_base64}"
+    return totp.provisioning_uri(name=username, issuer_name=app_name)
