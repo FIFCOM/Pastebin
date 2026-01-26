@@ -27,6 +27,8 @@ class User(Base):
     salt = Column(String(255), nullable=False)  # 用于派生 master_key
     encrypted_user_key = Column(Text, nullable=False)  # 加密的用户密钥
     totp_secret = Column(String(255), nullable=True)  # 加密的TOTP密钥，空值表示未启用
+    # TOTP 设置流程：setup 阶段写入 pending，verify 成功后提升为 totp_secret
+    totp_pending_secret = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
@@ -36,6 +38,11 @@ class User(Base):
     api_keys = relationship(
         "ApiKey", back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def totp_enabled(self) -> bool:
+        """Pydantic UserResponse.totp_enabled 的来源字段。"""
+        return bool(self.totp_secret)
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"

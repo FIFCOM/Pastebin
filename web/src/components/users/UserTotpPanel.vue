@@ -170,6 +170,9 @@ async function verify() {
   try {
     const resp = await verifyTotp(totpCode.value.trim())
     snackbar({ message: resp.message })
+    // 验证通过后已启用/替换密钥，收起二维码区域
+    setupInfo.value = null
+    totpCode.value = ''
     await refresh()
   } catch (e: any) {
     const msg = e?.response?.data?.detail || '验证失败'

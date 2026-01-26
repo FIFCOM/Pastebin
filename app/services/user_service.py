@@ -422,9 +422,12 @@ class UserService:
         if not user:
             raise ValueError("用户不存在")
 
+        enabled = bool(user.totp_secret)  # type: ignore
         return TotpStatusResponse(
-            enabled=bool(user.totp_secret),  # type: ignore
-            setup_required=not bool(user.totp_secret),  # type: ignore
+            enabled=enabled,
+            # setup_required 表示「是否需要重新发起 setup 获取二维码/密钥」
+            # 若存在 pending_secret，则说明已经 setup 过但尚未 verify。
+            setup_required=not bool(user.totp_pending_secret or user.totp_secret),  # type: ignore
         )
 
     @staticmethod
@@ -446,18 +449,25 @@ class UserService:
         if not user:
             raise ValueError("用户不存在")
 
-        # 生成新的TOTP密钥
-        totp_secret = generate_totp_secret()
+        # 生成/复用待验证的 TOTP 密钥：
+        # - 未启用时：若已有 pending，则复用，避免用户重复点击导致密钥变化
+        # - 已启用时：视为「重新生成」，每次都生成新的 pending，verify 后替换现有密钥
+        if user.totp_secret:  # type: ignore
+            totp_secret = generate_totp_secret()
+            user.totp_pending_secret = totp_secret  # type: ignore[assignment]
+        elif user.totp_pending_secret:  # type: ignore
+            totp_secret = user.totp_pending_secret  # type: ignore[assignment]
+        else:
+            totp_secret = generate_totp_secret()
+            user.totp_pending_secret = totp_secret  # type: ignore[assignment]
 
         provisioning_uri = generate_totp_provisioning_uri(
             totp_secret, user.username  # type: ignore[arg-type]
         )
 
-        # 保存TOTP密钥到数据库（但不启用，需要验证后才启用）
-        user.totp_secret = totp_secret  # type: ignore[assignment]
         db.commit()
 
-        return TotpSetupResponse(secret=totp_secret, provisioning_uri=provisioning_uri)
+        return TotpSetupResponse(secret=totp_secret, provisioning_uri=provisioning_uri) # type: ignore[assignment]
 
     @staticmethod
     def verify_and_enable_totp(
@@ -481,14 +491,18 @@ class UserService:
         if not user:
             raise ValueError("用户不存在")
 
-        if not user.totp_secret:  # type: ignore
-            raise ValueError("TOTP密钥未设置")
+        if not user.totp_pending_secret:  # type: ignore
+            raise ValueError("没有待验证的TOTP密钥，请先生成二维码")
 
         # 验证TOTP代码
-        is_valid = verify_totp_code(user.totp_secret, totp_data.totp_code)  # type: ignore
+        is_valid = verify_totp_code(
+            user.totp_pending_secret, totp_data.totp_code  # type: ignore[arg-type]
+        )
 
         if is_valid:
-            # 验证成功，TOTP已经启用（密钥已保存）
+            # 验证成功：启用（或替换）TOTP密钥
+            user.totp_secret = user.totp_pending_secret  # type: ignore[assignment]
+            user.totp_pending_secret = None  # type: ignore[assignment]
             db.commit()
             return True
         else:
@@ -513,8 +527,9 @@ class UserService:
         if not user:
             raise ValueError("用户不存在")
 
-        # 清空TOTP密钥
+        # 清空 TOTP 密钥（包含待验证的）
         user.totp_secret = None  # type: ignore[assignment]
+        user.totp_pending_secret = None  # type: ignore[assignment]
         db.commit()
         return True
 
