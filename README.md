@@ -127,7 +127,8 @@ npm run dev
 - `PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}` - 上传分片（二进制 `application/octet-stream`）
 - `POST /api/pastes/{paste_id}/files/{upload_id}/complete` - 完成分片上传（创建最终文件记录）
 - `POST /api/pastes/{paste_id}/files/{upload_id}/abort` - 取消并清理分片上传
-- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`）
+- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`；支持 `Range: bytes=...`）
+- `GET /api/pastes/{paste_id}/files/{file_id}/manifest` - 获取分片文件manifest（用于前端/Service Worker流式解密）
 - `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
 
 ## 文件上传加解密流程
@@ -188,12 +189,17 @@ npm run dev
 
 落盘：
 - 会写入 `data/files/{paste_id}/{file_id}.manifest.json`，用于下载时按分片边界进行流式解密与 AAD 校验
+- 前端/Service Worker 可通过 `/api/pastes/{paste_id}/files/{file_id}/manifest` 获取该 manifest 做客户端流式解密
 
 #### 4) 下载解密（chunked 文件）
 
 `GET /api/pastes/{paste_id}/files/{file_id}?encryption_key=...`
 
 若存在 manifest，服务端会按分片边界读取并使用 AAD 进行流式解密（`aad_required=true` 时不会降级为无 AAD 解密）。
+
+断点续传 / 视频播放器：
+- 接口支持 HTTP Range（`Range: bytes=start-end`），返回 `206 Partial Content` 与 `Content-Range`。
+- 当提供正确 `encryption_key` 且文件为分片（manifest存在）时，Range 基于“解密后的明文字节流”；否则 Range 基于“存储的加密字节流”（适合断点续传，但不直接满足明文视频播放）。
 
 ### 前端文件判重（仅 UI 级）
 

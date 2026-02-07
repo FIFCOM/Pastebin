@@ -164,6 +164,29 @@ class FileUploadCompleteResponse(BaseModel):
     )
 
 
+class FileManifestResponse(BaseModel):
+    """分片文件manifest响应（用于流式解密）"""
+
+    version: int = Field(..., description="manifest版本")
+    paste_id: str = Field(..., description="Paste ID")
+    file_id: str = Field(..., description="文件ID")
+    encryption_mode: str = Field(..., description="加密模式：client或server")
+    plain_size: int = Field(..., description="原始文件大小（字节）")
+    chunk_size: int = Field(..., description="分片大小（字节）")
+    total_chunks: int = Field(..., description="分片总数")
+    chunk_overhead_bytes: int = Field(..., description="每个分片的加密额外开销（字节）")
+    chunk_format: str = Field(..., description="分片加密格式说明")
+    aad_format: str = Field(..., description="AAD格式模板")
+    aad_prefix: str | None = Field(
+        default=None, description="AAD前缀（从aad_format推导）"
+    )
+    aad_required: bool = Field(..., description="是否强制AAD")
+    iv_scheme: str = Field(..., description="IV方案说明")
+    iv_prefix: str | None = Field(
+        default=None, description="IV前缀（Base64编码，8字节）"
+    )
+
+
 class PastePublishRequest(BaseModel):
     """发布Paste请求"""
 

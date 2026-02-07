@@ -29,6 +29,7 @@ from app.schemas.paste import (
     FileUploadInitRequest,
     FileUploadInitResponse,
     FileUploadStatusResponse,
+    FileManifestResponse,
     PasteContentResponse,
     PasteContentUpdateRequest,
     PasteCreateRequest,
@@ -96,6 +97,131 @@ def _iter_file(path, chunk_size: int = 1024 * 1024):
             if not chunk:
                 break
             yield chunk
+
+
+def _iter_file_range(path, start: int, end: int, chunk_size: int = 1024 * 1024):
+    remaining = end - start + 1
+    if remaining <= 0:
+        return
+    with open(path, "rb") as f:
+        f.seek(start)
+        while remaining > 0:
+            chunk = f.read(min(chunk_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
+def _parse_range_header(range_header: str | None, size: int) -> tuple[int, int] | None:
+    """
+    Parse a single HTTP Range header (bytes only).
+
+    Returns (start, end) inclusive, or None if header is missing/unsupported.
+    Raises HTTPException(416) for invalid/unsatisfiable ranges.
+    """
+    if range_header is None:
+        return None
+    value = str(range_header).strip()
+    if value == "":
+        return None
+
+    if not value.lower().startswith("bytes="):
+        return None
+
+    if size < 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="文件大小无效",
+        )
+
+    # We support a single range. If multiple are provided, take the first one.
+    spec = value[6:].strip()
+    if "," in spec:
+        spec = spec.split(",", 1)[0].strip()
+
+    if "-" not in spec:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="无效Range格式",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    start_str, end_str = spec.split("-", 1)
+
+    if size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="空文件不支持Range",
+            headers={"Content-Range": "bytes */0"},
+        )
+
+    if start_str == "":
+        # suffix-byte-range-spec: bytes=-N
+        try:
+            suffix_len = int(end_str, 10)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+                detail="无效Range格式",
+                headers={"Content-Range": f"bytes */{size}"},
+            ) from None
+        if suffix_len <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+                detail="无效Range长度",
+                headers={"Content-Range": f"bytes */{size}"},
+            )
+        if suffix_len >= size:
+            return (0, size - 1)
+        return (size - suffix_len, size - 1)
+
+    try:
+        start = int(start_str, 10)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="无效Range起点",
+            headers={"Content-Range": f"bytes */{size}"},
+        ) from None
+
+    if start < 0:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="无效Range起点",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    if start >= size:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="Range超出文件大小",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    if end_str == "":
+        end = size - 1
+    else:
+        try:
+            end = int(end_str, 10)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+                detail="无效Range终点",
+                headers={"Content-Range": f"bytes */{size}"},
+            ) from None
+
+    if end < start:
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="无效Range区间",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    if end >= size:
+        end = size - 1
+
+    return (start, end)
 
 
 def _get_admin_key_from_header(authorization: str | None) -> str:
@@ -521,12 +647,152 @@ async def get_paste_content(
             ) from None
 
 
+@router.get(
+    "/{paste_id}/files/{file_id}/manifest",
+    response_model=FileManifestResponse,
+    response_model_exclude_none=True,
+)
+async def get_file_manifest(
+    paste_id: str,
+    file_id: str,
+    access_key: str | None = Query(None, description="访问密钥（可选）"),
+    db: Session = Depends(get_db),
+):
+    """
+    获取分片文件manifest（用于流式解密）
+
+    - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        from app.models.paste import File, Paste
+        from config.config import settings
+
+        # 检查 Paste 状态/访问密钥/过期/阅后即焚
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste or str(paste.status) == "draft":  # type: ignore
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        if not PasteService._verify_access_key(paste, access_key):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
+            )
+
+        paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
+        if is_expired(paste_expire_at):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail="Paste已过期"
+            )
+
+        paste_max_views = int(paste.max_views or -1)  # type: ignore
+        paste_view_count = int(paste.view_count or 0)  # type: ignore
+        if paste_max_views > 0 and paste_view_count >= paste_max_views:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
+            )
+
+        # 获取文件记录
+        file_record = (
+            db.query(File)
+            .filter(File.id == file_id, File.paste_id == paste_id)
+            .first()
+        )
+
+        if not file_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在"
+            )
+
+        manifest_path = (
+            Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
+        )
+        if not manifest_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="manifest不存在（非分片文件）",
+            )
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        def _require_int(key: str) -> int:
+            value = manifest.get(key)
+            if value is None:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"manifest缺少字段: {key}",
+                )
+            try:
+                return int(value)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"manifest字段无效: {key}",
+                ) from None
+
+        def _require_str(key: str) -> str:
+            value = manifest.get(key)
+            if value is None:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"manifest缺少字段: {key}",
+                )
+            return str(value)
+
+        version = _require_int("version")
+        encryption_mode = _require_str("encryption_mode")
+        plain_size = _require_int("plain_size")
+        chunk_size = _require_int("chunk_size")
+        total_chunks = _require_int("total_chunks")
+        chunk_overhead_bytes = _require_int("chunk_overhead_bytes")
+        chunk_format = _require_str("chunk_format")
+        aad_format = _require_str("aad_format")
+        aad_required = bool(manifest.get("aad_required", True))
+        iv_scheme = _require_str("iv_scheme")
+        iv_prefix_value = manifest.get("iv_prefix")
+        iv_prefix = str(iv_prefix_value) if iv_prefix_value is not None else None
+
+        aad_prefix: str | None
+        if aad_format:
+            aad_prefix = aad_format.split("|", 1)[0]
+        else:
+            aad_prefix = None
+
+        return FileManifestResponse(
+            version=version,
+            paste_id=paste_id,
+            file_id=file_id,
+            encryption_mode=encryption_mode,
+            plain_size=plain_size,
+            chunk_size=chunk_size,
+            total_chunks=total_chunks,
+            chunk_overhead_bytes=chunk_overhead_bytes,
+            chunk_format=chunk_format,
+            aad_format=aad_format,
+            aad_prefix=aad_prefix,
+            aad_required=aad_required,
+            iv_scheme=iv_scheme,
+            iv_prefix=iv_prefix,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"manifest读取失败: {str(e)}",
+        ) from None
+
+
 @router.get("/{paste_id}/files/{file_id}")
 async def get_file(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
+    range_header: str | None = Header(None, alias="Range", description="HTTP Range头（bytes=...）"),
     db: Session = Depends(get_db),
 ):
     """
@@ -630,10 +896,69 @@ async def get_file(
                     total_chunks = int(manifest.get("total_chunks"))
                     plain_size = int(manifest.get("plain_size"))
                     aad_required = bool(manifest.get("aad_required", True))
+                    chunk_overhead_bytes = int(manifest.get("chunk_overhead_bytes", 28))
+                    if chunk_overhead_bytes != 28:
+                        raise ValueError("不支持的分片加密格式")
                     content_disposition = _build_content_disposition(
                         decrypted_filename or placeholder_filename,
                         fallback_filename=placeholder_filename,
                     )
+
+                    byte_range = _parse_range_header(range_header, plain_size)
+                    if byte_range is not None:
+                        range_start, range_end = byte_range
+                        start_chunk = range_start // chunk_size
+                        end_chunk = range_end // chunk_size
+                        start_in_chunk = range_start - start_chunk * chunk_size
+                        end_in_chunk = range_end - end_chunk * chunk_size
+
+                        def _iter_decrypted_range():
+                            stride = chunk_size + chunk_overhead_bytes
+                            with open(file_path, "rb") as f:
+                                f.seek(start_chunk * stride)
+                                for idx in range(start_chunk, end_chunk + 1):
+                                    expected_plain = (
+                                        chunk_size
+                                        if idx < total_chunks - 1
+                                        else plain_size - chunk_size * (total_chunks - 1)
+                                    )
+                                    if expected_plain < 0:
+                                        expected_plain = 0
+                                    iv = f.read(12)
+                                    ciphertext = f.read(expected_plain + 16)
+                                    if len(iv) != 12 or len(ciphertext) != expected_plain + 16:
+                                        raise ValueError("文件分片格式错误")
+
+                                    encrypted_chunk = iv + ciphertext
+                                    aad = PasteService._file_chunk_aad(
+                                        paste_id, file_id, idx, total_chunks
+                                    )
+                                    if aad_required:
+                                        plain = decrypt_with_key(encrypted_chunk, key_bytes, aad=aad)
+                                    else:
+                                        plain = decrypt_with_key(encrypted_chunk, key_bytes, aad=None)
+
+                                    slice_start = start_in_chunk if idx == start_chunk else 0
+                                    slice_end_exclusive = (
+                                        end_in_chunk + 1 if idx == end_chunk else len(plain)
+                                    )
+                                    chunk_out = plain[slice_start:slice_end_exclusive]
+                                    if chunk_out:
+                                        yield chunk_out
+
+                        content_length = range_end - range_start + 1
+                        content_range = f"bytes {range_start}-{range_end}/{plain_size}"
+                        return StreamingResponse(
+                            _iter_decrypted_range(),
+                            status_code=status.HTTP_206_PARTIAL_CONTENT,
+                            media_type=media_type,
+                            headers={
+                                "Content-Disposition": content_disposition,
+                                "Content-Length": str(content_length),
+                                "Content-Range": content_range,
+                                "Accept-Ranges": "bytes",
+                            },
+                        )
 
                     def _iter_decrypted_chunks():
                         with open(file_path, "rb") as f:
@@ -665,6 +990,7 @@ async def get_file(
                         headers={
                             "Content-Disposition": content_disposition,
                             "Content-Length": str(plain_size),
+                            "Accept-Ranges": "bytes",
                         },
                     )
 
@@ -683,21 +1009,40 @@ async def get_file(
                         "Content-Length": str(len(file_content)),
                     },
                 )
+            except HTTPException:
+                raise
             except Exception:
                 # 解密失败，回退为返回原始加密内容（不强制把错误暴露给客户端）
                 pass
 
         # 未提供/解密失败：直接流式返回原始文件，避免一次性读入内存
         file_size = file_path.stat().st_size
+        byte_range = _parse_range_header(range_header, file_size)
         content_disposition = _build_content_disposition(
             placeholder_filename, fallback_filename=placeholder_filename
         )
+        if byte_range is not None:
+            range_start, range_end = byte_range
+            content_length = range_end - range_start + 1
+            content_range = f"bytes {range_start}-{range_end}/{file_size}"
+            return StreamingResponse(
+                _iter_file_range(file_path, range_start, range_end),
+                status_code=status.HTTP_206_PARTIAL_CONTENT,
+                media_type=media_type,
+                headers={
+                    "Content-Disposition": content_disposition,
+                    "Content-Length": str(content_length),
+                    "Content-Range": content_range,
+                    "Accept-Ranges": "bytes",
+                },
+            )
         return StreamingResponse(
             _iter_file(file_path),
             media_type=media_type,
             headers={
                 "Content-Disposition": content_disposition,
                 "Content-Length": str(file_size),
+                "Accept-Ranges": "bytes",
             },
         )
 
