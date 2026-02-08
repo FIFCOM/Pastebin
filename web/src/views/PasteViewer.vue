@@ -23,7 +23,12 @@
       <plain-viewer v-if="viewerType === 'txt'" :content="decryptedContent" />
       
       <!-- Markdown Viewer -->
-      <markdown-viewer v-else-if="viewerType === 'md'" :content="decryptedContent" />
+      <markdown-viewer
+        v-else-if="viewerType === 'md'"
+        :content="decryptedContent"
+        :encryption-key="encryptionKeyBytes"
+        :access-key="currentAccessKey"
+      />
     </div>
 
     <!-- Access Key 输入对话框 -->
@@ -107,6 +112,7 @@ const decryptedContent = ref<string>('')
 const isLoading = ref<boolean>(true)
 const error = ref<string>('')
 const viewerType = ref<'txt' | 'md'>('txt')
+const encryptionKeyBytes = ref<Uint8Array | null>(null)
 
 // Access Key 相关
 const accessKeyDialog = ref<any>(null)
@@ -145,6 +151,7 @@ function validateParams(): { pasteId: string; encryptionKey: Uint8Array } | null
 
   try {
     const encryptionKey = urlSafeStrToKey(encryptionKeyStr)
+    encryptionKeyBytes.value = encryptionKey
     return { pasteId, encryptionKey }
   } catch (err) {
     showErrorDialog('无效的加密密钥格式。')
@@ -174,6 +181,14 @@ async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?:
 
     pasteData.value = data
     decryptedContent.value = await decryptContent(content.encrypted_content, encryptionKey)
+    currentAccessKey.value = accessKey
+    if (accessKey && accessKey.trim()) {
+      try {
+        sessionStorage.setItem(`mb_access_key:${pasteId}`, accessKey.trim())
+      } catch {
+        // ignore
+      }
+    }
     
     // 根据 paste 类型设置默认 viewer（不使用持久化）
     viewerType.value = data.type === 'md' ? 'md' : 'txt'
@@ -273,7 +288,15 @@ onMounted(async () => {
     return
   }
 
-  const success = await loadPaste(params.pasteId, params.encryptionKey)
+  let cachedAccessKey: string | undefined = undefined
+  try {
+    const cached = sessionStorage.getItem(`mb_access_key:${params.pasteId}`)
+    if (cached && cached.trim()) cachedAccessKey = cached.trim()
+  } catch {
+    // ignore
+  }
+
+  const success = await loadPaste(params.pasteId, params.encryptionKey, cachedAccessKey)
   
   if (!success && !error.value) {
     // 首次加载时需要 access key

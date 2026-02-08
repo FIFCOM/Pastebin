@@ -353,12 +353,6 @@ export function useFileUploader(params: {
         updateCapacityFromServer(initRes.max_total_upload_size, initRes.remaining_upload_size, {
           allowIncrease: false
         })
-
-        if (options?.autoInsert && params.onAutoInsert && !didAutoInsert) {
-          const fileId = initRes.file_id ?? initRes.upload_id
-          params.onAutoInsert({ fileId, name: file.name, size: file.size })
-          didAutoInsert = true
-        }
       }
 
       if (!upload_id) {

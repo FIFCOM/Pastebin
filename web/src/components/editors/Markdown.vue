@@ -7,9 +7,15 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick, toRefs } from 'vue'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import { useTheme } from '@/composables/useTheme'
+import { parseMbInternalFilePath } from '@/utils/mbFile'
+import { buildMbPlainFilePath, mbSwSetPasteContext } from '@/utils/mbSw'
 
 const props = defineProps<{
   modelValue: string
+  pasteId?: string
+  encryptionKey?: Uint8Array | null
+  accessKey?: string | null
+  adminKey?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +28,16 @@ const vditorRef = ref<HTMLElement | null>(null)
 let vditorInstance: Vditor | null = null
 let pasteInterceptor: ((e: ClipboardEvent) => void) | null = null
 let dropInterceptor: ((e: DragEvent) => void) | null = null
+let vditorDomObserver: MutationObserver | null = null
+let patchScheduled = false
+const swContextOk = ref(false)
+let swContextTicket = 0
+let lastSwContext: { pasteId: string; key: Uint8Array | null; accessKey: string | null; adminKey: string | null } = {
+  pasteId: '',
+  key: null,
+  accessKey: null,
+  adminKey: null
+}
 
 const { actualTheme } = useTheme()
 const vditorTheme = ref<'classic' | 'dark'>('classic')
@@ -40,6 +56,7 @@ const updateTheme = () => {
 }
 
 const destroyVditor = () => {
+  unbindVditorDomObserver()
   unbindPasteInterceptor()
   unbindDropInterceptor()
   if (vditorInstance) {
@@ -50,6 +67,96 @@ const destroyVditor = () => {
     }
     vditorInstance = null
   }
+}
+
+const ensureSwContext = async () => {
+  const pasteId = (props.pasteId ?? '').trim()
+  const key = props.encryptionKey ?? null
+  const accessKey = props.accessKey?.trim() ? props.accessKey.trim() : null
+  const adminKey = props.adminKey?.trim() ? props.adminKey.trim() : null
+
+  if (!pasteId || !key) {
+    swContextOk.value = false
+    lastSwContext = { pasteId: '', key: null, accessKey: null, adminKey: null }
+    return
+  }
+
+  if (
+    lastSwContext.pasteId === pasteId &&
+    lastSwContext.key === key &&
+    lastSwContext.accessKey === accessKey &&
+    lastSwContext.adminKey === adminKey &&
+    swContextOk.value
+  ) {
+    return
+  }
+
+  lastSwContext = { pasteId, key, accessKey, adminKey }
+  const ticket = (swContextTicket += 1)
+
+  const ok = await mbSwSetPasteContext({ pasteId, encryptionKey: key, accessKey, adminKey })
+  if (ticket !== swContextTicket) return
+
+  swContextOk.value = ok
+  if (ok) schedulePatchEncryptedImages()
+}
+
+const patchEncryptedInternalImages = () => {
+  if (!swContextOk.value) return
+
+  const pasteId = (props.pasteId ?? '').trim()
+  if (!pasteId) return
+
+  const root = vditorRef.value
+  if (!root) return
+
+  const imgs = Array.from(root.querySelectorAll('img')) as HTMLImageElement[]
+  for (const img of imgs) {
+    const rawSrc = img.getAttribute('src') || ''
+    if (!rawSrc) continue
+
+    const ref = parseMbInternalFilePath(rawSrc)
+    if (!ref) continue
+    if (ref.pasteId !== pasteId) continue
+
+    const plainSrc = buildMbPlainFilePath(ref.pasteId, ref.fileId)
+    if (img.getAttribute('data-mb-plain-src') === plainSrc) continue
+
+    img.setAttribute('data-mb-orig-src', rawSrc)
+    img.setAttribute('data-mb-plain-src', plainSrc)
+    img.setAttribute('src', plainSrc)
+  }
+}
+
+const schedulePatchEncryptedImages = () => {
+  if (patchScheduled) return
+  patchScheduled = true
+  window.requestAnimationFrame(() => {
+    patchScheduled = false
+    patchEncryptedInternalImages()
+  })
+}
+
+const bindVditorDomObserver = () => {
+  unbindVditorDomObserver()
+  if (!vditorRef.value) return
+
+  vditorDomObserver = new MutationObserver(() => {
+    schedulePatchEncryptedImages()
+  })
+
+  vditorDomObserver.observe(vditorRef.value, {
+    childList: true,
+    subtree: true
+  })
+
+  schedulePatchEncryptedImages()
+}
+
+const unbindVditorDomObserver = () => {
+  vditorDomObserver?.disconnect()
+  vditorDomObserver = null
+  patchScheduled = false
 }
 
 const bindPasteInterceptor = () => {
@@ -146,6 +253,10 @@ const initVditor = async () => {
         bindPasteInterceptor()
         // 禁用 Vditor 默认拖拽图片(Base64)行为，改由外部上传逻辑处理
         bindDropInterceptor()
+
+        // Hydrate internal encrypted images in preview/IR DOM via SW plaintext path.
+        bindVditorDomObserver()
+        void ensureSwContext()
       }
     })
   }
@@ -183,6 +294,13 @@ watch(isMobile, async () => {
     }
   }
 })
+
+watch(
+  [() => props.pasteId, () => props.encryptionKey, () => props.accessKey, () => props.adminKey],
+  () => {
+    void ensureSwContext()
+  }
+)
 
 onMounted(() => {
   checkMobile()
@@ -251,5 +369,18 @@ html.mdui-theme-dark :deep(.vditor-toolbar) {
 
 html.mdui-theme-dark :deep(.vditor-content) {
   background-color: var(--mdui-color-surface-container-low);
+}
+
+/* constrain rendered image preview size. */
+:deep(.vditor-preview img:not(.emoji)),
+:deep(.vditor-ir__preview img:not(.emoji)),
+:deep(.vditor-wysiwyg img:not(.emoji)) {
+  max-width: min(100%, var(--mb-md-img-preview-max-width, 720px));
+  max-height: var(--mb-md-img-preview-max-height, 360px);
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  cursor: zoom-in;
+  object-fit: contain;
 }
 </style>

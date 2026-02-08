@@ -187,6 +187,21 @@ class FileManifestResponse(BaseModel):
     )
 
 
+class FileMetaResponse(BaseModel):
+    """文件元信息（不包含任何解密密钥；用于前端客户端解密下载/预览）"""
+
+    paste_id: str = Field(..., description="Paste ID")
+    file_id: str = Field(..., description="文件ID")
+    encrypted_name: str = Field(..., description="加密的文件名（Base64）")
+    mime_type: str = Field(..., description="MIME类型")
+    encrypted_size: int = Field(..., description="加密后文件大小（字节）")
+    plain_size: int | None = Field(
+        default=None, description="原始文件大小（字节；manifest存在时返回）"
+    )
+    url: str = Field(..., description="文件下载URL（不包含任何密钥）")
+    manifest_url: str = Field(..., description="manifest URL")
+
+
 class PastePublishRequest(BaseModel):
     """发布Paste请求"""
 

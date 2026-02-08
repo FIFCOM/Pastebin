@@ -9,6 +9,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/PasteEditor.vue')
   },
   {
+    path: '/p/:paste_id/download/:file_id',
+    name: 'FileDownload',
+    component: () => import('../views/FileDownload.vue')
+  },
+  {
     path: '/p/:paste_id',
     name: 'PasteViewer',
     component: () => import('../views/PasteViewer.vue')

@@ -24,12 +24,13 @@ from app.core.database import get_db
 from app.core.time_utils import is_expired
 from app.schemas.common import MessageResponse
 from app.schemas.paste import (
+    FileManifestResponse,
+    FileMetaResponse,
     FileUploadCompleteRequest,
     FileUploadCompleteResponse,
     FileUploadInitRequest,
     FileUploadInitResponse,
     FileUploadStatusResponse,
-    FileManifestResponse,
     PasteContentResponse,
     PasteContentUpdateRequest,
     PasteCreateRequest,
@@ -241,6 +242,18 @@ def _get_admin_key_from_header(authorization: str | None) -> str:
         )
 
     return authorization[7:]  # 去掉 "Bearer " 前缀
+
+
+def _try_get_admin_key_from_header(authorization: str | None) -> str | None:
+    """尝试从Authorization头中提取admin_key（失败返回None，不抛异常）。"""
+    if not authorization:
+        return None
+    if not authorization.startswith("Bearer "):
+        return None
+    v = authorization[7:].strip()
+    if not v:
+        return None
+    return v
 
 
 @router.post(
@@ -656,6 +669,7 @@ async def get_file_manifest(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -670,14 +684,26 @@ async def get_file_manifest(
         from app.models.paste import File, Paste
         from config.config import settings
 
-        # 检查 Paste 状态/访问密钥/过期/阅后即焚
+        # 检查 Paste 状态/权限/过期/阅后即焚
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste or str(paste.status) == "draft":  # type: ignore
+        if not paste:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
-        if not PasteService._verify_access_key(paste, access_key):
+        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
+            if admin_key is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="管理密钥错误"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
             )
@@ -688,12 +714,13 @@ async def get_file_manifest(
                 status_code=status.HTTP_410_GONE, detail="Paste已过期"
             )
 
-        paste_max_views = int(paste.max_views or -1)  # type: ignore
-        paste_view_count = int(paste.view_count or 0)  # type: ignore
-        if paste_max_views > 0 and paste_view_count >= paste_max_views:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
-            )
+        if not admin_ok:
+            paste_max_views = int(paste.max_views or -1)  # type: ignore
+            paste_view_count = int(paste.view_count or 0)  # type: ignore
+            if paste_max_views > 0 and paste_view_count >= paste_max_views:
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
+                )
 
         # 获取文件记录
         file_record = (
@@ -786,12 +813,118 @@ async def get_file_manifest(
         ) from None
 
 
+@router.get(
+    "/{paste_id}/files/{file_id}/meta",
+    response_model=FileMetaResponse,
+    response_model_exclude_none=True,
+)
+async def get_file_meta(
+    paste_id: str,
+    file_id: str,
+    access_key: str | None = Query(None, description="访问密钥（可选）"),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    获取文件元信息（不包含任何解密密钥；用于前端客户端解密下载/预览）。
+
+    - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        from app.models.paste import File, Paste
+        from config.config import settings
+
+        # 检查 Paste 状态/权限/过期/阅后即焚
+        paste = db.query(Paste).filter(Paste.id == paste_id).first()
+        if not paste:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
+            if admin_key is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="管理密钥错误"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
+            )
+
+        paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
+        if is_expired(paste_expire_at):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail="Paste已过期"
+            )
+
+        if not admin_ok:
+            paste_max_views = int(paste.max_views or -1)  # type: ignore
+            paste_view_count = int(paste.view_count or 0)  # type: ignore
+            if paste_max_views > 0 and paste_view_count >= paste_max_views:
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
+                )
+
+        file_record = (
+            db.query(File)
+            .filter(File.id == file_id, File.paste_id == paste_id)
+            .first()
+        )
+        if not file_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在"
+            )
+
+        # plain_size: 来自 manifest（若存在）
+        plain_size: int | None = None
+        manifest_path = (
+            Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
+        )
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                value = manifest.get("plain_size")
+                if value is not None:
+                    plain_size = int(value)
+            except Exception:
+                plain_size = None
+
+        return FileMetaResponse(
+            paste_id=paste_id,
+            file_id=file_id,
+            encrypted_name=str(file_record.file_name_encrypted),  # type: ignore
+            mime_type=str(file_record.mime_type) or "application/octet-stream",  # type: ignore
+            encrypted_size=int(file_record.file_size),  # type: ignore
+            plain_size=plain_size,
+            url=f"/api/pastes/{paste_id}/files/{file_id}",
+            manifest_url=f"/api/pastes/{paste_id}/files/{file_id}/manifest",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"文件元信息读取失败: {str(e)}",
+        ) from None
+
+
 @router.get("/{paste_id}/files/{file_id}")
 async def get_file(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
+    authorization: str | None = Header(None),
     range_header: str | None = Header(None, alias="Range", description="HTTP Range头（bytes=...）"),
     db: Session = Depends(get_db),
 ):
@@ -807,14 +940,26 @@ async def get_file(
         from app.models.paste import File, Paste
         from config.config import settings
 
-        # 检查 Paste 状态/访问密钥/过期/阅后即焚
+        # 检查 Paste 状态/权限/过期/阅后即焚
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if not paste or str(paste.status) == "draft":  # type: ignore
+        if not paste:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
-        if not PasteService._verify_access_key(paste, access_key):
+        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
+            if admin_key is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="管理密钥错误"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
+            )
+
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="访问密钥错误"
             )
@@ -825,12 +970,13 @@ async def get_file(
                 status_code=status.HTTP_410_GONE, detail="Paste已过期"
             )
 
-        paste_max_views = int(paste.max_views or -1)  # type: ignore
-        paste_view_count = int(paste.view_count or 0)  # type: ignore
-        if paste_max_views > 0 and paste_view_count >= paste_max_views:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
-            )
+        if not admin_ok:
+            paste_max_views = int(paste.max_views or -1)  # type: ignore
+            paste_view_count = int(paste.view_count or 0)  # type: ignore
+            if paste_max_views > 0 and paste_view_count >= paste_max_views:
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE, detail="Paste已达到最大查看次数"
+                )
 
         # 获取文件记录
         file_record = (

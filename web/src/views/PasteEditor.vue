@@ -61,6 +61,10 @@
           <div v-show="contentType === 'md'" class="editor-section">
             <markdown-editor
               v-model="markdownContent"
+              :paste-id="currentPasteId"
+              :encryption-key="pasteKey"
+              :access-key="accessKey"
+              :admin-key="currentAdminKey"
               @paste-files="handleMarkdownPasteFiles"
             ></markdown-editor>
           </div>
