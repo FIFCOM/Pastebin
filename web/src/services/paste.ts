@@ -13,12 +13,14 @@ export interface PasteFile {
 }
 
 export interface PasteData {
-  title: string
+  title: string | null
   type: 'txt' | 'md'
-  status: 'published' | 'edited'
-  published_at: string
+  status: 'published' | 'edited' | 'draft'
+  published_at: string | null
   updated_at: string
-  expire_at: string
+  expire_at: string | null
+  view_count: number
+  max_views: number
 }
 
 export interface PasteContent {

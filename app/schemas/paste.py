@@ -195,6 +195,7 @@ class FileMetaResponse(BaseModel):
     encrypted_name: str = Field(..., description="加密的文件名（Base64）")
     mime_type: str = Field(..., description="MIME类型")
     encrypted_size: int = Field(..., description="加密后文件大小（字节）")
+    created_at: datetime = Field(..., description="上传时间（UTC）")
     plain_size: int | None = Field(
         default=None, description="原始文件大小（字节；manifest存在时返回）"
     )

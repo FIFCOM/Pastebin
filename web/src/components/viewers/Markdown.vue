@@ -149,6 +149,8 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
         'href',
         buildMbDownloadPageHref(ref.pasteId, ref.fileId, { encryptionKeyHash: window.location.hash })
       )
+      token.attrSet('target', '_blank')
+      token.attrSet('rel', 'noopener noreferrer')
       token.attrSet('data-mb-type', 'file')
       token.attrSet('data-mb-paste-id', ref.pasteId)
       token.attrSet('data-mb-file-id', ref.fileId)

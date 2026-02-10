@@ -316,6 +316,11 @@ async function handlePlainFileRequest(request, pasteId, fileId) {
         }
         controller.close()
       } catch (e) {
+        const err = (e && typeof e === 'object') ? e : {}
+        if (err.name === 'AbortError' || err.code === 20) {
+          // Expected when the consumer cancels the stream (e.g. navigation or range seek).
+          return
+        }
         console.error('[mb-sw] decrypt failed:', e)
         controller.error(e)
       } finally {

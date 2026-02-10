@@ -64,7 +64,16 @@ export async function* decryptChunkedFileStream(
   ids: { pasteId: string; fileId: string },
   opts?: {
     signal?: AbortSignal
+    /**
+     * Plain bytes progress (based on decrypted chunks; updates once per chunk).
+     */
     onProgress?: (plainBytesDone: number, plainBytesTotal: number) => void
+    /**
+     * Plain bytes progress mapped from encrypted stream reads (smooth / real-time).
+     * This is meant for "download progress" UI, even though actual decryption
+     * still happens per chunk.
+     */
+    onPlainDownloadProgress?: (plainBytesDone: number, plainBytesTotal: number) => void
     onEncryptedProgress?: (encryptedBytesDone: number, encryptedBytesTotal: number) => void
   }
 ): AsyncGenerator<Uint8Array> {
@@ -79,11 +88,63 @@ export async function* decryptChunkedFileStream(
   if (!Number.isFinite(totalChunks) || totalChunks <= 0) throw new Error('manifest.total_chunks无效')
   if (overhead !== 28) throw new Error(`不支持的chunk_overhead_bytes: ${overhead}（期望28）`)
 
+  // AES-GCM format: IV(12B) + ciphertext(plainLen) + tag(16B)
+  const AES_GCM_IV_BYTES = 12
+
   const reader = encryptedStream.getReader()
   const state = { buf: new Uint8Array(0) }
   let plainDone = 0
   let encryptedDone = 0
   const encryptedTotal = plainSize + totalChunks * overhead
+
+  // Smooth "downloaded plain bytes" estimate derived from encrypted bytes read.
+  // This maps IV/tag overhead away so the UI can show `plainDone / plainTotal`
+  // progress without waiting for an entire chunk to decrypt.
+  let plainDownloaded = 0
+  let progChunkIndex = 0
+  let progEncOffsetInChunk = 0
+
+  function expectedPlainSizeForChunk(chunkIndex: number): number {
+    if (chunkIndex < totalChunks - 1) return chunkSize
+    const v = plainSize - chunkSize * (totalChunks - 1)
+    if (!Number.isFinite(v) || v <= 0) return 0
+    return v
+  }
+
+  function clampPlainContribution(encOffset: number, expectedPlain: number): number {
+    if (expectedPlain <= 0) return 0
+    if (!Number.isFinite(encOffset) || encOffset <= 0) return 0
+    // Exclude IV bytes. Tag bytes come after ciphertext so they don't add to this.
+    const v = encOffset - AES_GCM_IV_BYTES
+    if (v <= 0) return 0
+    return v >= expectedPlain ? expectedPlain : v
+  }
+
+  function applyEncryptedDeltaToPlainDownloaded(deltaEncryptedBytes: number) {
+    let remaining = deltaEncryptedBytes
+    while (remaining > 0 && progChunkIndex < totalChunks) {
+      const expectedPlain = expectedPlainSizeForChunk(progChunkIndex)
+      const encryptedLen = expectedPlain + overhead
+
+      const take = Math.min(remaining, encryptedLen - progEncOffsetInChunk)
+      const before = progEncOffsetInChunk
+      const after = before + take
+
+      const plainBefore = clampPlainContribution(before, expectedPlain)
+      const plainAfter = clampPlainContribution(after, expectedPlain)
+      plainDownloaded += plainAfter - plainBefore
+
+      progEncOffsetInChunk = after
+      remaining -= take
+
+      if (progEncOffsetInChunk >= encryptedLen) {
+        progChunkIndex += 1
+        progEncOffsetInChunk = 0
+      }
+    }
+
+    if (plainDownloaded > plainSize) plainDownloaded = plainSize
+  }
 
   try {
     for (let i = 0; i < totalChunks; i++) {
@@ -97,6 +158,11 @@ export async function* decryptChunkedFileStream(
       const encryptedChunk = await readExactly(reader, state, encryptedLen, opts?.signal, (n) => {
         encryptedDone += n
         opts?.onEncryptedProgress?.(encryptedDone, encryptedTotal)
+
+        if (opts?.onPlainDownloadProgress) {
+          applyEncryptedDeltaToPlainDownloaded(n)
+          opts.onPlainDownloadProgress(plainDownloaded, plainSize)
+        }
       })
 
       const aad = aadRequired ? buildFileChunkAad(ids.pasteId, ids.fileId, i, totalChunks) : undefined
@@ -127,7 +193,14 @@ export async function decryptChunkedFileToBlob(
   mimeType: string,
   opts?: {
     signal?: AbortSignal
+    /**
+     * Plain bytes progress (based on decrypted chunks; updates once per chunk).
+     */
     onProgress?: (plainBytesDone: number, plainBytesTotal: number) => void
+    /**
+     * Plain bytes progress mapped from encrypted stream reads (smooth / real-time).
+     */
+    onPlainDownloadProgress?: (plainBytesDone: number, plainBytesTotal: number) => void
     onEncryptedProgress?: (encryptedBytesDone: number, encryptedBytesTotal: number) => void
   }
 ): Promise<Blob> {

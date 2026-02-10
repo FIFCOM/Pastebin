@@ -905,6 +905,7 @@ async def get_file_meta(
             encrypted_name=str(file_record.file_name_encrypted),  # type: ignore
             mime_type=str(file_record.mime_type) or "application/octet-stream",  # type: ignore
             encrypted_size=int(file_record.file_size),  # type: ignore
+            created_at=file_record.created_at,  # type: ignore[arg-type]
             plain_size=plain_size,
             url=f"/api/pastes/{paste_id}/files/{file_id}",
             manifest_url=f"/api/pastes/{paste_id}/files/{file_id}/manifest",

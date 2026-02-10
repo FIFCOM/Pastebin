@@ -8,15 +8,26 @@
 
     <!-- Paste 内容 -->
     <div v-else-if="pasteData && decryptedContent" class="paste-content">
-      <h1 class="mdui-typo-headline">{{ pasteData.title }}</h1>
-      
-      <!-- Viewer 类型切换开关 -->
-      <div class="viewer-type-switch">
-        <span>Markdown 渲染</span>
-        <mdui-switch
-          :checked="viewerType === 'md'"
-          @change="handleViewerTypeChange"
-        ></mdui-switch>
+      <div class="paste-header">
+        <mdui-tooltip :content="viewerType === 'md' ? '切换为纯文本' : '切换为 Markdown'">
+          <mdui-button-icon @click="toggleViewerType">
+            <mdui-icon-article v-if="viewerType === 'md'"></mdui-icon-article>
+            <mdui-icon-code v-else></mdui-icon-code>
+          </mdui-button-icon>
+        </mdui-tooltip>
+        <h1 class="mdui-typo-headline">{{ pasteTitle }}</h1>
+      </div>
+
+      <div class="paste-meta">
+        <mdui-tooltip content="浏览次数">
+          <span class="meta-item meta-icon"><mdui-icon-remove-red-eye></mdui-icon-remove-red-eye>{{ pasteViewsText }}</span>
+        </mdui-tooltip>
+        <mdui-tooltip content="创建时间">
+          <span class="meta-item meta-icon"><mdui-icon-create></mdui-icon-create>{{ pasteCreatedText }}</span>
+        </mdui-tooltip>
+        <mdui-tooltip content="过期时间">
+          <span class="meta-item meta-icon"><mdui-icon-auto-delete></mdui-icon-auto-delete>{{ pasteExpireInlineText }}</span>
+        </mdui-tooltip>
       </div>
 
       <!-- Plain Viewer -->
@@ -87,11 +98,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPaste, getPasteContent, type PasteData } from '@/services/paste'
 import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
 import { useTheme } from '@/composables/useTheme'
+import { formatDate } from '@/utils/format'
 import PlainViewer from '@/components/viewers/Plain.vue'
 import MarkdownViewer from '@/components/viewers/Markdown.vue'
 import 'mdui/components/circular-progress.js'
@@ -99,8 +111,14 @@ import 'mdui/components/card.js'
 import 'mdui/components/dialog.js'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
-import 'mdui/components/switch.js'
+import 'mdui/components/button-icon.js'
 import 'mdui/components/top-app-bar.js'
+import 'mdui/components/tooltip.js'
+import '@mdui/icons/remove-red-eye.js'
+import '@mdui/icons/create.js'
+import '@mdui/icons/auto-delete.js'
+import '@mdui/icons/code.js'
+import '@mdui/icons/article.js'
 
 useTheme()
 
@@ -122,6 +140,21 @@ const currentAccessKey = ref<string | undefined>(undefined)
 
 // 错误对话框
 const errorDialog = ref<any>(null)
+
+const pasteTitle = computed(() => pasteData.value?.title || '未命名 Paste')
+const pasteCreatedText = computed(() => {
+  const v = pasteData.value?.published_at || pasteData.value?.updated_at
+  return formatDate(v)
+})
+const pasteExpireInlineText = computed(() => {
+  const v = pasteData.value?.expire_at ?? null
+  if (!v) return '永不过期'
+  return formatDate(v)
+})
+const pasteViewsText = computed(() => {
+  const viewCount = Number(pasteData.value?.view_count)
+  return Number.isFinite(viewCount) && viewCount >= 0 ? viewCount : 0
+})
 
 /**
  * 显示错误对话框
@@ -160,13 +193,10 @@ function validateParams(): { pasteId: string; encryptionKey: Uint8Array } | null
 }
 
 /**
- * 处理 Viewer 类型切换
- * 仅针对当前视图生效，不做持久化
+ * 切换 Viewer 类型
  */
-function handleViewerTypeChange(e: Event) {
-  const target = e.target as any
-  const isMarkdown = target.checked
-  viewerType.value = isMarkdown ? 'md' : 'txt'
+function toggleViewerType() {
+  viewerType.value = viewerType.value === 'md' ? 'txt' : 'md'
 }
 
 /**
@@ -309,8 +339,8 @@ onMounted(async () => {
 
 <style scoped>
 .paste-view {
-  padding-top: 2rem;
-  padding-bottom: 2rem;
+  padding-top: 0rem;
+  padding-bottom: 1rem;
 }
 
 .loading-indicator {
@@ -324,21 +354,50 @@ onMounted(async () => {
   margin-top: 1rem;
 }
 
-.viewer-type-switch {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
-  background-color: var(--mdui-color-surface-variant);
-  border-radius: 8px;
-  margin-bottom: 24px;
+.paste-header {
+  margin-bottom: 4px;
 }
 
-.viewer-type-switch > span {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--mdui-color-on-surface);
+.paste-header h1 {
+  margin: 0;
+  display: inline;
+}
+
+.paste-header mdui-tooltip {
+  display: inline-block;
+  vertical-align: top;
+  margin-top: 3px;
+  margin-right: 2px;
+}
+
+.paste-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 0;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: rgb(var(--mdui-color-outline));
+}
+
+.paste-meta mdui-tooltip::after {
+  content: '';
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.paste-meta mdui-tooltip:last-child::after {
+  display: none;
+}
+
+.paste-meta .meta-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paste-meta .meta-icon :is(mdui-icon-remove-red-eye, mdui-icon-create, mdui-icon-auto-delete) {
+  font-size: 15px;
 }
 
 /* Dialog 样式 */
