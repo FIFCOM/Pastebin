@@ -2,9 +2,7 @@
   <mdui-card class="file-info-card">
     <div class="file-header">
       <div class="file-header-main">
-        <div class="file-title-row">
-          <div class="file-title" :title="displayName">{{ displayName }}</div>
-        </div>
+        <div class="file-title" :title="displayName">{{ displayName }}</div>
         <div v-if="encryptionLabel" class="file-subtitle" title="加密状态">
           <mdui-icon
             :name="encryptionMode === 'client' ? 'enhanced_encryption' : 'lock'"
@@ -26,23 +24,27 @@
 
     <div class="file-meta">
       <div class="file-meta-row">
-        <span class="label">大小</span>
+        <span class="label label-with-icon">
+          <mdui-icon-storage></mdui-icon-storage>
+          大小
+        </span>
         <span class="value">{{ plainSizeText }}</span>
       </div>
 
       <div v-if="hasCreatedAt" class="file-meta-row">
-        <span class="label">上传时间</span>
+        <span class="label label-with-icon">
+          <mdui-icon-create></mdui-icon-create>
+          上传时间
+        </span>
         <span class="value">{{ createdAtText }}</span>
       </div>
 
       <div v-if="hasPasteInfo" class="file-meta-row">
-        <span class="label">过期时间</span>
+        <span class="label label-with-icon">
+          <mdui-icon-auto-delete></mdui-icon-auto-delete>
+          过期时间
+        </span>
         <span class="value">{{ pasteExpireText }}</span>
-      </div>
-
-      <div v-if="hasPasteInfo" class="file-meta-row">
-        <span class="label">查看次数</span>
-        <span class="value">{{ pasteViewsText }}</span>
       </div>
     </div>
 
@@ -66,7 +68,7 @@
         @click="emit('download')"
       >
         <mdui-icon slot="icon" name="download"></mdui-icon>
-        {{ isDownloading ? '下载中' : downloadState === 'done' ? '重新下载' : '下载' }}
+        {{ downloadButtonText }}
       </mdui-button>
     </div>
   </mdui-card>
@@ -74,14 +76,18 @@
 
 <script setup lang="ts">
 import type { DownloadState } from '@/components/file-download/types'
+import { computed } from 'vue'
 
 import 'mdui/components/card.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
+import '@mdui/icons/auto-delete.js'
+import '@mdui/icons/create.js'
+import '@mdui/icons/storage.js'
 
-defineProps<{
+const props = defineProps<{
   displayName: string
   encryptionLabel: string
   encryptionMode: '' | 'client' | 'server'
@@ -92,7 +98,6 @@ defineProps<{
   hasCreatedAt: boolean
   hasPasteInfo: boolean
   pasteExpireText: string
-  pasteViewsText: string
   showProgress: boolean
   progressValue: number
   progressText: string
@@ -104,6 +109,17 @@ const emit = defineEmits<{
   copyShareUrl: []
   download: []
 }>()
+
+const downloadLabelByState: Partial<Record<DownloadState, string>> = {
+  done: '重新下载',
+}
+
+const downloadButtonText = computed(() => {
+  if (props.isDownloading) {
+    return '下载中'
+  }
+  return downloadLabelByState[props.downloadState] ?? '下载'
+})
 </script>
 
 <style scoped>
@@ -135,27 +151,13 @@ const emit = defineEmits<{
   font-size: 18px;
   font-weight: 600;
   color: rgb(var(--mdui-color-on-surface));
-  flex: 1 1 auto;
   min-width: 0;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@supports (-webkit-line-clamp: 2) {
-  .file-title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-  }
-}
-
-.file-title-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
 }
 
 .file-subtitle {
@@ -186,6 +188,16 @@ const emit = defineEmits<{
 
 .file-meta-row .label {
   color: rgb(var(--mdui-color-on-surface));
+}
+
+.file-meta-row .label-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.file-meta-row .label-with-icon :is(mdui-icon-storage, mdui-icon-create, mdui-icon-auto-delete) {
+  font-size: 15px;
 }
 
 .file-meta-row .value {

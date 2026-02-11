@@ -39,7 +39,6 @@
         :has-created-at="Boolean(meta?.created_at)"
         :has-paste-info="Boolean(pasteInfo)"
         :paste-expire-text="pasteExpireText"
-        :paste-views-text="pasteViewsText"
         :show-progress="showProgress"
         :progress-value="progressValue"
         :progress-text="progressText"
@@ -137,7 +136,8 @@ import {
   type PublicFileMeta,
   type PublicPasteInfo
 } from '@/services/publicApi'
-import { formatDateTime, formatDurationSeconds, humanSize } from '@/utils/format'
+import { fileTypeToIconName, isProbablyText } from '@/utils/fileTypeIcon'
+import { formatDate, formatDurationSeconds, humanSize } from '@/utils/format'
 
 import 'mdui/components/button.js'
 import 'mdui/components/circular-progress.js'
@@ -197,7 +197,7 @@ const plainSize = computed(() => manifest.value?.plain_size ?? meta.value?.plain
 const plainSizeText = computed(() => humanSize(plainSize.value || 0))
 const createdAtText = computed(() => {
   if (!meta.value?.created_at) return ''
-  return formatDateTime(meta.value.created_at)
+  return formatDate(meta.value.created_at)
 })
 const displayName = computed(() => decryptedName.value || `mb_encrypted_${fileId.value}`)
 const mimeType = computed(() => meta.value?.mime_type || 'application/octet-stream')
@@ -205,133 +205,7 @@ const isVideo = computed(() => mimeType.value.startsWith('video/'))
 const isImage = computed(() => mimeType.value.startsWith('image/'))
 const isAudio = computed(() => mimeType.value.startsWith('audio/'))
 
-function getFileExt(name: string): string {
-  const base = (name || '').trim()
-  const idx = base.lastIndexOf('.')
-  if (idx <= 0 || idx >= base.length - 1) return ''
-  return base.slice(idx + 1).toLowerCase()
-}
-
-function isProbablyText(mime: string, name: string): boolean {
-  const mt = (mime || '').toLowerCase().trim()
-  if (mt.startsWith('text/')) return true
-  if (
-    mt === 'application/json' ||
-    mt === 'application/xml' ||
-    mt === 'application/yaml' ||
-    mt === 'application/x-yaml' ||
-    mt === 'application/toml'
-  ) {
-    return true
-  }
-
-  const ext = getFileExt(name)
-  return (
-    ext === 'txt' ||
-    ext === 'md' ||
-    ext === 'json' ||
-    ext === 'csv' ||
-    ext === 'log' ||
-    ext === 'yaml' ||
-    ext === 'yml' ||
-    ext === 'toml' ||
-    ext === 'ini' ||
-    ext === 'conf' ||
-    ext === 'xml'
-  )
-}
-
 const isText = computed(() => isProbablyText(mimeType.value, displayName.value))
-
-function fileTypeToIconName(mime: string, name: string): string {
-  const mt = (mime || '').toLowerCase().trim()
-  const ext = getFileExt(name)
-
-  // PDF
-  if (mt === 'application/pdf' || ext === 'pdf') return 'picture_as_pdf'
-
-  // Archives / compressed files
-  if (
-    mt === 'application/zip' ||
-    mt === 'application/x-7z-compressed' ||
-    mt === 'application/x-rar-compressed' ||
-    mt === 'application/vnd.rar' ||
-    mt === 'application/x-tar' ||
-    mt === 'application/gzip' ||
-    mt === 'application/x-gzip' ||
-    mt === 'application/x-bzip2' ||
-    mt === 'application/x-xz' ||
-    mt === 'application/zstd' ||
-    ext === 'zip' ||
-    ext === 'rar' ||
-    ext === '7z' ||
-    ext === 'tar' ||
-    ext === 'gz' ||
-    ext === 'tgz' ||
-    ext === 'bz2' ||
-    ext === 'xz' ||
-    ext === 'zst' ||
-    ext === 'lz' ||
-    ext === 'lz4'
-  ) {
-    return 'folder_zip'
-  }
-
-  // Office docs / documents
-  if (
-    mt === 'application/msword' ||
-    mt === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mt === 'application/vnd.oasis.opendocument.text' ||
-    ext === 'doc' ||
-    ext === 'docx' ||
-    ext === 'odt' ||
-    ext === 'wps' ||
-    ext === 'pages'
-  ) {
-    return 'description'
-  }
-
-  // Spreadsheets
-  if (
-    mt === 'application/vnd.ms-excel' ||
-    mt === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    mt === 'application/vnd.oasis.opendocument.spreadsheet' ||
-    ext === 'xls' ||
-    ext === 'xlsx' ||
-    ext === 'ods' ||
-    ext === 'numbers'
-  ) {
-    return 'table_chart'
-  }
-
-  // Presentations
-  if (
-    mt === 'application/vnd.ms-powerpoint' ||
-    mt === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    mt === 'application/vnd.oasis.opendocument.presentation' ||
-    ext === 'ppt' ||
-    ext === 'pptx' ||
-    ext === 'odp' ||
-    ext === 'key'
-  ) {
-    return 'slideshow'
-  }
-
-  // Fonts
-  if (
-    mt.startsWith('font/') ||
-    mt === 'application/font-woff' ||
-    mt === 'application/font-woff2' ||
-    ext === 'ttf' ||
-    ext === 'otf' ||
-    ext === 'woff' ||
-    ext === 'woff2'
-  ) {
-    return 'font_download'
-  }
-
-  return 'insert_drive_file'
-}
 
 const fileTypeIcon = computed(() => fileTypeToIconName(mimeType.value, displayName.value))
 
@@ -348,18 +222,7 @@ const encryptionLabel = computed(() => {
 const pasteExpireText = computed(() => {
   const v = pasteInfo.value?.expire_at ?? null
   if (!v) return '永不过期'
-  return formatDateTime(v)
-})
-
-const pasteViewsText = computed(() => {
-  const maxViews = Number(pasteInfo.value?.max_views)
-  const viewCount = Number(pasteInfo.value?.view_count)
-  const max = Number.isFinite(maxViews) ? maxViews : -1
-  const cnt = Number.isFinite(viewCount) && viewCount >= 0 ? viewCount : 0
-
-  if (max <= 0) return `${cnt}（无限制）`
-  const left = Math.max(0, max - cnt)
-  return `${cnt} / ${max}（剩余 ${left} 次）`
+  return formatDate(v)
 })
 
 const shareUrl = computed(() => window.location.href)

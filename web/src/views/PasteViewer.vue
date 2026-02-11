@@ -28,6 +28,11 @@
         <mdui-tooltip content="过期时间">
           <span class="meta-item meta-icon"><mdui-icon-auto-delete></mdui-icon-auto-delete>{{ pasteExpireInlineText }}</span>
         </mdui-tooltip>
+        <mdui-tooltip content="文件列表">
+          <button type="button" class="meta-item meta-icon meta-action" @click="openPasteFilesDialog">
+            <mdui-icon-folder></mdui-icon-folder>{{ pasteFilesText }}
+          </button>
+        </mdui-tooltip>
       </div>
 
       <!-- Plain Viewer -->
@@ -41,6 +46,15 @@
         :access-key="currentAccessKey"
       />
     </div>
+
+    <!-- 文件列表对话框 -->
+    <PasteFilesDialog
+      ref="pasteFilesDialog"
+      :files="pasteFiles"
+      :paste-id="pasteId"
+      :encryption-key="encryptionKeyBytes"
+      :encryption-key-hash="encryptionKeyHash"
+    />
 
     <!-- Access Key 输入对话框 -->
     <mdui-dialog
@@ -100,12 +114,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getPaste, getPasteContent, type PasteData } from '@/services/paste'
+import { getPaste, getPasteContent, type PasteData, type PasteFile } from '@/services/paste'
 import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
 import { useTheme } from '@/composables/useTheme'
 import { formatDate } from '@/utils/format'
 import PlainViewer from '@/components/viewers/Plain.vue'
 import MarkdownViewer from '@/components/viewers/Markdown.vue'
+import PasteFilesDialog from '@/components/paste/PasteFilesDialog.vue'
 import 'mdui/components/circular-progress.js'
 import 'mdui/components/card.js'
 import 'mdui/components/dialog.js'
@@ -119,6 +134,7 @@ import '@mdui/icons/create.js'
 import '@mdui/icons/auto-delete.js'
 import '@mdui/icons/code.js'
 import '@mdui/icons/article.js'
+import '@mdui/icons/folder.js'
 
 useTheme()
 
@@ -126,6 +142,7 @@ const route = useRoute()
 
 // 状态
 const pasteData = ref<PasteData | null>(null)
+const pasteFiles = ref<PasteFile[]>([])
 const decryptedContent = ref<string>('')
 const isLoading = ref<boolean>(true)
 const error = ref<string>('')
@@ -140,6 +157,7 @@ const currentAccessKey = ref<string | undefined>(undefined)
 
 // 错误对话框
 const errorDialog = ref<any>(null)
+const pasteFilesDialog = ref<{ open: () => void } | null>(null)
 
 const pasteTitle = computed(() => pasteData.value?.title || '未命名 Paste')
 const pasteCreatedText = computed(() => {
@@ -155,6 +173,13 @@ const pasteViewsText = computed(() => {
   const viewCount = Number(pasteData.value?.view_count)
   return Number.isFinite(viewCount) && viewCount >= 0 ? viewCount : 0
 })
+const pasteFilesText = computed(() => `${pasteFiles.value.length} 个文件`)
+const pasteId = computed(() => String(route.params.paste_id || ''))
+const encryptionKeyHash = computed(() => window.location.hash || '')
+
+function openPasteFilesDialog() {
+  pasteFilesDialog.value?.open()
+}
 
 /**
  * 显示错误对话框
@@ -204,12 +229,14 @@ function toggleViewerType() {
  */
 async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?: string): Promise<boolean> {
   try {
+    pasteFiles.value = []
     const [data, content] = await Promise.all([
       getPaste(pasteId, accessKey),
       getPasteContent(pasteId, accessKey)
     ])
 
     pasteData.value = data
+    pasteFiles.value = Array.isArray(content.files) ? content.files : []
     decryptedContent.value = await decryptContent(content.encrypted_content, encryptionKey)
     currentAccessKey.value = accessKey
     if (accessKey && accessKey.trim()) {
@@ -396,8 +423,28 @@ onMounted(async () => {
   gap: 4px;
 }
 
-.paste-meta .meta-icon :is(mdui-icon-remove-red-eye, mdui-icon-create, mdui-icon-auto-delete) {
+.paste-meta .meta-icon :is(mdui-icon-remove-red-eye, mdui-icon-create, mdui-icon-auto-delete, mdui-icon-folder) {
   font-size: 15px;
+}
+
+.paste-meta .meta-action {
+  border: 0;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.paste-meta .meta-action:hover {
+  color: rgb(var(--mdui-color-primary));
+}
+
+.paste-meta .meta-action:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Dialog 样式 */
