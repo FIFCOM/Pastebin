@@ -131,7 +131,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 8px 16px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
   font-size: 13px;
 }
 
@@ -173,7 +173,7 @@ onUnmounted(() => {
 .section-title {
   margin-bottom: 8px;
   font-size: 14px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .mode-buttons {
@@ -189,7 +189,7 @@ onUnmounted(() => {
 }
 
 .mode-button--active {
-  background-color: color-mix(in srgb, var(--mdui-color-primary) 12%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--mdui-color-primary)) 12%, transparent);
 }
 
 .color-palette {
@@ -207,7 +207,7 @@ onUnmounted(() => {
 }
 
 .color-swatch--active {
-  border-color: var(--mdui-color-primary);
+  border-color: rgb(var(--mdui-color-primary));
 }
 
 .dialog-actions {

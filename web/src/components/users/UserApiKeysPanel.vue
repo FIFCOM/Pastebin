@@ -263,7 +263,7 @@ onMounted(() => {
 .panel-subtitle {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .header-actions {
@@ -276,7 +276,7 @@ onMounted(() => {
 .empty-hint {
   margin: 16px 0 0;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .key-list {
@@ -291,7 +291,7 @@ onMounted(() => {
 .created-hint {
   margin: 4px 0 10px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .dialog-actions {

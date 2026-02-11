@@ -40,6 +40,5 @@ defineProps<{
     monospace;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--mdui-color-on-surface);
 }
 </style>

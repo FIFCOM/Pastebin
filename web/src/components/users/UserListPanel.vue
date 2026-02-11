@@ -301,7 +301,7 @@ onMounted(() => {
 .panel-subtitle {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .header-actions {
@@ -329,7 +329,7 @@ onMounted(() => {
 
 .pager-info {
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .size-select {
@@ -339,7 +339,7 @@ onMounted(() => {
 .empty-hint {
   margin: 16px 0 0;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .user-list {

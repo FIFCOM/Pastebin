@@ -392,7 +392,6 @@ syncMaxViewsModeFromValue()
 .publish-panel {
   background: rgb(var(--mdui-color-background));
   border-radius: 12px;
-  border: 1px solid var(--mdui-color-outline-variant);
 }
 
 .panel-header {
@@ -406,7 +405,7 @@ syncMaxViewsModeFromValue()
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
 .panel-status {
@@ -414,7 +413,7 @@ syncMaxViewsModeFromValue()
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
   font-size: 13px;
   min-height: 20px;
   flex: 1 1 auto;
@@ -423,7 +422,7 @@ syncMaxViewsModeFromValue()
 }
 
 .panel-status[data-kind='error'] {
-  color: var(--mdui-color-error);
+  color: rgb(var(--mdui-color-error));
 }
 
 .status-icon {
@@ -459,7 +458,6 @@ syncMaxViewsModeFromValue()
   gap: 8px;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid var(--mdui-color-outline-variant);
   background: rgb(var(--mdui-color-surface));
 }
 
@@ -478,7 +476,7 @@ syncMaxViewsModeFromValue()
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
 .expire-row {
@@ -488,7 +486,7 @@ syncMaxViewsModeFromValue()
 
 .expire-label {
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .maxviews-row {
@@ -498,7 +496,7 @@ syncMaxViewsModeFromValue()
 
 .maxviews-label {
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .maxviews-custom {
@@ -509,7 +507,7 @@ syncMaxViewsModeFromValue()
   margin-top: 6px;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--mdui-color-error);
+  color: rgb(var(--mdui-color-error));
 }
 
 .panel-actions {

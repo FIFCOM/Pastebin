@@ -451,14 +451,13 @@ onMounted(() => {
   justify-content: flex-start;
   gap: 12px;
   padding: 12px 16px;
-  background-color: var(--mdui-color-surface-variant);
   border-radius: 8px;
 }
 
 .content-type-switch > span {
   font-size: 16px;
   font-weight: 500;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
 .upload-btn {
@@ -473,7 +472,6 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  border-top: 1px solid var(--mdui-color-outline-variant);
 }
 
 .submit-wrapper {

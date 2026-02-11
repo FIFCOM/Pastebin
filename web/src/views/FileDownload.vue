@@ -10,140 +10,44 @@
     </div>
 
     <div v-else class="file-download-layout">
-      <div class="file-preview">
-        <div v-if="isVideo" class="preview-section">
-          <div v-if="videoPlainSrc" class="video-container">
-            <video class="video-player" controls preload="metadata" :src="videoPlainSrc"></video>
-          </div>
-          <PreviewPlaceholder v-else />
-        </div>
+      <FilePreviewPanel
+        :is-video="isVideo"
+        :is-image="isImage"
+        :is-audio="isAudio"
+        :is-text="isText"
+        :video-src="videoPlainSrc"
+        :image-src="imagePlainSrc"
+        :audio-src="audioPlainSrc"
+        :display-name="displayName"
+        :file-type-icon="fileTypeIcon"
+        :text-preview-label="textPreviewLabel"
+        :text-preview-loading="textPreviewLoading"
+        :text-preview-error="textPreviewError"
+        :text-preview="textPreview"
+        :text-preview-truncated="textPreviewTruncated"
+        @image-preview="openImagePreview"
+      />
 
-        <div v-else-if="isImage" class="preview-section">
-          <div v-if="imagePlainSrc" class="image-container">
-            <img
-              class="image-preview"
-              :src="imagePlainSrc"
-              :alt="displayName"
-              title="点击放大"
-              @click="openImagePreview"
-            />
-          </div>
-          <PreviewPlaceholder v-else />
-        </div>
-
-        <div v-else-if="isAudio" class="preview-section">
-          <div v-if="audioPlainSrc" class="audio-container">
-            <audio class="audio-player" controls preload="metadata" :src="audioPlainSrc"></audio>
-          </div>
-          <PreviewPlaceholder v-else />
-        </div>
-
-        <div v-else-if="isText" class="preview-section">
-          <div class="text-preview-container">
-            <div class="text-preview-header">
-              <div class="text-preview-title">文本预览</div>
-              <div class="text-preview-subtitle">前 {{ textPreviewLabel }}</div>
-            </div>
-
-            <div v-if="textPreviewLoading" class="text-preview-loading">
-              <mdui-circular-progress></mdui-circular-progress>
-              <div class="hint">正在解密预览内容…</div>
-            </div>
-
-            <PreviewPlaceholder
-              v-else-if="textPreviewError"
-              :message="textPreviewError"
-              hint="你仍然可以直接下载该文件。"
-            />
-
-            <pre v-else class="text-preview"><code class="mdui-prose">{{ textPreview }}</code></pre>
-
-            <div v-if="textPreviewTruncated" class="text-preview-hint">
-              仅展示前 {{ textPreviewLabel }}，完整内容请下载。
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="file-icon-section">
-          <mdui-icon :name="fileTypeIcon" class="file-icon"></mdui-icon>
-          <div class="file-icon-name">{{ displayName }}</div>
-        </div>
-      </div>
-
-      <mdui-card class="file-info-card">
-        <div class="file-header">
-          <div class="file-header-main">
-            <div class="file-title-row">
-              <div class="file-title" :title="displayName">{{ displayName }}</div>
-              <mdui-chip
-                v-if="encryptionLabel"
-                class="encryption-chip"
-                variant="tonal"
-                :class="`mode-${encryptionMode}`"
-                title="加密状态"
-              >
-                <mdui-icon name="lock" class="encryption-chip-icon"></mdui-icon>
-                <span>{{ encryptionLabel }}</span>
-              </mdui-chip>
-            </div>
-            <div class="file-subtitle">{{ meta?.mime_type || 'application/octet-stream' }}</div>
-          </div>
-
-          <div class="file-header-actions">
-            <mdui-button-icon
-              :icon="shareUrlCopied ? 'check' : 'content_copy'"
-              :disabled="!shareUrl"
-              :title="shareUrlCopied ? '已复制' : '复制分享链接'"
-              @click="copyShareUrl"
-            ></mdui-button-icon>
-          </div>
-        </div>
-
-        <div class="file-meta">
-          <div class="file-meta-row">
-            <span class="label">大小</span>
-            <span class="value">{{ humanSize(plainSize || 0) }}</span>
-          </div>
-
-          <div v-if="meta?.created_at" class="file-meta-row">
-            <span class="label">上传时间</span>
-            <span class="value">{{ formatDateTime(meta?.created_at) }}</span>
-          </div>
-
-          <div v-if="pasteInfo" class="file-meta-row">
-            <span class="label">过期时间</span>
-            <span class="value">{{ pasteExpireText }}</span>
-          </div>
-
-          <div v-if="pasteInfo" class="file-meta-row">
-            <span class="label">查看次数</span>
-            <span class="value">{{ pasteViewsText }}</span>
-          </div>
-        </div>
-
-        <div v-if="showProgress" class="progress-section">
-          <mdui-linear-progress
-            class="download-progress"
-            :value="progressValue"
-            :max="1"
-          ></mdui-linear-progress>
-          <div class="progress-text">
-            {{ progressText }}
-          </div>
-        </div>
-
-        <div class="actions">
-          <mdui-button
-            full-width
-            :disabled="isDownloading"
-            :loading="isDownloading"
-            @click="handleDownload"
-          >
-            <mdui-icon slot="icon" name="download"></mdui-icon>
-            {{ isDownloading ? '下载中' : downloadState === 'done' ? '重新下载' : '下载' }}
-          </mdui-button>
-        </div>
-      </mdui-card>
+      <FileInfoCard
+        :display-name="displayName"
+        :encryption-label="encryptionLabel"
+        :encryption-mode="encryptionMode"
+        :share-url="shareUrl"
+        :share-url-copied="shareUrlCopied"
+        :plain-size-text="plainSizeText"
+        :created-at-text="createdAtText"
+        :has-created-at="Boolean(meta?.created_at)"
+        :has-paste-info="Boolean(pasteInfo)"
+        :paste-expire-text="pasteExpireText"
+        :paste-views-text="pasteViewsText"
+        :show-progress="showProgress"
+        :progress-value="progressValue"
+        :progress-text="progressText"
+        :is-downloading="isDownloading"
+        :download-state="downloadState"
+        @copy-share-url="copyShareUrl"
+        @download="handleDownload"
+      />
     </div>
 
     <ImagePreview
@@ -162,7 +66,7 @@
       close-on-esc="false"
       close-on-overlay-click="false"
     >
-      <mdui-icon slot="icon" name="lock" style="color: var(--mdui-color-primary);"></mdui-icon>
+      <mdui-icon slot="icon" name="lock" style="color: rgb(var(--mdui-color-primary));"></mdui-icon>
       <div class="dialog-content">
         <p class="dialog-description">此文件所属 Paste 受访问密钥保护，请输入密钥继续。</p>
 
@@ -221,7 +125,9 @@ import type { MbFileManifest } from '@/utils/mbFileDecrypt'
 import { decryptChunkedFileStream, decryptChunkedFileToBlob } from '@/utils/mbFileDecrypt'
 import { buildMbPlainFilePath, mbSwSetPasteContext } from '@/utils/mbSw'
 import ImagePreview from '@/components/common/ImagePreview.vue'
-import PreviewPlaceholder from '@/components/common/PreviewPlaceholder.vue'
+import FileInfoCard from '@/components/file-download/FileInfoCard.vue'
+import FilePreviewPanel from '@/components/file-download/FilePreviewPanel.vue'
+import type { DownloadState } from '@/components/file-download/types'
 import { useDownloadProgress } from '@/composables/useDownloadProgress'
 import {
   buildAccessKeyQuery,
@@ -233,14 +139,10 @@ import {
 } from '@/services/publicApi'
 import { formatDateTime, formatDurationSeconds, humanSize } from '@/utils/format'
 
-import 'mdui/components/card.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
-import 'mdui/components/chip.js'
 import 'mdui/components/circular-progress.js'
 import 'mdui/components/dialog.js'
 import 'mdui/components/icon.js'
-import 'mdui/components/linear-progress.js'
 import 'mdui/components/text-field.js'
 
 useTheme()
@@ -265,7 +167,7 @@ const accessKeyInput = ref('')
 const accessKeyError = ref(false)
 
 const downloadProgress = useDownloadProgress()
-const downloadState = ref<'idle' | 'downloading' | 'done' | 'error'>('idle')
+const downloadState = ref<DownloadState>('idle')
 const isDownloading = computed(() => downloadState.value === 'downloading')
 const showProgress = computed(() => downloadState.value !== 'idle')
 
@@ -292,6 +194,11 @@ let textPreviewTicket = 0
 const TEXT_PREVIEW_MAX_PLAIN_BYTES = 16 * 1024
 
 const plainSize = computed(() => manifest.value?.plain_size ?? meta.value?.plain_size ?? 0)
+const plainSizeText = computed(() => humanSize(plainSize.value || 0))
+const createdAtText = computed(() => {
+  if (!meta.value?.created_at) return ''
+  return formatDateTime(meta.value.created_at)
+})
 const displayName = computed(() => decryptedName.value || `mb_encrypted_${fileId.value}`)
 const mimeType = computed(() => meta.value?.mime_type || 'application/octet-stream')
 const isVideo = computed(() => mimeType.value.startsWith('video/'))
@@ -433,8 +340,8 @@ const encryptionMode = computed(() => {
   return m === 'client' || m === 'server' ? m : ''
 })
 const encryptionLabel = computed(() => {
-  if (encryptionMode.value === 'client') return '端到端加密'
-  if (encryptionMode.value === 'server') return '加密'
+  if (encryptionMode.value === 'client') return '已端到端加密'
+  if (encryptionMode.value === 'server') return '已加密'
   return ''
 })
 
@@ -1014,8 +921,8 @@ onBeforeUnmount(() => {
   gap: 10px;
   padding: 14px 16px;
   border-radius: 8px;
-  background-color: var(--mdui-color-error-container);
-  color: var(--mdui-color-on-error-container);
+  background-color: rgb(var(--mdui-color-error-container));
+  color: rgb(var(--mdui-color-on-error-container));
 }
 
 .error-text {
@@ -1029,269 +936,9 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
-.file-preview {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.file-info-card {
-  width: 360px;
-  padding: 16px;
-  margin-left: auto;
-  align-self: flex-start;
-}
-
-.file-header {
-  margin-bottom: 14px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.file-header-main {
-  min-width: 0;
-  flex: 1 1 0;
-}
-
-.file-header-actions {
-  flex: 0 0 auto;
-}
-
-.file-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--mdui-color-on-surface);
-  flex: 1 1 auto;
-  min-width: 0; /* allow shrinking inside flex so the chip stays visible */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@supports (-webkit-line-clamp: 2) {
-  .file-title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-}
-
-.file-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.encryption-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.encryption-chip-icon {
-  font-size: 18px;
-}
-
-.encryption-chip.mode-client .encryption-chip-icon {
-  color: rgb(var(--mdui-color-tertiary));
-}
-
-.file-subtitle {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
-}
-
-.file-meta {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.file-meta-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.file-meta-row .label {
-  color: var(--mdui-color-on-surface-variant);
-}
-
-.file-meta-row .value {
-  color: var(--mdui-color-on-surface);
-  word-break: break-all;
-}
-
-.preview-section {
-  margin-bottom: 16px;
-}
-
-.video-container {
-  border-radius: 10px;
-  overflow: hidden;
-  background: #000;
-}
-
-.video-player {
-  width: 100%;
-  max-height: min(60vh, 560px);
-  display: block;
-}
-
-.image-container {
-  border-radius: 10px;
-  overflow: hidden;
-  background-color: var(--mdui-color-surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-}
-
-.image-preview {
-  max-width: 100%;
-  max-height: min(60vh, 560px);
-  height: auto;
-  display: block;
-  border-radius: 8px;
-  object-fit: contain;
-  cursor: zoom-in;
-}
-
-.audio-container {
-  border-radius: 10px;
-  background-color: var(--mdui-color-surface);
-  padding: 12px;
-}
-
-.audio-player {
-  width: 100%;
-}
-
-.text-preview-container {
-  border-radius: 10px;
-  background-color: var(--mdui-color-surface);
-  padding: 12px;
-}
-
-.text-preview-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.text-preview-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--mdui-color-on-surface);
-}
-
-.text-preview-subtitle {
-  font-size: 12px;
-  color: var(--mdui-color-on-surface-variant);
-  white-space: nowrap;
-}
-
-.text-preview-loading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  color: var(--mdui-color-on-surface-variant);
-  font-size: 13px;
-}
-
-.text-preview {
-  margin: 0;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: rgb(var(--mdui-color-surface-container));
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: min(60vh, 560px);
-  overflow: auto;
-}
-
-.text-preview-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--mdui-color-on-surface-variant);
-}
-
-.file-icon-section {
-  border-radius: 12px;
-  background-color: var(--mdui-color-surface-variant);
-  padding: 32px 16px;
-  min-height: 240px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: var(--mdui-color-on-surface-variant);
-  gap: 12px;
-}
-
-.file-icon {
-  font-size: 64px;
-}
-
-.file-icon-name {
-  font-size: 14px;
-  color: var(--mdui-color-on-surface);
-  word-break: break-word;
-}
-
-.progress-section {
-  margin-top: 10px;
-  margin-bottom: 10px;
-}
-
-.progress-text {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--mdui-color-on-surface-variant);
-  text-align: right;
-}
-
-.download-progress {
-  --mdui-motion-duration-long2: 0ms;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 14px;
-  width: 100%;
-}
-
-.actions mdui-button {
-  width: 100%;
-}
-
 @media (max-width: 900px) {
   .file-download-layout {
     flex-direction: column;
-  }
-
-  .file-info-card {
-    width: 100%;
-    order: -1;
-  }
-
-  .file-preview {
-    width: 100%;
   }
 }
 
@@ -1302,7 +949,6 @@ onBeforeUnmount(() => {
 
 .dialog-description {
   font-size: 14px;
-  color: var(--mdui-color-on-surface-variant);
   margin: 0 0 20px 0;
   line-height: 1.5;
 }
@@ -1316,8 +962,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background-color: var(--mdui-color-error-container);
-  color: var(--mdui-color-on-error-container);
+  background-color: rgb(var(--mdui-color-error-container));
+  color: rgb(var(--mdui-color-on-error-container));
   border-radius: 8px;
   margin-top: 8px;
 }

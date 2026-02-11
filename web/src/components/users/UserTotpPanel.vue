@@ -241,13 +241,13 @@ onMounted(() => {
 .panel-subtitle {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .empty-hint {
   margin: 16px 0 0;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .content {
@@ -265,12 +265,11 @@ onMounted(() => {
 
 .status-label {
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
 }
 
 .hint {
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .actions {
@@ -282,7 +281,7 @@ onMounted(() => {
 .setup-area {
   margin-top: 4px;
   padding-top: 12px;
-  border-top: 1px solid var(--mdui-color-outline-variant);
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
 }
 
 .setup-title {
@@ -312,13 +311,12 @@ onMounted(() => {
 }
 
 .secret-label {
-  font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  font-size: 15px;
 }
 
 .secret {
   word-break: break-all;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .verify-row {

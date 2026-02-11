@@ -216,7 +216,7 @@ async function save() {
 .panel-subtitle {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .info-grid {
@@ -232,7 +232,7 @@ async function save() {
 
 .info-label {
   font-size: 12px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .info-value {
@@ -264,7 +264,7 @@ async function save() {
 
 .error-message {
   font-size: 13px;
-  color: var(--mdui-color-error);
+  color: rgb(var(--mdui-color-error));
 }
 
 @media (max-width: 640px) {

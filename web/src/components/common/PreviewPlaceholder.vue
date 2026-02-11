@@ -22,8 +22,8 @@ withDefaults(
 .preview-placeholder {
   padding: 12px;
   border-radius: 10px;
-  background-color: var(--mdui-color-surface);
-  color: var(--mdui-color-on-surface-variant);
+  background-color: rgb(var(--mdui-color-surface));
+  color: rgb(var(--mdui-color-on-surface-variant));
   font-size: 13px;
   line-height: 1.6;
 }

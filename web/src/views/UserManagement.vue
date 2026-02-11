@@ -85,7 +85,7 @@ function handleTabChange(e: Event) {
 .page-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .tabs {

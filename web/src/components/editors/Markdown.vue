@@ -340,7 +340,6 @@ onMounted(() => {
 
 <style scoped>
 .vditor-container {
-  border: 1px solid var(--mdui-color-outline);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -350,8 +349,6 @@ onMounted(() => {
 }
 
 :deep(.vditor-toolbar) {
-  background-color: var(--mdui-color-surface-variant);
-  border-bottom: 1px solid var(--mdui-color-outline-variant);
   pointer-events: auto !important;
 }
 
@@ -359,17 +356,6 @@ onMounted(() => {
   pointer-events: auto !important;
 }
 
-:deep(.vditor-content) {
-  background-color: var(--mdui-color-surface);
-}
-
-html.mdui-theme-dark :deep(.vditor-toolbar) {
-  background-color: var(--mdui-color-surface-container-high);
-}
-
-html.mdui-theme-dark :deep(.vditor-content) {
-  background-color: var(--mdui-color-surface-container-low);
-}
 
 /* constrain rendered image preview size. */
 :deep(.vditor-preview img:not(.emoji)),

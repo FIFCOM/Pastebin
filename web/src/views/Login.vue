@@ -187,7 +187,7 @@ function goRegister() {
 .auth-subtitle {
   margin: 0 0 16px 0;
   font-size: 14px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .auth-form {
@@ -204,17 +204,16 @@ function goRegister() {
 
 .error-message {
   font-size: 13px;
-  color: var(--mdui-color-error);
+  color: rgb(var(--mdui-color-error));
 }
 
 .auth-footer {
   margin-top: 16px;
   font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
 }
 
 .auth-footer a {
-  color: var(--mdui-color-primary);
+  color: rgb(var(--mdui-color-primary));
   text-decoration: none;
   font-weight: 500;
 }

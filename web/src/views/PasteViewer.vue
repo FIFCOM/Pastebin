@@ -49,7 +49,7 @@
       close-on-esc="false"
       close-on-overlay-click="false"
     >
-      <mdui-icon slot="icon" name="lock" style="color: var(--mdui-color-primary);"></mdui-icon>
+      <mdui-icon slot="icon" name="lock" style="color: rgb(var(--mdui-color-primary));"></mdui-icon>
       <div class="dialog-content">
         <p class="dialog-description">此 Paste 受访问密钥保护，请输入密钥以查看内容。</p>
         
@@ -89,7 +89,7 @@
       close-on-esc="false"
       close-on-overlay-click="false"
     >
-      <mdui-icon slot="icon" name="error" style="color: var(--mdui-color-error);"></mdui-icon>
+      <mdui-icon slot="icon" name="error" style="color: rgb(var(--mdui-color-error));"></mdui-icon>
       <div class="dialog-content">
         <p class="dialog-description">{{ error }}</p>
       </div>
@@ -407,7 +407,7 @@ onMounted(async () => {
 
 .dialog-description {
   font-size: 14px;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
   margin: 0 0 20px 0;
   line-height: 1.5;
 }
@@ -421,8 +421,8 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background-color: var(--mdui-color-error-container);
-  color: var(--mdui-color-on-error-container);
+  background-color: rgb(var(--mdui-color-error-container));
+  color: rgb(var(--mdui-color-on-error-container));
   border-radius: 8px;
   margin-top: 8px;
 }

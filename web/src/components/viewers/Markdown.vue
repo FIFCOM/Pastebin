@@ -308,9 +308,9 @@ onBeforeUnmount(() => {
 <style scoped>
 /* 全局 Markdown 容器基础样式，遵循 MDUI 配色与排版建议 */
 .markdown-viewer {
-  background-color: var(--mdui-color-surface-variant);
+  
   border-radius: 8px;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
   line-height: 1.7;
   font-size: 0.95rem;
   overflow-x: auto;
@@ -329,20 +329,18 @@ onBeforeUnmount(() => {
   margin-bottom: 0.5em;
   font-weight: 600;
   line-height: 1.25;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
   /* 为锚点跳转预留顶栏空间，避免标题被遮挡 */
   scroll-margin-top: 80px;
 }
 
 .markdown-viewer :deep(h1) {
   font-size: 2em;
-  border-bottom: 1px solid var(--mdui-color-outline-variant);
   padding-bottom: 0.3em;
 }
 
 .markdown-viewer :deep(h2) {
   font-size: 1.5em;
-  border-bottom: 1px solid var(--mdui-color-outline-variant);
   padding-bottom: 0.3em;
 }
 
@@ -360,14 +358,13 @@ onBeforeUnmount(() => {
 
 .markdown-viewer :deep(h6) {
   font-size: 0.85em;
-  color: var(--mdui-color-on-surface-variant);
 }
 
 /* 段落样式 */
 .markdown-viewer :deep(p) {
   margin-top: 0;
   margin-bottom: 1em;
-  color: var(--mdui-color-on-surface);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
 /* 链接样式 */
@@ -414,7 +411,6 @@ onBeforeUnmount(() => {
     "WenQuanYi Micro Hei",
     monospace;
   font-size: 0.9em;
-  color: var(--mdui-color-on-surface);
 }
 
 /* 多行代码块样式：与 Plain.vue 一致使用 MDUI surface-container 背景，统一视觉 */
@@ -454,13 +450,13 @@ onBeforeUnmount(() => {
   padding-left: 1em;
   margin-left: 0;
   margin-right: 0;
-  color: var(--mdui-color-on-surface-variant);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 /* 水平线样式 */
 .markdown-viewer :deep(hr) {
   border: none;
-  border-top: 1px solid var(--mdui-color-outline-variant);
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
   margin: 2em 0;
 }
 
@@ -473,18 +469,18 @@ onBeforeUnmount(() => {
 
 .markdown-viewer :deep(th),
 .markdown-viewer :deep(td) {
-  border: 1px solid var(--mdui-color-outline-variant);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
   padding: 0.5em 1em;
   text-align: left;
 }
 
 .markdown-viewer :deep(th) {
-  background-color: var(--mdui-color-surface);
+  background-color: rgb(var(--mdui-color-surface));
   font-weight: 600;
 }
 
 .markdown-viewer :deep(tr:nth-child(even)) {
-  background-color: var(--mdui-color-surface);
+  background-color: rgb(var(--mdui-color-surface));
 }
 
 /* 图片样式 */
