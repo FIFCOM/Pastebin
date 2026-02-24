@@ -88,6 +88,7 @@ class UserResponse(BaseModel):
 class UserUpdateRequest(BaseModel):
     """用户更新请求"""
 
+    username: str | None = Field(default=None, description="用户名")
     email: EmailStr | None = Field(default=None, description="用户邮箱")
     current_password: str | None = Field(
         None, min_length=64, max_length=64, description="当前密码（SHA256哈希）"

@@ -28,6 +28,15 @@
 
     <form class="edit-form" @submit.prevent="save">
       <mdui-text-field
+        v-model="newUsername"
+        label="更新用户名"
+        placeholder="请输入用户名"
+        variant="outlined"
+        clearable
+        :disabled="isSaving"
+      ></mdui-text-field>
+
+      <mdui-text-field
         v-model="newEmail"
         label="更新邮箱"
         placeholder="name@example.com"
@@ -101,6 +110,7 @@ const isRefreshing = ref(false)
 const isSaving = ref(false)
 const errorMessage = ref('')
 
+const newUsername = ref('')
 const newEmail = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -109,6 +119,7 @@ const confirmPassword = ref('')
 watch(
   currentUser,
   (user) => {
+    newUsername.value = user?.username ?? ''
     newEmail.value = user?.email ?? ''
     currentPassword.value = ''
     newPassword.value = ''
@@ -131,19 +142,28 @@ const avatarText = computed(() => {
 const canSave = computed(() => {
   if (!currentUser.value) return false
 
+  const username = newUsername.value.trim()
+  const currentUsername = currentUser.value.username
+  const usernameChanged = username !== currentUsername
+  if (usernameChanged && !username) return false
+
   const email = newEmail.value.trim()
   const currentEmail = currentUser.value.email ?? ''
   const emailChanged = email.length > 0 && email !== currentEmail
 
   const wantsPasswordChange = newPassword.value.length > 0 || confirmPassword.value.length > 0
+  const needsCurrentPassword = emailChanged || wantsPasswordChange
 
   if (wantsPasswordChange) {
     if (!newPassword.value) return false
     if (newPassword.value !== confirmPassword.value) return false
   }
 
-  if (!emailChanged && !wantsPasswordChange) return false
-  return currentPassword.value.trim().length > 0
+  if (!usernameChanged && !emailChanged && !wantsPasswordChange) return false
+  if (needsCurrentPassword) {
+    return currentPassword.value.trim().length > 0
+  }
+  return true
 })
 
 async function refreshUser() {
@@ -165,13 +185,21 @@ async function save() {
 
   errorMessage.value = ''
 
+  const username = newUsername.value.trim()
   const email = newEmail.value.trim()
   const payload: {
+    username?: string
     email?: string
     password?: string
-    current_password: string
-  } = {
-    current_password: currentPassword.value
+    current_password?: string
+  } = {}
+
+  if (username !== currentUser.value.username) {
+    if (!username) {
+      errorMessage.value = '用户名不能为空'
+      return
+    }
+    payload.username = username
   }
 
   if (email && email !== (currentUser.value.email ?? '')) {
@@ -190,8 +218,17 @@ async function save() {
     payload.password = newPassword.value
   }
 
-  if (!payload.email && !payload.password) {
+  if (!payload.username && !payload.email && !payload.password) {
     return
+  }
+
+  if (payload.email || payload.password) {
+    const currentPasswordValue = currentPassword.value.trim()
+    if (!currentPasswordValue) {
+      errorMessage.value = '修改邮箱或密码时需要输入当前密码'
+      return
+    }
+    payload.current_password = currentPasswordValue
   }
 
   isSaving.value = true

@@ -90,7 +90,7 @@ class UserService:
 
         access_token = create_access_token(
             data={
-                "sub": user.username,
+                "uid": user.id,
                 "session_id": session.id,
                 "type": "access",
             }
@@ -272,7 +272,7 @@ class UserService:
             更新后的用户信息
 
         Raises:
-            ValueError: 当用户不存在或邮箱已被占用时
+            ValueError: 当用户不存在，或用户名/邮箱已被占用时
         """
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -291,14 +291,30 @@ class UserService:
         ):
             raise ValueError("无权限修改角色或状态")
 
-        wants_sensitive_change = (
+        next_username: str | None = None
+        if user_data.username is not None:
+            next_username = user_data.username.strip()
+            if not next_username:
+                raise ValueError("用户名不能为空")
+
+        wants_email_or_password_change = (
             user_data.email is not None and user_data.email != user.email
         ) or bool(user_data.password)
-        if is_self and wants_sensitive_change:
+        if is_self and wants_email_or_password_change:
             if not user_data.current_password:
                 raise ValueError("修改邮箱或密码需要输入当前密码")
             if not verify_password(user_data.current_password, str(user.password_hash)):  # type: ignore[arg-type]
                 raise ValueError("当前密码错误")
+
+        if next_username is not None and next_username != user.username:
+            existing_user = (
+                db.query(User)
+                .filter(and_(User.username == next_username, User.id != user_id))
+                .first()
+            )
+            if existing_user:
+                raise ValueError("用户名已存在")
+            user.username = next_username  # type: ignore[assignment]
 
         if user_data.email and user_data.email != user.email:
             existing_user = (
@@ -900,7 +916,7 @@ class UserService:
 
         access_token = create_access_token(
             data={
-                "sub": user.username,
+                "uid": user.id,
                 "session_id": session.id,
                 "type": "access",
             }

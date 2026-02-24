@@ -40,14 +40,30 @@ def _resolve_access_session(token: str, db: Session) -> tuple[UserResponse, str]
     if payload is None:
         raise _auth_error("无效的认证凭据")
 
-    username: str | None = payload.get("sub")
+    uid_claim = payload.get("uid")
     session_id: str | None = payload.get("session_id")
     token_type: str | None = payload.get("type")
 
-    if username is None or session_id is None or token_type != "access":
+    if session_id is None or token_type != "access":
         raise _auth_error("无效的认证凭据")
 
-    user = UserService.get_user_by_username(db, username)
+    if type(uid_claim) is int:
+        user_id = uid_claim
+    elif isinstance(uid_claim, str):
+        uid_text = uid_claim.strip()
+        if not uid_text:
+            raise _auth_error("无效的认证凭据")
+        try:
+            user_id = int(uid_text)
+        except ValueError as e:
+            raise _auth_error("无效的认证凭据") from e
+    else:
+        raise _auth_error("无效的认证凭据")
+
+    if user_id <= 0:
+        raise _auth_error("无效的认证凭据")
+
+    user = UserService.get_user_by_id(db, user_id)
     if user is None:
         raise _auth_error("用户不存在")
     if not user.is_active:

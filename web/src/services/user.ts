@@ -29,6 +29,7 @@ export interface UserCreateRequest {
 }
 
 export interface UserUpdateRequest {
+  username?: string
   email?: string
   password?: string
   current_password?: string
@@ -74,12 +75,16 @@ export async function createUser(user: UserCreateRequest): Promise<UserResponse>
 
 export async function updateUser(userId: number, update: UserUpdateRequest): Promise<UserResponse> {
   const body: {
+    username?: string
     email?: string
     password?: string
     current_password?: string
     role?: 'admin' | 'user'
     is_active?: boolean
   } = {}
+
+  const username = update.username?.trim()
+  if (username) body.username = username
 
   const email = update.email?.trim()
   if (email) body.email = email

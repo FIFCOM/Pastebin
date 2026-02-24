@@ -201,6 +201,15 @@
 
       <form class="dialog-form" @submit.prevent="saveEdit">
         <mdui-text-field
+          v-model="editUsername"
+          label="用户名"
+          placeholder="请输入用户名"
+          variant="outlined"
+          clearable
+          :disabled="isSavingEdit"
+        ></mdui-text-field>
+
+        <mdui-text-field
           v-model="editEmail"
           label="邮箱"
           placeholder="name@example.com"
@@ -454,6 +463,7 @@ async function create() {
 
 const editDialogRef = ref<any>(null)
 const editingUser = ref<UserResponse | null>(null)
+const editUsername = ref('')
 const editEmail = ref('')
 const editPassword = ref('')
 const editRole = ref<'admin' | 'user'>('user')
@@ -465,16 +475,20 @@ const canSaveEdit = computed(() => {
   const user = editingUser.value
   if (!user) return false
 
+  const nextUsername = editUsername.value.trim()
+  if (!nextUsername) return false
+  const hasUsernameChanged = nextUsername !== user.username
   const hasEmailChanged = editEmail.value.trim() !== (user.email ?? '')
   const hasPasswordChanged = editPassword.value.length > 0
   const hasRoleChanged = editRole.value !== user.role
   const hasStatusChanged = editIsActive.value !== user.is_active
 
-  return hasEmailChanged || hasPasswordChanged || hasRoleChanged || hasStatusChanged
+  return hasUsernameChanged || hasEmailChanged || hasPasswordChanged || hasRoleChanged || hasStatusChanged
 })
 
 function openEditDialog(user: UserResponse) {
   editingUser.value = user
+  editUsername.value = user.username
   editEmail.value = user.email ?? ''
   editPassword.value = ''
   editRole.value = user.role
@@ -488,6 +502,7 @@ function closeEditDialog() {
 
 function resetEditForm() {
   editingUser.value = null
+  editUsername.value = ''
   editEmail.value = ''
   editPassword.value = ''
   editRole.value = 'user'
@@ -514,11 +529,19 @@ async function saveEdit() {
   isSavingEdit.value = true
   try {
     const payload: {
+      username?: string
       email?: string
       password?: string
       role?: 'admin' | 'user'
       is_active?: boolean
     } = {}
+
+    const nextUsername = editUsername.value.trim()
+    if (!nextUsername) {
+      snackbar({ message: '用户名不能为空', closeable: true })
+      return
+    }
+    if (nextUsername !== user.username) payload.username = nextUsername
 
     const nextEmail = editEmail.value.trim()
     if (nextEmail !== (user.email ?? '')) payload.email = nextEmail

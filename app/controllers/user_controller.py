@@ -268,8 +268,8 @@ async def update_user(
     """
     更新用户信息
 
-    - 普通用户：仅可更新自己邮箱/密码，且必须提供 current_password
-    - 管理员：可更新任意用户的邮箱/密码/角色/状态
+    - 普通用户：仅可更新自己用户名/邮箱/密码；修改邮箱或密码时必须提供 current_password
+    - 管理员：可更新任意用户的用户名/邮箱/密码/角色/状态
     """
     try:
         return UserService.update_user(
