@@ -1,8 +1,6 @@
-import axios from 'axios'
+import { createInstallAwareHttpClient } from './http'
 
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
-})
+const apiClient = createInstallAwareHttpClient()
 
 export interface PublicConfig {
   max_upload_file_size: number

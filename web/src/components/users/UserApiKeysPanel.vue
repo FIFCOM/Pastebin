@@ -1,55 +1,42 @@
 <template>
-  <mdui-card class="panel-card">
-    <div class="panel-header">
-      <div>
-        <div class="panel-title">API Keys</div>
-        <div class="panel-subtitle">用于 API 访问（创建时仅返回一次明文）</div>
-      </div>
+  <UserPanelCard title="API Keys" subtitle="用于 API 访问（创建时仅返回一次明文）">
+    <template #actions>
+      <mdui-button
+        variant="tonal"
+        :disabled="!currentUser || isLoading"
+        :loading="isLoading"
+        @click="load"
+      >
+        刷新
+      </mdui-button>
+      <mdui-button variant="filled" :disabled="!currentUser" @click="openCreateDialog">
+        创建
+      </mdui-button>
+    </template>
 
-      <div class="header-actions">
-        <mdui-button
-          variant="tonal"
-          :disabled="!currentUser || isLoading"
-          :loading="isLoading"
-          @click="load"
-        >
-          刷新
-        </mdui-button>
-        <mdui-button
-          variant="filled"
-          :disabled="!currentUser"
-          @click="openCreateDialog"
-        >
-          创建
-        </mdui-button>
-      </div>
-    </div>
-
-    <mdui-divider></mdui-divider>
-
-    <div v-if="!currentUser" class="empty-hint">请先登录</div>
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
 
     <div v-else>
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && apiKeys.length === 0" class="empty-hint">
-        暂无 API Key
-      </div>
+      <div v-if="!isLoading && apiKeys.length === 0" class="user-panel-empty-hint">暂无 API Key</div>
 
-      <mdui-list v-else class="key-list">
+      <mdui-list v-else class="user-panel-list">
         <mdui-list-item
-          v-for="k in apiKeys"
-          :key="k.id"
-          :headline="k.name"
-          :description="`创建时间：${formatDate(k.created_at)}\\nID：${k.id}`"
-          description-line="2"
+          v-for="key in apiKeys"
+          :key="key.id"
+          :headline="key.name"
+          :description="keyDescription(key)"
+          description-line="3"
           rounded
         >
-          <div slot="end-icon" class="end-actions">
+          <div slot="end-icon" class="key-actions">
+            <mdui-chip variant="outlined">{{ keyPreview(key.key_preview) }}</mdui-chip>
+            <mdui-chip v-if="isExpired(key.expires_at)" variant="filled">已过期</mdui-chip>
             <mdui-button-icon
-              :disabled="deletingId === k.id"
-              :loading="deletingId === k.id"
-              @click.stop="remove(k.id, k.name)"
+              :disabled="deletingId === key.id"
+              :loading="deletingId === key.id"
+              @click.stop="remove(key.id, key.name)"
             >
               <mdui-icon name="delete"></mdui-icon>
             </mdui-button-icon>
@@ -67,37 +54,43 @@
       <span slot="headline">创建 API Key</span>
 
       <template v-if="!createdKey">
-        <mdui-text-field
-          v-model="newName"
-          label="名称"
-          placeholder="例如：Production Key"
-          variant="outlined"
-          clearable
-          :disabled="isCreating"
-        ></mdui-text-field>
+        <div class="create-form">
+          <mdui-text-field
+            v-model="newName"
+            label="名称"
+            placeholder="例如：Production Key"
+            variant="outlined"
+            clearable
+            :disabled="isCreating"
+          ></mdui-text-field>
+
+          <mdui-text-field
+            v-model="expiresInDays"
+            label="有效期（天，可选）"
+            placeholder="留空表示不过期"
+            variant="outlined"
+            type="number"
+            min="1"
+            max="3650"
+            :disabled="isCreating"
+          ></mdui-text-field>
+        </div>
       </template>
 
       <template v-else>
-        <div class="created-hint">
-          请立即复制保存（仅创建时返回一次）：
-        </div>
+        <div class="created-hint">请立即复制保存（仅创建时返回一次）：</div>
         <mdui-text-field
           :value="createdKey.api_key"
           label="API Key"
           variant="outlined"
           readonly
         ></mdui-text-field>
+        <div class="created-meta">预览：{{ keyPreview(createdKey.key_preview) }}</div>
       </template>
 
       <div slot="action" class="dialog-actions">
         <mdui-button variant="text" @click="closeCreateDialog">关闭</mdui-button>
-        <mdui-button
-          v-if="createdKey"
-          variant="tonal"
-          @click="copyCreatedKey"
-        >
-          复制
-        </mdui-button>
+        <mdui-button v-if="createdKey" variant="tonal" @click="copyCreatedKey">复制</mdui-button>
         <mdui-button
           v-else
           variant="filled"
@@ -109,18 +102,17 @@
         </mdui-button>
       </div>
     </mdui-dialog>
-  </mdui-card>
+  </UserPanelCard>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { snackbar } from 'mdui/functions/snackbar.js'
 import { confirm } from 'mdui/functions/confirm.js'
+import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
-import 'mdui/components/card.js'
+import 'mdui/components/chip.js'
 import 'mdui/components/dialog.js'
-import 'mdui/components/divider.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/list.js'
@@ -128,8 +120,17 @@ import 'mdui/components/list-item.js'
 import 'mdui/components/text-field.js'
 
 import { useAuth } from '../../composables/useAuth'
-import { createApiKey, deleteApiKey, listApiKeys } from '../../services/user'
-import type { ApiKeyCreateResponse, ApiKeyResponse } from '../../services/user'
+import {
+  createApiKey,
+  deleteApiKey,
+  listApiKeys,
+  type ApiKeyCreateResponse,
+  type ApiKeyResponse
+} from '../../services/user'
+import { extractErrorMessage } from '../../utils/error'
+import { formatDateTime } from '../../utils/format'
+import UserPanelCard from './UserPanelCard.vue'
+import './panel.css'
 
 const { currentUser } = useAuth()
 
@@ -138,6 +139,7 @@ const isLoading = ref(false)
 
 const createDialogRef = ref<any>(null)
 const newName = ref('')
+const expiresInDays = ref('')
 const isCreating = ref(false)
 const createdKey = ref<ApiKeyCreateResponse | null>(null)
 
@@ -145,20 +147,43 @@ const deletingId = ref<number | null>(null)
 
 const canCreate = computed(() => newName.value.trim().length > 0)
 
-function formatDate(raw: string): string {
-  const d = new Date(raw)
-  return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
+function keyPreview(preview: string | null | undefined): string {
+  return preview?.trim() || '-'
+}
+
+function parseExpiresInDays(): number | null {
+  const raw = expiresInDays.value.trim()
+  if (!raw) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) return null
+  return Math.min(3650, Math.floor(value))
+}
+
+function isExpired(expiresAt: string | null): boolean {
+  if (!expiresAt) return false
+  const d = new Date(expiresAt)
+  if (Number.isNaN(d.getTime())) return false
+  return d.getTime() <= Date.now()
+}
+
+function keyDescription(key: ApiKeyResponse): string {
+  return [
+    `创建 ${formatDateTime(key.created_at)}`,
+    `最近使用 ${formatDateTime(key.last_used_at)}`,
+    `最后 IP ${key.last_used_ip ?? '-'}`,
+    `过期 ${formatDateTime(key.expires_at)}`
+  ].join(' · ')
 }
 
 async function load() {
   if (!currentUser.value) return
+
   isLoading.value = true
   try {
     const resp = await listApiKeys()
     apiKeys.value = resp.api_keys
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '获取 API Keys 失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '获取 API Keys 失败'), closeable: true })
   } finally {
     isLoading.value = false
   }
@@ -174,22 +199,23 @@ function closeCreateDialog() {
 
 function resetCreateDialog() {
   newName.value = ''
+  expiresInDays.value = ''
   isCreating.value = false
   createdKey.value = null
 }
 
 async function create() {
-  if (!currentUser.value) return
-  if (!canCreate.value || isCreating.value) return
+  if (!currentUser.value || !canCreate.value || isCreating.value) return
 
   isCreating.value = true
   try {
-    createdKey.value = await createApiKey(newName.value)
+    createdKey.value = await createApiKey(newName.value, {
+      expiresInDays: parseExpiresInDays()
+    })
     snackbar({ message: 'API Key 创建成功，请立即复制保存' })
     await load()
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '创建失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '创建失败'), closeable: true })
   } finally {
     isCreating.value = false
   }
@@ -197,11 +223,12 @@ async function create() {
 
 async function copyCreatedKey() {
   if (!createdKey.value) return
+
   try {
     await navigator.clipboard.writeText(createdKey.value.api_key)
     snackbar({ message: '已复制到剪贴板' })
-  } catch (e) {
-    console.warn('Clipboard write failed', e)
+  } catch (error: unknown) {
+    console.warn('Clipboard write failed', error)
     snackbar({ message: '复制失败，请手动复制', closeable: true })
   }
 }
@@ -225,72 +252,44 @@ async function remove(keyId: number, name: string) {
   deletingId.value = keyId
   try {
     await deleteApiKey(keyId)
-    apiKeys.value = apiKeys.value.filter((k) => k.id !== keyId)
     snackbar({ message: '已删除' })
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '删除失败'
-    snackbar({ message: msg, closeable: true })
+    await load()
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '删除失败'), closeable: true })
   } finally {
     deletingId.value = null
   }
 }
 
 onMounted(() => {
-  load()
+  void load()
 })
 </script>
 
 <style scoped>
-.panel-card {
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.panel-header {
+.key-actions {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.panel-title {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.panel-subtitle {
-  margin-top: 4px;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.header-actions {
-  display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.empty-hint {
-  margin: 16px 0 0;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.key-list {
+.create-form {
   margin-top: 8px;
-}
-
-.end-actions {
-  display: flex;
-  align-items: center;
+  display: grid;
+  gap: 10px;
 }
 
 .created-hint {
   margin: 4px 0 10px;
   font-size: 13px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.created-meta {
+  margin-top: 6px;
+  font-size: 12px;
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 

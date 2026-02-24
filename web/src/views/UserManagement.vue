@@ -10,13 +10,13 @@
       variant="secondary"
       full-width
       :value="activeTab"
-      @change="handleTabChange"
+      @change.self="handleTabChange"
     >
       <mdui-tab value="profile">我的账户</mdui-tab>
       <mdui-tab value="sessions">会话</mdui-tab>
       <mdui-tab value="totp">两步验证</mdui-tab>
       <mdui-tab value="apikeys">API Keys</mdui-tab>
-      <mdui-tab value="users">用户列表</mdui-tab>
+      <mdui-tab v-if="isAdmin" value="users">用户列表</mdui-tab>
 
       <mdui-tab-panel slot="panel" value="profile">
         <UserProfilePanel />
@@ -30,7 +30,7 @@
       <mdui-tab-panel slot="panel" value="apikeys">
         <UserApiKeysPanel />
       </mdui-tab-panel>
-      <mdui-tab-panel slot="panel" value="users">
+      <mdui-tab-panel v-if="isAdmin" slot="panel" value="users">
         <UserListPanel />
       </mdui-tab-panel>
     </mdui-tabs>
@@ -38,11 +38,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import 'mdui/components/tab.js'
 import 'mdui/components/tab-panel.js'
 import 'mdui/components/tabs.js'
 
+import { useAuth } from '../composables/useAuth'
 import UserApiKeysPanel from '../components/users/UserApiKeysPanel.vue'
 import UserListPanel from '../components/users/UserListPanel.vue'
 import UserProfilePanel from '../components/users/UserProfilePanel.vue'
@@ -50,21 +52,62 @@ import UserSessionsPanel from '../components/users/UserSessionsPanel.vue'
 import UserTotpPanel from '../components/users/UserTotpPanel.vue'
 
 const TAB_VALUES = ['profile', 'sessions', 'totp', 'apikeys', 'users'] as const
+
 type TabValue = (typeof TAB_VALUES)[number]
 
+const router = useRouter()
+const route = useRoute()
+const { currentUser, isAuthInitialized } = useAuth()
+
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const activeTab = ref<TabValue>('profile')
 
 function isTabValue(value: unknown): value is TabValue {
   return typeof value === 'string' && (TAB_VALUES as readonly string[]).includes(value)
 }
 
-function handleTabChange(e: Event) {
-  const target = e.target as { value?: unknown } | null
-  const value = target?.value
-  if (isTabValue(value)) {
-    activeTab.value = value
-  }
+function normalizeTab(value: unknown): TabValue {
+  if (!isTabValue(value)) return 'profile'
+  if (value === 'users' && !isAdmin.value && isAuthInitialized.value) return 'profile'
+  return value
 }
+
+function updateRouteTab(tab: TabValue) {
+  const current = typeof route.query.tab === 'string' ? route.query.tab : ''
+  if (current === tab) return
+
+  void router.replace({
+    query: {
+      ...route.query,
+      tab
+    }
+  })
+}
+
+function handleTabChange(e: Event) {
+  // 只处理 tabs 自身的 change，忽略内部表单控件冒泡出来的 change
+  if (e.target !== e.currentTarget) return
+
+  const tabs = e.currentTarget as { value?: unknown } | null
+  const next = normalizeTab(tabs?.value)
+  activeTab.value = next
+  updateRouteTab(next)
+}
+
+watch(
+  [() => route.query.tab, isAdmin, isAuthInitialized],
+  ([tab]) => {
+    const normalized = normalizeTab(tab)
+    if (activeTab.value !== normalized) {
+      activeTab.value = normalized
+    }
+
+    if (tab !== normalized) {
+      updateRouteTab(normalized)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

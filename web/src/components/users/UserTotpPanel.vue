@@ -1,10 +1,6 @@
 <template>
-  <mdui-card class="panel-card">
-    <div class="panel-header">
-      <div>
-        <div class="panel-title">两步验证（TOTP）</div>
-        <div class="panel-subtitle">增强登录安全性（如 Google Authenticator）</div>
-      </div>
+  <UserPanelCard title="两步验证（TOTP）" subtitle="使用验证器应用增强账户安全">
+    <template #actions>
       <mdui-button
         variant="tonal"
         :disabled="!currentUser || isLoading"
@@ -13,11 +9,9 @@
       >
         刷新
       </mdui-button>
-    </div>
+    </template>
 
-    <mdui-divider></mdui-divider>
-
-    <div v-if="!currentUser" class="empty-hint">请先登录</div>
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
 
     <div v-else class="content">
       <div class="status-row">
@@ -27,8 +21,16 @@
         </mdui-chip>
       </div>
 
-      <div v-if="!status?.enabled" class="hint">
-        点击“生成二维码”后，使用验证器应用扫描二维码，并输入 6 位验证码完成验证。
+      <div class="hint">
+        {{
+          status?.enabled
+            ? '如更换手机或丢失验证器，请立即联系管理员重置两步验证。'
+            : '点击“生成二维码”后，使用验证器应用扫描二维码，并输入 6 位验证码完成验证。'
+        }}
+      </div>
+
+      <div class="backup-note">
+        重要提示：请保存验证器应用的迁移备份，避免设备丢失后无法登录。
       </div>
 
       <div class="actions">
@@ -75,6 +77,7 @@
         <div class="secret-row">
           <div class="secret-label">密钥</div>
           <code class="secret">{{ setupInfo.secret }}</code>
+          <mdui-button variant="tonal" @click="copySecret">复制</mdui-button>
         </div>
 
         <div class="verify-row">
@@ -99,23 +102,24 @@
         </div>
       </div>
     </div>
-  </mdui-card>
+  </UserPanelCard>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { snackbar } from 'mdui/functions/snackbar.js'
 import { confirm } from 'mdui/functions/confirm.js'
+import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/card.js'
 import 'mdui/components/chip.js'
-import 'mdui/components/divider.js'
 import 'mdui/components/text-field.js'
 
 import { useAuth } from '../../composables/useAuth'
 import { disableTotp, getTotpStatus, setupTotp, verifyTotp } from '../../services/user'
 import type { TotpSetupResponse, TotpStatusResponse } from '../../services/user'
+import { extractErrorMessage } from '../../utils/error'
 import QrCode from '../common/QrCode.vue'
+import UserPanelCard from './UserPanelCard.vue'
+import './panel.css'
 
 const { currentUser } = useAuth()
 
@@ -132,12 +136,12 @@ const canVerify = computed(() => /^\d{6}$/.test(totpCode.value.trim()))
 
 async function refresh() {
   if (!currentUser.value) return
+
   isLoading.value = true
   try {
     status.value = await getTotpStatus()
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '获取状态失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '获取状态失败'), closeable: true })
   } finally {
     isLoading.value = false
   }
@@ -145,17 +149,29 @@ async function refresh() {
 
 async function setup() {
   if (!currentUser.value) return
+
   isSettingUp.value = true
   try {
     setupInfo.value = await setupTotp()
     totpCode.value = ''
     await refresh()
     snackbar({ message: '已生成二维码，请扫码后输入验证码验证' })
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '生成失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '生成失败'), closeable: true })
   } finally {
     isSettingUp.value = false
+  }
+}
+
+async function copySecret() {
+  if (!setupInfo.value) return
+
+  try {
+    await navigator.clipboard.writeText(setupInfo.value.secret)
+    snackbar({ message: '密钥已复制' })
+  } catch (error: unknown) {
+    console.warn('Copy secret failed', error)
+    snackbar({ message: '复制失败，请手动复制', closeable: true })
   }
 }
 
@@ -170,13 +186,11 @@ async function verify() {
   try {
     const resp = await verifyTotp(totpCode.value.trim())
     snackbar({ message: resp.message })
-    // 验证通过后已启用/替换密钥，收起二维码区域
     setupInfo.value = null
     totpCode.value = ''
     await refresh()
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '验证失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '验证失败'), closeable: true })
   } finally {
     isVerifying.value = false
   }
@@ -205,51 +219,19 @@ async function disable() {
     totpCode.value = ''
     snackbar({ message: resp.message })
     await refresh()
-  } catch (e: any) {
-    const msg = e?.response?.data?.detail || '禁用失败'
-    snackbar({ message: msg, closeable: true })
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '禁用失败'), closeable: true })
   } finally {
     isDisabling.value = false
   }
 }
 
 onMounted(() => {
-  refresh()
+  void refresh()
 })
 </script>
 
 <style scoped>
-.panel-card {
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.panel-title {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.panel-subtitle {
-  margin-top: 4px;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.empty-hint {
-  margin: 16px 0 0;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
 .content {
   margin-top: 12px;
   display: flex;
@@ -267,7 +249,8 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.hint {
+.hint,
+.backup-note {
   font-size: 13px;
   color: rgb(var(--mdui-color-on-surface-variant));
 }

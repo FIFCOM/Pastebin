@@ -4,6 +4,8 @@ export interface UserResponse {
   id: number
   username: string
   email: string | null
+  role: 'admin' | 'user'
+  is_active: boolean
   totp_enabled: boolean
   created_at: string
 }

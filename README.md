@@ -95,6 +95,30 @@ npm run dev
 
 ## API端点
 
+### 安装态错误契约（HTTP 428）
+
+当服务端检测到尚未完成安装（例如 `.env` 不存在或管理员未创建）时，除安装与健康检查白名单接口外，会返回 `428 Precondition Required`：
+
+```json
+{
+  "error": "安装未完成",
+  "detail": "安装未完成，请先完成安装",
+  "status_code": 428,
+  "code": "INSTALL_REQUIRED"
+}
+```
+
+第三方客户端建议按以下顺序处理：
+- 先判断 HTTP 状态码是否为 `428`
+- 再判断响应 `code === "INSTALL_REQUIRED"`
+- 命中后跳转或提示用户完成安装流程（Web 默认引导到 `/install`）
+
+安装白名单路径（不会被安装门禁拦截）：
+- `/api/install` 与 `/api/install/*`
+- `/api/health` 与 `/api/health/`
+- `/openapi.json`
+- `/docs`、`/redoc`
+
 ### 用户认证
 
 - `POST /api/users/register` - 用户注册
@@ -322,7 +346,7 @@ npm run dev
 ### MySQL
 设置环境变量：
 ```
-MYSQL_DATABASE_URL=mysql+pymysql://username:password@localhost:3306/material_bin
+DATABASE_URL=mysql+pymysql://username:password@localhost:3306/material_bin
 ```
 
 ## 开发
@@ -334,6 +358,8 @@ uv run ruff check .
 ```
 
 ### 数据库管理
+服务启动时不会自动建表；首次安装会在创建管理员前自动执行建表。
+
 ```bash
 # 初始化数据库
 uv run python app/core/init_db.py

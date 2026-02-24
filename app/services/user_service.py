@@ -4,7 +4,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ from app.core.security import (
     verify_password,
     verify_totp_code,
 )
-from app.core.time_utils import is_expired
+from app.core.time_utils import coerce_utc, is_expired
 from app.models.user import UsedRefreshToken, User, UserSession, UserSessionKey
 from app.schemas.user import (
     LoginResponse,
@@ -47,6 +47,55 @@ from config.config import settings
 
 class UserService:
     """用户服务类"""
+
+    @staticmethod
+    def _is_user_active(user: User) -> bool:
+        return bool(user.is_active)
+
+    @staticmethod
+    def _create_login_session(
+        db: Session,
+        user: User,
+        user_key: bytes,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> tuple[str, str]:
+        refresh_token = generate_refresh_token()
+        refresh_token_hash = hash_refresh_token(refresh_token)
+        session_key = generate_session_key()
+
+        encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(days=settings.refresh_token_expire_days)
+
+        session = UserSession(
+            user_id=user.id,  # type: ignore[arg-type]
+            session_token=refresh_token_hash,
+            encrypted_session_key=bytes_to_str(encrypted_user_key_for_session),
+            expires_at=expires_at,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            last_active_at=now,
+        )
+        db.add(session)
+        db.flush()
+
+        session_key_record = UserSessionKey(
+            session_id=session.id,
+            encrypted_session_key=encrypt_session_key(session_key, str(session.id)),
+        )
+        db.add(session_key_record)
+        db.commit()
+
+        access_token = create_access_token(
+            data={
+                "sub": user.username,
+                "session_id": session.id,
+                "type": "access",
+            }
+        )
+        return access_token, refresh_token
 
     @staticmethod
     def register_user(db: Session, user_data: UserRegisterRequest) -> UserResponse:
@@ -75,7 +124,9 @@ class UserService:
                 break
 
         # 准备用户密钥
-        salt, encryption_key, encrypted_user_key = prepare_user_keys(user_data.password)
+        salt, _encryption_key, encrypted_user_key = prepare_user_keys(
+            user_data.password
+        )
 
         # 使用bcrypt哈希密码
         password_hash = hash_password(user_data.password)
@@ -87,6 +138,8 @@ class UserService:
             password_hash=password_hash,
             salt=bytes_to_str(salt),
             encrypted_user_key=bytes_to_str(encrypted_user_key),
+            role="user",
+            is_active=True,
         )
 
         db.add(user)
@@ -115,13 +168,22 @@ class UserService:
         if not user:
             return None
 
+        if not UserService._is_user_active(user):
+            return None
+
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
 
         return user
 
     @staticmethod
-    def login_user(db: Session, login_data: UserLoginRequest) -> LoginResponse:
+    def login_user(
+        db: Session,
+        login_data: UserLoginRequest,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> LoginResponse:
         """
         用户登录
 
@@ -137,6 +199,11 @@ class UserService:
         """
         user = UserService.authenticate_user(db, login_data)
         if not user:
+            existing_user = (
+                db.query(User).filter(User.email == login_data.email).first()
+            )
+            if existing_user and not UserService._is_user_active(existing_user):
+                raise ValueError("账户已被禁用")
             raise ValueError("邮箱或密码错误")
 
         # 检查用户是否启用了TOTP
@@ -151,36 +218,12 @@ class UserService:
         except Exception as e:
             raise ValueError(f"密钥恢复失败: {str(e)}") from e
 
-        # 创建会话（refresh token + 服务端保存 session_key，用于后续续期）
-        refresh_token = generate_refresh_token()
-        refresh_token_hash = hash_refresh_token(refresh_token)
-        session_key = generate_session_key()
-
-        encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
-        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
-
-        session = UserSession(
-            user_id=user.id,  # type: ignore[arg-type]
-            session_token=refresh_token_hash,
-            encrypted_session_key=bytes_to_str(encrypted_user_key_for_session),
-            expires_at=expires_at,
-        )
-        db.add(session)
-        db.flush()
-
-        session_key_record = UserSessionKey(
-            session_id=session.id,
-            encrypted_session_key=encrypt_session_key(session_key, str(session.id)),
-        )
-        db.add(session_key_record)
-        db.commit()
-
-        access_token = create_access_token(
-            data={
-                "sub": user.username,
-                "session_id": session.id,
-                "type": "access",
-            }
+        access_token, refresh_token = UserService._create_login_session(
+            db,
+            user,
+            user_key,
+            user_agent=user_agent,
+            ip_address=ip_address,
         )
 
         return LoginResponse(
@@ -210,7 +253,12 @@ class UserService:
 
     @staticmethod
     def update_user(
-        db: Session, user_id: int, user_data: UserUpdateRequest
+        db: Session,
+        user_id: int,
+        user_data: UserUpdateRequest,
+        *,
+        actor_user_id: int,
+        actor_is_admin: bool = False,
     ) -> UserResponse:
         """
         更新用户信息
@@ -230,7 +278,28 @@ class UserService:
         if not user:
             raise ValueError("用户不存在")
 
-        # 检查邮箱冲突
+        actor = db.query(User).filter(User.id == actor_user_id).first()
+        if actor is None:
+            raise ValueError("操作者不存在")
+
+        is_self = actor_user_id == user_id
+        if not is_self and not actor_is_admin:
+            raise ValueError("无权限修改其他用户信息")
+
+        if not actor_is_admin and (
+            user_data.role is not None or user_data.is_active is not None
+        ):
+            raise ValueError("无权限修改角色或状态")
+
+        wants_sensitive_change = (
+            user_data.email is not None and user_data.email != user.email
+        ) or bool(user_data.password)
+        if is_self and wants_sensitive_change:
+            if not user_data.current_password:
+                raise ValueError("修改邮箱或密码需要输入当前密码")
+            if not verify_password(user_data.current_password, str(user.password_hash)):  # type: ignore[arg-type]
+                raise ValueError("当前密码错误")
+
         if user_data.email and user_data.email != user.email:
             existing_user = (
                 db.query(User)
@@ -241,15 +310,31 @@ class UserService:
                 raise ValueError("邮箱已被其他用户使用")
             user.email = str(user_data.email)  # type: ignore[assignment]
 
-        # 更新密码
         if user_data.password:
-            # 重新生成密钥
-            salt, _encryption_key, encrypted_user_key = prepare_user_keys(user_data.password)
+            salt, _encryption_key, encrypted_user_key = prepare_user_keys(
+                user_data.password
+            )
             password_hash = hash_password(user_data.password)
 
-            user.password_hash = password_hash  # type: ignore
-            user.salt = bytes_to_str(salt)  # type: ignore
-            user.encrypted_user_key = bytes_to_str(encrypted_user_key)  # type: ignore
+            user.password_hash = password_hash  # type: ignore[assignment]
+            user.salt = bytes_to_str(salt)  # type: ignore[assignment]
+            user.encrypted_user_key = bytes_to_str(encrypted_user_key)  # type: ignore[assignment]
+
+        if actor_is_admin and user_data.role is not None:
+            if user.role == "admin" and user_data.role != "admin":
+                other_admin = (
+                    db.query(User)
+                    .filter(User.role == "admin", User.id != user_id)
+                    .first()
+                )
+                if other_admin is None:
+                    raise ValueError("系统至少需要保留一个管理员")
+            user.role = user_data.role  # type: ignore[assignment]
+
+        if actor_is_admin and user_data.is_active is not None:
+            if actor_user_id == user_id and not user_data.is_active:
+                raise ValueError("不能禁用当前登录账户")
+            user.is_active = user_data.is_active  # type: ignore[assignment]
 
         db.commit()
         db.refresh(user)
@@ -257,7 +342,13 @@ class UserService:
         return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
-    def delete_user(db: Session, user_id: int) -> bool:
+    def delete_user(
+        db: Session,
+        user_id: int,
+        *,
+        actor_user_id: int,
+        actor_is_admin: bool = False,
+    ) -> bool:
         """
         删除用户
 
@@ -272,12 +363,30 @@ class UserService:
         if not user:
             return False
 
+        if not actor_is_admin and actor_user_id != user_id:
+            raise ValueError("无权限删除其他用户")
+
+        if user.role == "admin":
+            other_admin = (
+                db.query(User).filter(User.role == "admin", User.id != user_id).first()
+            )
+            if other_admin is None:
+                raise ValueError("系统至少需要保留一个管理员")
+
         db.delete(user)
         db.commit()
         return True
 
     @staticmethod
-    def list_users(db: Session, page: int = 1, size: int = 10) -> UserListResponse:
+    def list_users(
+        db: Session,
+        page: int = 1,
+        size: int = 10,
+        *,
+        search: str | None = None,
+        role: str | None = None,
+        is_active: bool | None = None,
+    ) -> UserListResponse:
         """
         分页获取用户列表
 
@@ -291,12 +400,25 @@ class UserService:
         """
         offset = (page - 1) * size
 
-        # 获取用户列表
-        users_query = db.query(User).offset(offset).limit(size)
-        users = users_query.all()
+        users_query = db.query(User)
+        search_text = (search or "").strip()
+        if search_text:
+            q = f"%{search_text}%"
+            users_query = users_query.filter(
+                or_(User.username.ilike(q), User.email.ilike(q))  # type: ignore[arg-type]
+            )
+        if role in {"admin", "user"}:
+            users_query = users_query.filter(User.role == role)
+        if is_active is not None:
+            users_query = users_query.filter(User.is_active == is_active)
 
-        # 获取总数
-        total = db.query(User).count()
+        total = users_query.count()
+        users = (
+            users_query.order_by(User.created_at.desc(), User.id.desc())
+            .offset(offset)
+            .limit(size)
+            .all()
+        )
 
         return UserListResponse(
             users=[UserResponse.model_validate(user) for user in users],  # type: ignore
@@ -341,7 +463,9 @@ class UserService:
             raise ValueError("邮箱已存在")
 
         # 准备用户密钥
-        salt, encryption_key, encrypted_user_key = prepare_user_keys(user_data.password)
+        salt, _encryption_key, encrypted_user_key = prepare_user_keys(
+            user_data.password
+        )
         password_hash = hash_password(user_data.password)
 
         # 创建用户
@@ -351,6 +475,8 @@ class UserService:
             password_hash=password_hash,  # type: ignore
             salt=bytes_to_str(salt),  # type: ignore
             encrypted_user_key=bytes_to_str(encrypted_user_key),  # type: ignore
+            role=user_data.role,
+            is_active=True,
         )
 
         db.add(user)
@@ -360,10 +486,30 @@ class UserService:
         return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
-    def get_user_sessions(db: Session, user_id: int) -> list[SessionResponse]:
+    def get_user_sessions(
+        db: Session, user_id: int, *, current_session_id: str | None = None
+    ) -> list[SessionResponse]:
         """获取用户的所有会话"""
-        sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
-        return [SessionResponse.model_validate(session) for session in sessions]  # type: ignore
+        sessions = (
+            db.query(UserSession)
+            .filter(UserSession.user_id == user_id)
+            .order_by(UserSession.last_active_at.desc(), UserSession.created_at.desc())
+            .all()
+        )
+        return [
+            SessionResponse(
+                id=str(session.id),
+                user_id=int(session.user_id),  # type: ignore[arg-type]
+                expires_at=session.expires_at,  # type: ignore[arg-type]
+                created_at=session.created_at,  # type: ignore[arg-type]
+                user_agent=session.user_agent,  # type: ignore[arg-type]
+                ip_address=session.ip_address,  # type: ignore[arg-type]
+                last_active_at=session.last_active_at,  # type: ignore[arg-type]
+                is_current=current_session_id is not None
+                and str(session.id) == current_session_id,
+            )
+            for session in sessions
+        ]
 
     @staticmethod
     def revoke_session(
@@ -391,6 +537,18 @@ class UserService:
         db.delete(session)
         db.commit()
         return True
+
+    @staticmethod
+    def revoke_other_sessions(
+        db: Session, user_id: int, current_session_id: str
+    ) -> int:
+        sessions = db.query(UserSession).filter(
+            UserSession.user_id == user_id, UserSession.id != current_session_id
+        )
+        count = sessions.count()
+        sessions.delete(synchronize_session=False)
+        db.commit()
+        return count
 
     @staticmethod
     def cleanup_expired_sessions(db: Session) -> int:
@@ -462,12 +620,13 @@ class UserService:
             user.totp_pending_secret = totp_secret  # type: ignore[assignment]
 
         provisioning_uri = generate_totp_provisioning_uri(
-            totp_secret, user.username  # type: ignore[arg-type]
+            totp_secret,
+            user.username,  # type: ignore[arg-type]
         )
 
         db.commit()
 
-        return TotpSetupResponse(secret=totp_secret, provisioning_uri=provisioning_uri) # type: ignore[assignment]
+        return TotpSetupResponse(secret=totp_secret, provisioning_uri=provisioning_uri)  # type: ignore[assignment]
 
     @staticmethod
     def verify_and_enable_totp(
@@ -496,7 +655,8 @@ class UserService:
 
         # 验证TOTP代码
         is_valid = verify_totp_code(
-            user.totp_pending_secret, totp_data.totp_code  # type: ignore[arg-type]
+            user.totp_pending_secret,
+            totp_data.totp_code,  # type: ignore[arg-type]
         )
 
         if is_valid:
@@ -554,6 +714,9 @@ class UserService:
         if not user:
             return None
 
+        if not UserService._is_user_active(user):
+            return None
+
         # 验证密码
         if not verify_password(login_data.password, user.password_hash):  # type: ignore
             return None
@@ -567,7 +730,11 @@ class UserService:
 
     @staticmethod
     def login_user_with_totp(
-        db: Session, login_data: UserLoginWithTotpRequest
+        db: Session,
+        login_data: UserLoginWithTotpRequest,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
     ) -> LoginResponse:
         """
         用户登录（包含TOTP验证）
@@ -584,6 +751,11 @@ class UserService:
         """
         user = UserService.authenticate_user_with_totp(db, login_data)
         if not user:
+            existing_user = (
+                db.query(User).filter(User.email == login_data.email).first()
+            )
+            if existing_user and not UserService._is_user_active(existing_user):
+                raise ValueError("账户已被禁用")
             raise ValueError("邮箱、密码或TOTP代码错误")
 
         # 恢复用户密钥
@@ -594,35 +766,12 @@ class UserService:
         except Exception as e:
             raise ValueError(f"密钥恢复失败: {str(e)}") from e
 
-        refresh_token = generate_refresh_token()
-        refresh_token_hash = hash_refresh_token(refresh_token)
-        session_key = generate_session_key()
-
-        encrypted_user_key_for_session = encrypt_with_key(user_key, session_key)
-        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
-
-        session = UserSession(
-            user_id=user.id,  # type: ignore[arg-type]
-            session_token=refresh_token_hash,
-            encrypted_session_key=bytes_to_str(encrypted_user_key_for_session),
-            expires_at=expires_at,
-        )
-        db.add(session)
-        db.flush()
-
-        session_key_record = UserSessionKey(
-            session_id=session.id,
-            encrypted_session_key=encrypt_session_key(session_key, str(session.id)),
-        )
-        db.add(session_key_record)
-        db.commit()
-
-        access_token = create_access_token(
-            data={
-                "sub": user.username,
-                "session_id": session.id,
-                "type": "access",
-            }
+        access_token, refresh_token = UserService._create_login_session(
+            db,
+            user,
+            user_key,
+            user_agent=user_agent,
+            ip_address=ip_address,
         )
 
         return LoginResponse(
@@ -633,7 +782,13 @@ class UserService:
         )
 
     @staticmethod
-    def refresh_access_token(db: Session, refresh_token: str) -> tuple[str, str]:
+    def refresh_access_token(
+        db: Session,
+        refresh_token: str,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> tuple[str, str]:
         """
         使用 refresh token 续期：返回 (access_token, new_refresh_token)。
 
@@ -659,7 +814,9 @@ class UserService:
             if reused is not None:
                 # 复用旧 refresh token：撤销整个会话
                 session_to_revoke = (
-                    db.query(UserSession).filter(UserSession.id == reused.session_id).first()
+                    db.query(UserSession)
+                    .filter(UserSession.id == reused.session_id)
+                    .first()
                 )
                 if session_to_revoke is not None:
                     db.delete(session_to_revoke)
@@ -679,25 +836,35 @@ class UserService:
             db.commit()
             raise ValueError("用户不存在")
 
+        if not UserService._is_user_active(user):
+            db.delete(session)
+            db.commit()
+            raise ValueError("账户已被禁用")
+
+        now = datetime.now(UTC)
         new_refresh_token = generate_refresh_token()
         new_refresh_token_hash = hash_refresh_token(new_refresh_token)
-        new_expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
+        new_expires_at = now + timedelta(days=settings.refresh_token_expire_days)
 
         # 通过条件更新实现原子旋转，避免高并发下出现“两个新 refresh token 都返回但只有一个有效”的问题
         try:
+            update_data = {
+                UserSession.session_token: new_refresh_token_hash,
+                UserSession.expires_at: new_expires_at,
+                UserSession.last_active_at: now,
+            }
+            if user_agent is not None:
+                update_data[UserSession.user_agent] = user_agent
+            if ip_address is not None:
+                update_data[UserSession.ip_address] = ip_address
+
             updated = (
                 db.query(UserSession)
                 .filter(
                     UserSession.id == session.id,
                     UserSession.session_token == old_refresh_token_hash,
                 )
-                .update(
-                    {
-                        UserSession.session_token: new_refresh_token_hash,
-                        UserSession.expires_at: new_expires_at,
-                    },
-                    synchronize_session=False,
-                )
+                .update(update_data, synchronize_session=False)
             )
 
             if updated != 1:
@@ -727,7 +894,9 @@ class UserService:
             if session_to_revoke is not None:
                 db.delete(session_to_revoke)
                 db.commit()
-            raise ValueError("检测到 refresh token 复用，已撤销会话，请重新登录") from None
+            raise ValueError(
+                "检测到 refresh token 复用，已撤销会话，请重新登录"
+            ) from None
 
         access_token = create_access_token(
             data={
@@ -743,7 +912,9 @@ class UserService:
         """撤销当前会话（根据 refresh token 定位）"""
         refresh_token_hash = hash_refresh_token(refresh_token)
         session = (
-            db.query(UserSession).filter(UserSession.session_token == refresh_token_hash).first()
+            db.query(UserSession)
+            .filter(UserSession.session_token == refresh_token_hash)
+            .first()
         )
         if session is None:
             return False
@@ -752,13 +923,49 @@ class UserService:
         return True
 
     @staticmethod
-    def logout_all_sessions(db: Session, user_id: int) -> int:
-        """撤销用户的全部会话（所有设备登出）"""
+    def logout_all_sessions(
+        db: Session, user_id: int, *, exclude_session_id: str | None = None
+    ) -> int:
+        """撤销用户的全部会话（可选保留当前会话）"""
         sessions = db.query(UserSession).filter(UserSession.user_id == user_id)
+        if exclude_session_id:
+            sessions = sessions.filter(UserSession.id != exclude_session_id)
         count = sessions.count()
-        sessions.delete()
+        sessions.delete(synchronize_session=False)
         db.commit()
         return count
+
+    @staticmethod
+    def touch_session_activity(
+        db: Session,
+        session_id: str,
+        *,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        min_update_interval_seconds: int = 60,
+    ) -> None:
+        session = db.query(UserSession).filter(UserSession.id == session_id).first()
+        if session is None:
+            return
+
+        now = datetime.now(UTC)
+        last_active = session.last_active_at or session.created_at  # type: ignore[arg-type]
+        if last_active is not None:
+            elapsed = (coerce_utc(now) - coerce_utc(last_active)).total_seconds()
+            should_skip = (
+                elapsed < min_update_interval_seconds
+                and (ip_address is None or session.ip_address == ip_address)
+                and (user_agent is None or session.user_agent == user_agent)
+            )
+            if should_skip:
+                return
+
+        session.last_active_at = now  # type: ignore[assignment]
+        if ip_address is not None:
+            session.ip_address = ip_address  # type: ignore[assignment]
+        if user_agent is not None:
+            session.user_agent = user_agent  # type: ignore[assignment]
+        db.commit()
 
     @staticmethod
     def cleanup_expired_used_refresh_tokens(db: Session) -> int:

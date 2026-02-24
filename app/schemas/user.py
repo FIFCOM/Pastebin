@@ -3,8 +3,11 @@
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.schemas.validators import normalize_sha256_hex
 
 
 class UserRegisterRequest(BaseModel):
@@ -22,9 +25,8 @@ class UserRegisterRequest(BaseModel):
     @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
-        if not all(c in "0123456789abcdefABCDEF" for c in v):
-            raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
-        return v.lower()  # 统一转为小写
+        normalized = normalize_sha256_hex(v)
+        return str(normalized)  # 统一转为小写
 
 
 class UserLoginRequest(BaseModel):
@@ -39,9 +41,8 @@ class UserLoginRequest(BaseModel):
     @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
-        if not all(c in "0123456789abcdefABCDEF" for c in v):
-            raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
-        return v.lower()
+        normalized = normalize_sha256_hex(v)
+        return str(normalized)
 
 
 class UserLoginWithTotpRequest(BaseModel):
@@ -57,9 +58,8 @@ class UserLoginWithTotpRequest(BaseModel):
     @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
-        if not all(c in "0123456789abcdefABCDEF" for c in v):
-            raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
-        return v.lower()
+        normalized = normalize_sha256_hex(v)
+        return str(normalized)
 
     @field_validator("totp_code")
     @classmethod
@@ -76,6 +76,8 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str | None
+    role: Literal["admin", "user"] = "user"
+    is_active: bool = True
     totp_enabled: bool = False  # 是否启用TOTP
     created_at: datetime
 
@@ -87,19 +89,20 @@ class UserUpdateRequest(BaseModel):
     """用户更新请求"""
 
     email: EmailStr | None = Field(default=None, description="用户邮箱")
+    current_password: str | None = Field(
+        None, min_length=64, max_length=64, description="当前密码（SHA256哈希）"
+    )
     password: str | None = Field(
         None, min_length=64, max_length=64, description="SHA256哈希后的新密码"
     )
+    role: Literal["admin", "user"] | None = Field(default=None, description="用户角色")
+    is_active: bool | None = Field(default=None, description="用户是否可登录")
 
-    @field_validator("password")
+    @field_validator("current_password", "password")
     @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
-        if v is not None:
-            if not all(c in "0123456789abcdefABCDEF" for c in v):
-                raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
-            return v.lower()
-        return v
+        return normalize_sha256_hex(v)
 
 
 class LoginResponse(BaseModel):
@@ -132,6 +135,10 @@ class SessionResponse(BaseModel):
     user_id: int
     expires_at: datetime
     created_at: datetime
+    user_agent: str | None = None
+    ip_address: str | None = None
+    last_active_at: datetime | None = None
+    is_current: bool = False
 
     class Config:
         from_attributes = True
@@ -151,6 +158,7 @@ class UserCreateRequest(BaseModel):
 
     username: str | None = Field(default=None, description="用户名，留空则自动生成")
     email: EmailStr = Field(..., description="用户邮箱")
+    role: Literal["admin", "user"] = Field(default="user", description="用户角色")
     password: str = Field(
         ..., min_length=64, max_length=64, description="SHA256哈希后的密码"
     )
@@ -159,9 +167,8 @@ class UserCreateRequest(BaseModel):
     @classmethod
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
-        if not all(c in "0123456789abcdefABCDEF" for c in v):
-            raise ValueError("密码必须是有效的SHA256哈希(64位十六进制字符串)")
-        return v.lower()
+        normalized = normalize_sha256_hex(v)
+        return str(normalized)
 
 
 class TotpSetupResponse(BaseModel):

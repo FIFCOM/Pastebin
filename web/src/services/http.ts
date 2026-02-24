@@ -1,17 +1,37 @@
-import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  type AxiosInstance,
+  type InternalAxiosRequestConfig
+} from 'axios'
 import { clearAccessToken, loadAccessToken, saveAccessToken } from './token'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
-export const authHttp = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true
-})
+type InstallAwareClientOptions = {
+  withCredentials?: boolean
+}
 
-export const apiHttp = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true
-})
+export function createInstallAwareHttpClient(options: InstallAwareClientOptions = {}): AxiosInstance {
+  const client = axios.create({
+    baseURL: API_BASE_URL,
+    withCredentials: options.withCredentials ?? false
+  })
+  attachInstallRequiredInterceptor(client)
+  return client
+}
+
+export const authHttp = createInstallAwareHttpClient({ withCredentials: true })
+
+export const apiHttp = createInstallAwareHttpClient({ withCredentials: true })
+
+const INSTALL_REQUIRED_CODE = 'INSTALL_REQUIRED'
+const INSTALL_ROUTE_PATH = (() => {
+  const baseUrl = String(import.meta.env.BASE_URL || '/')
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+  return `${normalizedBase}/install`.replace('//install', '/install')
+})()
+let installRedirecting = false
 
 // Preemptively refresh to reduce near-expiry 401 "jitter" (default: 5 minutes).
 // Can be overridden via Vite env: VITE_ACCESS_TOKEN_REFRESH_THRESHOLD_SECONDS.
@@ -62,6 +82,21 @@ function isAuthDenied(error: unknown): boolean {
   return status === 401 || status === 403
 }
 
+function isInstallRequiredError(error: AxiosError): boolean {
+  if (error.response?.status !== 428) return false
+  const data = error.response.data as { code?: unknown } | undefined
+  return data?.code === INSTALL_REQUIRED_CODE
+}
+
+function redirectToInstallIfNeeded(): void {
+  if (typeof window === 'undefined') return
+  const path = window.location.pathname
+  if (path === INSTALL_ROUTE_PATH || path === `${INSTALL_ROUTE_PATH}/`) return
+  if (installRedirecting) return
+  installRedirecting = true
+  window.location.replace(INSTALL_ROUTE_PATH)
+}
+
 export async function refreshAccessToken(): Promise<string> {
   if (!refreshInFlight) {
     refreshInFlight = authHttp
@@ -106,6 +141,18 @@ function ensureAxiosHeaders(
   return headers instanceof AxiosHeaders ? headers : AxiosHeaders.from(headers)
 }
 
+export function attachInstallRequiredInterceptor(client: AxiosInstance): void {
+  client.interceptors.response.use(
+    (resp) => resp,
+    (error: AxiosError) => {
+      if (isInstallRequiredError(error)) {
+        redirectToInstallIfNeeded()
+      }
+      return Promise.reject(error)
+    }
+  )
+}
+
 apiHttp.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   if (isAuthEndpoint(config.url)) {
     return config
@@ -141,6 +188,11 @@ apiHttp.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 apiHttp.interceptors.response.use(
   (resp) => resp,
   async (error: AxiosError) => {
+    if (isInstallRequiredError(error)) {
+      redirectToInstallIfNeeded()
+      return Promise.reject(error)
+    }
+
     const status = error.response?.status
     const config = error.config as RetryableAxiosConfig | undefined
 

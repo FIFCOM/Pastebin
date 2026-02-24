@@ -16,7 +16,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/common'
 import markdownItAnchor from 'markdown-it-anchor'
 import markdownItTocDoneRight from 'markdown-it-toc-done-right'
 import markdownItKatex from '@vscode/markdown-it-katex'

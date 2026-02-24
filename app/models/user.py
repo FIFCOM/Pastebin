@@ -5,7 +5,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -29,6 +29,8 @@ class User(Base):
     totp_secret = Column(String(255), nullable=True)  # 加密的TOTP密钥，空值表示未启用
     # TOTP 设置流程：setup 阶段写入 pending，verify 成功后提升为 totp_secret
     totp_pending_secret = Column(String(255), nullable=True)
+    role = Column(String(20), nullable=False, default="user", index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系
@@ -64,6 +66,9 @@ class UserSession(Base):
     encrypted_session_key = Column(Text, nullable=False)  # 会话加密的用户密钥
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    user_agent = Column(Text, nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    last_active_at = Column(DateTime, nullable=True)
 
     # 关系
     user = relationship("User", back_populates="sessions")

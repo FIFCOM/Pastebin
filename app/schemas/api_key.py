@@ -11,6 +11,12 @@ class ApiKeyCreateRequest(BaseModel):
     """创建API密钥请求"""
 
     name: str = Field(..., min_length=1, max_length=100, description="API密钥名称")
+    expires_in_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=3650,
+        description="可选，到期天数（不填表示不过期）",
+    )
 
 
 class ApiKeyResponse(BaseModel):
@@ -18,7 +24,11 @@ class ApiKeyResponse(BaseModel):
 
     id: int
     name: str
+    key_preview: str | None = None
     created_at: datetime
+    last_used_at: datetime | None = None
+    last_used_ip: str | None = None
+    expires_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -30,7 +40,11 @@ class ApiKeyCreateResponse(BaseModel):
     id: int
     name: str
     api_key: str = Field(..., description="API密钥明文（仅创建时返回一次）")
+    key_preview: str | None = None
     created_at: datetime
+    last_used_at: datetime | None = None
+    last_used_ip: str | None = None
+    expires_at: datetime | None = None
 
     class Config:
         from_attributes = True

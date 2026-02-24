@@ -44,6 +44,35 @@ export default defineConfig(({ mode }) => {
     // 优化依赖预构建
     optimizeDeps: {
       include: ['vditor']
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return
+
+            if (id.includes('katex')) {
+              return 'viewer-katex'
+            }
+
+            if (id.includes('highlight.js')) {
+              return 'viewer-highlight'
+            }
+
+            if (id.includes('markdown-it')) {
+              return 'viewer-markdown'
+            }
+
+            if (id.includes('/mdui/')) {
+              return 'ui-mdui'
+            }
+
+            if (id.includes('/vue/') || id.includes('/vue-router/')) {
+              return 'framework'
+            }
+          }
+        }
+      }
     }
   }
 })

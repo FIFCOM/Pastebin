@@ -1,12 +1,12 @@
 <template>
   <div class="app-shell">
-    <GlobalHeader></GlobalHeader>
+    <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
     <mdui-layout class="app-layout">
       <mdui-layout-main class="mdui-container app-main">
         <router-view />
       </mdui-layout-main>
     </mdui-layout>
-    <GlobalFooter></GlobalFooter>
+    <GlobalFooter v-if="!isInstallRoute"></GlobalFooter>
   </div>
 </template>
 
@@ -14,14 +14,18 @@
 import 'mdui/mdui.css'
 import 'mdui'
 
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import GlobalHeader from './components/GlobalHeader.vue'
 import GlobalFooter from './components/GlobalFooter.vue'
 import { useAuth } from './composables/useAuth'
 
+const route = useRoute()
 const { initAuth } = useAuth()
+const isInstallRoute = computed(() => route.path === '/install' || route.path.startsWith('/install/'))
 
 onMounted(() => {
+  if (isInstallRoute.value) return
   initAuth().catch((e) => {
     console.error('Failed to initialize auth on app mount', e)
   })

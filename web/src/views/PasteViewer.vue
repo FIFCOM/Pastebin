@@ -112,14 +112,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPaste, getPasteContent, type PasteData, type PasteFile } from '@/services/paste'
 import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
 import { useTheme } from '@/composables/useTheme'
 import { formatDate } from '@/utils/format'
 import PlainViewer from '@/components/viewers/Plain.vue'
-import MarkdownViewer from '@/components/viewers/Markdown.vue'
 import PasteFilesDialog from '@/components/paste/PasteFilesDialog.vue'
 import 'mdui/components/circular-progress.js'
 import 'mdui/components/card.js'
@@ -137,6 +136,8 @@ import '@mdui/icons/article.js'
 import '@mdui/icons/folder.js'
 
 useTheme()
+
+const MarkdownViewer = defineAsyncComponent(() => import('@/components/viewers/Markdown.vue'))
 
 const route = useRoute()
 

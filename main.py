@@ -14,12 +14,14 @@ from app.controllers import (
     collab_room_router,
     config_router,
     health_router,
+    install_router,
     paste_router,
     user_history_router,
     user_router,
 )
 from app.core.error_handlers import register_exception_handlers
-from app.core.init_db import init_database
+from app.core.middleware import InstallGateMiddleware
+from app.services.install_state_service import ENV_FILE
 from config.config import settings, validate_config
 
 
@@ -39,13 +41,8 @@ async def lifespan(app: FastAPI):
         if not settings.debug:
             raise
 
-    # 初始化数据库
-    try:
-        init_database()
-        print("✓ 数据库初始化完成")
-    except Exception as e:
-        print(f"✗ 数据库初始化失败: {e}")
-        raise
+    if not ENV_FILE.exists():
+        print("ℹ 未检测到 .env，应用将保持安装待完成状态")
 
     print("🚀 应用启动完成")
     yield
@@ -63,6 +60,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+app.add_middleware(InstallGateMiddleware)
+
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
@@ -76,9 +76,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # 注册路由
 app.include_router(health_router)
 app.include_router(config_router)
+app.include_router(install_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
 app.include_router(paste_router)

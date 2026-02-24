@@ -16,16 +16,9 @@ if settings.database_url.startswith("sqlite"):
         connect_args={"check_same_thread": False},
         echo=settings.debug,
     )
-elif settings.mysql_database_url and settings.mysql_database_url.startswith("mysql"):
-    # MySQL配置
-    engine = create_engine(settings.mysql_database_url, echo=settings.debug)
 else:
-    # 默认使用SQLite
-    engine = create_engine(
-        settings.database_url,
-        connect_args={"check_same_thread": False},
-        echo=settings.debug,
-    )
+    # 非SQLite数据库统一走默认引擎配置（如 MySQL / PostgreSQL）
+    engine = create_engine(settings.database_url, echo=settings.debug)
 
 
 def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):

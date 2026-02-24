@@ -25,6 +25,11 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/install',
+    name: 'Install',
+    component: () => import('../views/Install.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
@@ -45,6 +50,11 @@ const router = createRouter({
 
 // 简单 guestOnly 守卫：已登录用户访问 /login 或 /register 时跳回首页
 router.beforeEach(async (to, _from, next) => {
+  if (to.path === '/install' || to.path.startsWith('/install/')) {
+    next()
+    return
+  }
+
   const { isAuthInitialized, initAuth, isLoggedIn } = useAuth()
 
   if (!isAuthInitialized.value) {

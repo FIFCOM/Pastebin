@@ -23,6 +23,10 @@ class ApiKey(Base):
     key_hash = Column(
         String(255), unique=True, nullable=False, index=True
     )  # API key的哈希值
+    key_preview = Column(String(32), nullable=True)  # 仅用于前端识别，不可用于认证
+    last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String(64), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # 关系

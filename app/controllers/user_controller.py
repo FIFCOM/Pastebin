@@ -2,11 +2,23 @@
 用户控制器 - REST API路由
 """
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
+from typing import Literal
+
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_current_user_and_session
+from app.core.request_meta import extract_client_ip, extract_user_agent
 from app.schemas.common import MessageResponse
 from app.schemas.user import (
     LoginResponse,
@@ -46,6 +58,27 @@ def _set_refresh_token_cookie(response: Response, refresh_token: str) -> None:
 def _clear_refresh_token_cookie(response: Response) -> None:
     response.delete_cookie(key=REFRESH_TOKEN_COOKIE_NAME, path="/api/users")
 
+
+def _is_admin(user: UserResponse) -> bool:
+    return user.role == "admin"
+
+
+def _require_admin(user: UserResponse) -> None:
+    if not _is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员可执行该操作"
+        )
+
+
+def _map_user_service_error(error: ValueError) -> HTTPException:
+    message = str(error)
+    if "无权限" in message:
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
+    if "不存在" in message:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
 # 创建路由器
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
 
@@ -61,8 +94,7 @@ async def register_user(user_data: UserRegisterRequest, db: Session = Depends(ge
     - **password**: SHA256哈希后的密码
     """
     try:
-        user = UserService.register_user(db, user_data)
-        return user
+        return UserService.register_user(db, user_data)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -72,6 +104,7 @@ async def register_user(user_data: UserRegisterRequest, db: Session = Depends(ge
 @router.post("/login", response_model=LoginResponse)
 async def login_user(
     login_data: UserLoginRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
@@ -82,7 +115,12 @@ async def login_user(
     - **password**: SHA256哈希后的密码
     """
     try:
-        login_response = UserService.login_user(db, login_data)
+        login_response = UserService.login_user(
+            db,
+            login_data,
+            user_agent=extract_user_agent(request),
+            ip_address=extract_client_ip(request),
+        )
         _set_refresh_token_cookie(response, login_response.refresh_token)
         return login_response
     except ValueError as e:
@@ -96,6 +134,7 @@ async def login_user(
 @router.post("/login-totp", response_model=LoginResponse)
 async def login_user_with_totp(
     login_data: UserLoginWithTotpRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
@@ -107,7 +146,12 @@ async def login_user_with_totp(
     - **totp_code**: 6位TOTP验证码
     """
     try:
-        login_response = UserService.login_user_with_totp(db, login_data)
+        login_response = UserService.login_user_with_totp(
+            db,
+            login_data,
+            user_agent=extract_user_agent(request),
+            ip_address=extract_client_ip(request),
+        )
         _set_refresh_token_cookie(response, login_response.refresh_token)
         return login_response
     except ValueError as e:
@@ -120,6 +164,7 @@ async def login_user_with_totp(
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
 async def refresh_access_token(
+    request: Request,
     response: Response,
     refresh_token: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE_NAME),
     refresh_data: RefreshTokenRequest | None = None,
@@ -138,7 +183,12 @@ async def refresh_access_token(
         )
 
     try:
-        access_token, new_refresh_token = UserService.refresh_access_token(db, token)
+        access_token, new_refresh_token = UserService.refresh_access_token(
+            db,
+            token,
+            user_agent=extract_user_agent(request),
+            ip_address=extract_client_ip(request),
+        )
         _set_refresh_token_cookie(response, new_refresh_token)
         return RefreshTokenResponse(
             access_token=access_token,
@@ -197,6 +247,11 @@ async def get_user(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """根据ID获取用户信息"""
+    if not _is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限查看其他用户"
+        )
+
     user = UserService.get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
@@ -213,21 +268,19 @@ async def update_user(
     """
     更新用户信息
 
-    用户只能更新自己的信息
+    - 普通用户：仅可更新自己邮箱/密码，且必须提供 current_password
+    - 管理员：可更新任意用户的邮箱/密码/角色/状态
     """
-    # 检查权限：用户只能更新自己的信息
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="无权限修改其他用户信息"
-        )
-
     try:
-        updated_user = UserService.update_user(db, user_id, user_data)
-        return updated_user
+        return UserService.update_user(
+            db,
+            user_id,
+            user_data,
+            actor_user_id=current_user.id,
+            actor_is_admin=_is_admin(current_user),
+        )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from None
+        raise _map_user_service_error(e) from None
 
 
 @router.delete("/{user_id}", response_model=MessageResponse)
@@ -239,15 +292,19 @@ async def delete_user(
     """
     删除用户
 
-    用户只能删除自己的账户
+    - 普通用户：仅可删除自己的账户
+    - 管理员：可删除任意用户
     """
-    # 检查权限：用户只能删除自己的账户
-    if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="无权限删除其他用户"
+    try:
+        success = UserService.delete_user(
+            db,
+            user_id,
+            actor_user_id=current_user.id,
+            actor_is_admin=_is_admin(current_user),
         )
+    except ValueError as e:
+        raise _map_user_service_error(e) from None
 
-    success = UserService.delete_user(db, user_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
@@ -258,15 +315,22 @@ async def delete_user(
 async def list_users(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页大小"),
+    search: str | None = Query(None, description="按用户名/邮箱搜索"),
+    role: Literal["admin", "user"] | None = Query(None, description="角色筛选"),
+    is_active: bool | None = Query(None, description="状态筛选"),
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """
-    获取用户列表（分页）
-
-    需要登录
-    """
-    return UserService.list_users(db, page, size)
+    """获取用户列表（管理员）"""
+    _require_admin(current_user)
+    return UserService.list_users(
+        db,
+        page,
+        size,
+        search=search,
+        role=role,
+        is_active=is_active,
+    )
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -276,15 +340,17 @@ async def create_user(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    创建用户（管理功能）
+    创建用户（管理员）
 
     - **username**: 用户名（可选，留空自动生成）
     - **email**: 用户邮箱
     - **password**: SHA256哈希后的密码
+    - **role**: 用户角色（admin/user）
     """
+    _require_admin(current_user)
+
     try:
-        user = UserService.create_user(db, user_data)
-        return user
+        return UserService.create_user(db, user_data)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -295,19 +361,39 @@ async def create_user(
 async def get_user_sessions(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current: tuple[UserResponse, str] = Depends(get_current_user_and_session),
 ):
     """
-    获取用户的所有会话
+    获取用户会话列表
 
-    用户只能查看自己的会话
+    仅支持用户查看自己的会话。
     """
+    current_user, current_session_id = current
     if current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限查看其他用户的会话"
         )
 
-    return UserService.get_user_sessions(db, user_id)
+    return UserService.get_user_sessions(
+        db, user_id, current_session_id=current_session_id
+    )
+
+
+@router.delete("/{user_id}/sessions/others", response_model=MessageResponse)
+async def revoke_other_sessions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current: tuple[UserResponse, str] = Depends(get_current_user_and_session),
+):
+    """撤销当前用户的其他设备会话（保留当前会话）。"""
+    current_user, current_session_id = current
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限操作其他用户的会话"
+        )
+
+    count = UserService.revoke_other_sessions(db, user_id, current_session_id)
+    return MessageResponse(message=f"已撤销 {count} 个其他会话")
 
 
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)
@@ -335,7 +421,9 @@ async def cleanup_expired_sessions(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """清理过期会话（管理功能）"""
+    """清理过期会话（管理员）"""
+    _require_admin(current_user)
+
     sessions_count = UserService.cleanup_expired_sessions(db)
     used_tokens_count = UserService.cleanup_expired_used_refresh_tokens(db)
     return MessageResponse(
@@ -392,10 +480,9 @@ async def verify_totp(
         success = UserService.verify_and_enable_totp(db, current_user.id, totp_data)
         if success:
             return MessageResponse(message="TOTP验证成功，两步验证已启用")
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="TOTP验证码错误"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="TOTP验证码错误"
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -414,10 +501,9 @@ async def disable_totp(
         success = UserService.disable_totp(db, current_user.id)
         if success:
             return MessageResponse(message="TOTP两步验证已禁用")
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="禁用TOTP失败"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="禁用TOTP失败"
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(e)

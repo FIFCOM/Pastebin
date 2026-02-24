@@ -59,7 +59,6 @@ class Settings:
 
     # 数据库设置
     database_url: str
-    mysql_database_url: str | None
 
     # 安全设置
     secret_key: str
@@ -109,8 +108,7 @@ def load_config() -> Settings:
         version=os.getenv("VERSION", "0.1.0"),
         debug=_bool_env("DEBUG", True),
         # 数据库设置
-        database_url=os.getenv("DATABASE_URL", "sqlite:///./user_auth.db"),
-        mysql_database_url=os.getenv("MYSQL_DATABASE_URL"),
+        database_url=os.getenv("DATABASE_URL", "sqlite:///./material_bin.db"),
         # 安全设置
         secret_key=secret_key,
         algorithm=os.getenv("ALGORITHM", "HS256"),
