@@ -21,15 +21,31 @@
         <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
         <div v-if="status" class="steps" aria-label="安装进度">
+          <div
+            class="step-connector step-connector-head"
+            :class="{ done: stepStates.env !== 'pending' }"
+            aria-hidden="true"
+          ></div>
+
           <div class="step-node step-node-start" :class="`is-${stepStates.env}`">
             <div class="step-circle">{{ stepStates.env === 'done' ? '✓' : '1' }}</div>
           </div>
 
-          <div class="step-connector" :class="{ done: stepStates.env === 'done' }" aria-hidden="true"></div>
+          <div
+            class="step-connector step-connector-mid"
+            :class="{ done: stepStates.env === 'done' }"
+            aria-hidden="true"
+          ></div>
 
           <div class="step-node step-node-end" :class="`is-${stepStates.admin}`">
             <div class="step-circle">{{ stepStates.admin === 'done' ? '✓' : '2' }}</div>
           </div>
+
+          <div
+            class="step-connector step-connector-tail"
+            :class="{ done: stepStates.admin === 'done' }"
+            aria-hidden="true"
+          ></div>
 
           <div class="step-content step-content-start">
             <div class="step-title">配置环境变量</div>
@@ -577,10 +593,10 @@ void loadStatus()
 .steps {
   margin: 10px 0 18px;
   display: grid;
-  grid-template-columns: auto minmax(48px, 1fr) auto;
+  grid-template-columns: minmax(40px, 1fr) auto minmax(48px, 1fr) auto minmax(40px, 1fr);
   grid-template-areas:
-    'node-start connector node-end'
-    'content-start . content-end';
+    'connector-head node-start connector-mid node-end connector-tail'
+    '. content-start . content-end .';
   column-gap: 12px;
   row-gap: 8px;
   align-items: center;
@@ -626,11 +642,22 @@ void loadStatus()
 }
 
 .step-connector {
-  grid-area: connector;
   width: 100%;
   height: 2px;
   border-radius: 999px;
   background: rgba(var(--mdui-color-outline), 0.45);
+}
+
+.step-connector-head {
+  grid-area: connector-head;
+}
+
+.step-connector-mid {
+  grid-area: connector-mid;
+}
+
+.step-connector-tail {
+  grid-area: connector-tail;
 }
 
 .step-connector.done {
@@ -730,7 +757,7 @@ void loadStatus()
   border-radius: 10px;
   padding: 10px 12px;
   background: rgb(var(--mdui-color-surface-container-low));
-  color: rgb(var(--mdui-color-on-surface));
+  color: rgb(var(--mdui-color-primary));
   font-size: 13px;
   font-weight: 500;
   text-align: left;
@@ -821,26 +848,12 @@ void loadStatus()
 
 @media (max-width: 640px) {
   .steps {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(16px, 1fr) auto minmax(24px, 1fr) auto minmax(16px, 1fr);
     grid-template-areas:
-      'node-start'
-      'content-start'
-      'connector'
-      'node-end'
-      'content-end';
+      'connector-head node-start connector-mid node-end connector-tail'
+      '. content-start . content-end .';
+    column-gap: 8px;
     row-gap: 6px;
-    justify-items: center;
-  }
-
-  .step-content-start,
-  .step-content-end {
-    justify-self: center;
-    text-align: center;
-  }
-
-  .step-connector {
-    width: 2px;
-    height: 24px;
   }
 }
 </style>
