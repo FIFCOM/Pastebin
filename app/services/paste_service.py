@@ -57,7 +57,11 @@ class PasteService:
 
     @staticmethod
     def _upload_chunk_path(paste_id: str, upload_id: str, index: int) -> Path:
-        return PasteService._upload_session_dir(paste_id, upload_id) / "chunks" / f"{index:08d}.part"
+        return (
+            PasteService._upload_session_dir(paste_id, upload_id)
+            / "chunks"
+            / f"{index:08d}.part"
+        )
 
     @staticmethod
     def _final_file_path(paste_id: str, file_id: str) -> Path:
@@ -95,7 +99,9 @@ class PasteService:
         return existing_total_bytes + pending_total_bytes
 
     @staticmethod
-    def _paste_remaining_upload_bytes(db: Session, paste_id: str, now: datetime) -> int | None:
+    def _paste_remaining_upload_bytes(
+        db: Session, paste_id: str, now: datetime
+    ) -> int | None:
         limit = PasteService._paste_total_upload_limit_bytes()
         if limit <= 0:
             return None
@@ -103,7 +109,9 @@ class PasteService:
         return max(0, limit - used)
 
     @staticmethod
-    def _file_chunk_aad(paste_id: str, file_id: str, chunk_index: int, total_chunks: int) -> bytes:
+    def _file_chunk_aad(
+        paste_id: str, file_id: str, chunk_index: int, total_chunks: int
+    ) -> bytes:
         # AAD 约定（前后端需一致）：用于绑定 paste/file/chunk 维度，防乱序/重放/篡改
         return f"{PasteService.FILE_CHUNK_AAD_PREFIX}|paste:{paste_id}|file:{file_id}|i:{chunk_index}|n:{total_chunks}".encode()
 
@@ -225,7 +233,9 @@ class PasteService:
 
         remaining_after: int | None
         if max_paste_total > 0:
-            remaining_after = max(0, max_paste_total - (used_total + int(req.file_size)))
+            remaining_after = max(
+                0, max_paste_total - (used_total + int(req.file_size))
+            )
         else:
             remaining_after = None
 
@@ -254,7 +264,10 @@ class PasteService:
 
         session = (
             db.query(FileUploadSession)
-            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .filter(
+                FileUploadSession.id == upload_id,
+                FileUploadSession.paste_id == paste_id,
+            )
             .first()
         )
         if not session:
@@ -325,7 +338,10 @@ class PasteService:
 
         session = (
             db.query(FileUploadSession)
-            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .filter(
+                FileUploadSession.id == upload_id,
+                FileUploadSession.paste_id == paste_id,
+            )
             .first()
         )
         if not session:
@@ -366,12 +382,18 @@ class PasteService:
 
             with open(assembled_tmp, "wb") as out:
                 for index in range(total_chunks):
-                    chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
+                    chunk_path = PasteService._upload_chunk_path(
+                        paste_id, upload_id, index
+                    )
                     if not chunk_path.exists():
                         raise ValueError(f"缺少分片: {index}")
                     chunk_bytes = chunk_path.read_bytes()
 
-                    expected_plain = chunk_size if index < total_chunks - 1 else plain_size - chunk_size * (total_chunks - 1)
+                    expected_plain = (
+                        chunk_size
+                        if index < total_chunks - 1
+                        else plain_size - chunk_size * (total_chunks - 1)
+                    )
                     if expected_plain < 0:
                         expected_plain = 0
                     if len(chunk_bytes) != expected_plain:
@@ -386,8 +408,12 @@ class PasteService:
 
                     # deterministic nonce: prefix(8B) + chunk_index(4B, big-endian)
                     iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
-                    aad = PasteService._file_chunk_aad(paste_id, upload_id, index, total_chunks)
-                    encrypted_chunk = encrypt_with_key(chunk_bytes, paste_key, aad=aad, iv=iv)
+                    aad = PasteService._file_chunk_aad(
+                        paste_id, upload_id, index, total_chunks
+                    )
+                    encrypted_chunk = encrypt_with_key(
+                        chunk_bytes, paste_key, aad=aad, iv=iv
+                    )
                     out.write(encrypted_chunk)
                     sha256_encrypted.update(encrypted_chunk)
         else:
@@ -400,19 +426,27 @@ class PasteService:
             seen_ivs: set[bytes] = set()
             with open(assembled_tmp, "wb") as out:
                 for index in range(total_chunks):
-                    chunk_path = PasteService._upload_chunk_path(paste_id, upload_id, index)
+                    chunk_path = PasteService._upload_chunk_path(
+                        paste_id, upload_id, index
+                    )
                     if not chunk_path.exists():
                         raise ValueError(f"缺少分片: {index}")
                     chunk_bytes = chunk_path.read_bytes()
 
-                    expected_plain = chunk_size if index < total_chunks - 1 else plain_size - chunk_size * (total_chunks - 1)
+                    expected_plain = (
+                        chunk_size
+                        if index < total_chunks - 1
+                        else plain_size - chunk_size * (total_chunks - 1)
+                    )
                     if expected_plain < 0:
                         expected_plain = 0
                     expected_encrypted = expected_plain + 12 + 16
                     if len(chunk_bytes) != expected_encrypted:
                         raise ValueError(f"分片大小不匹配: index={index}")
                     iv = bytes(chunk_bytes[:12])
-                    expected_iv = iv_prefix + int(index).to_bytes(4, "big", signed=False)
+                    expected_iv = iv_prefix + int(index).to_bytes(
+                        4, "big", signed=False
+                    )
                     if iv != expected_iv:
                         raise ValueError(f"分片IV不匹配: index={index}")
                     if iv in seen_ivs:
@@ -510,7 +544,9 @@ class PasteService:
         )
 
     @staticmethod
-    def abort_file_upload(db: Session, paste_id: str, upload_id: str, admin_key: str) -> None:
+    def abort_file_upload(
+        db: Session, paste_id: str, upload_id: str, admin_key: str
+    ) -> None:
         """取消分片上传并清理临时数据。"""
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
         if not paste:
@@ -520,7 +556,10 @@ class PasteService:
 
         session = (
             db.query(FileUploadSession)
-            .filter(FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id)
+            .filter(
+                FileUploadSession.id == upload_id,
+                FileUploadSession.paste_id == paste_id,
+            )
             .first()
         )
         if session:
@@ -556,7 +595,8 @@ class PasteService:
         session = (
             db.query(FileUploadSession)
             .filter(
-                FileUploadSession.id == upload_id, FileUploadSession.paste_id == paste_id
+                FileUploadSession.id == upload_id,
+                FileUploadSession.paste_id == paste_id,
             )
             .first()
         )
@@ -948,7 +988,10 @@ class PasteService:
 
     @staticmethod
     def get_paste_info(
-        db: Session, paste_id: str, access_key: str | None = None
+        db: Session,
+        paste_id: str,
+        access_key: str | None = None,
+        admin_key: str | None = None,
     ) -> PasteResponse:
         """
         获取Paste信息
@@ -968,15 +1011,15 @@ class PasteService:
         if not paste:
             raise ValueError("Paste不存在")
 
-        if str(paste.status) == "draft":  # type: ignore
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
             raise ValueError("草稿状态的Paste不可访问")
 
-        # 验证访问权限
-        if not PasteService._verify_access_key(paste, access_key):
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
             raise ValueError("访问密钥错误")
 
-        # 检查是否过期（兼容 SQLite 返回的 naive datetime）
-        if is_expired(paste.expire_at):  # type: ignore[arg-type]
+        if not admin_ok and is_expired(paste.expire_at):  # type: ignore[arg-type]
             raise ValueError("Paste已过期")
 
         return PasteResponse(
@@ -996,6 +1039,7 @@ class PasteService:
         paste_id: str,
         access_key: str | None = None,
         encryption_key: str | None = None,
+        admin_key: str | None = None,
     ) -> PasteContentResponse:
         """
         获取Paste内容
@@ -1016,30 +1060,29 @@ class PasteService:
         if not paste:
             raise ValueError("Paste不存在")
 
-        if str(paste.status) == "draft":  # type: ignore
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
             raise ValueError("草稿状态的Paste不可访问")
 
-        # 验证访问权限
-        if not PasteService._verify_access_key(paste, access_key):
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
             raise ValueError("访问密钥错误")
 
-        # 检查是否过期（兼容 SQLite 返回的 naive datetime）
-        if is_expired(paste.expire_at):  # type: ignore[arg-type]
+        if not admin_ok and is_expired(paste.expire_at):  # type: ignore[arg-type]
             raise ValueError("Paste已过期")
 
         content_path = paste.content_path  # type: ignore
         if content_path is None or str(content_path).strip() == "":
             raise ValueError("Paste内容为空")
 
-        # 检查查看次数限制并增加计数
-        paste_max_views = int(paste.max_views or -1)  # type: ignore
-        paste_view_count = int(paste.view_count or 0)  # type: ignore
-        if paste_max_views > 0 and paste_view_count >= paste_max_views:
-            raise ValueError("Paste已达到最大查看次数")
+        if not admin_ok:
+            paste_max_views = int(paste.max_views or -1)  # type: ignore
+            paste_view_count = int(paste.view_count or 0)  # type: ignore
+            if paste_max_views > 0 and paste_view_count >= paste_max_views:
+                raise ValueError("Paste已达到最大查看次数")
 
-        # 增加查看次数
-        paste.view_count = paste_view_count + 1  # type: ignore
-        db.commit()
+            paste.view_count = paste_view_count + 1  # type: ignore
+            db.commit()
 
         # 读取内容
         encrypted_content = PasteService._read_content_from_file(str(content_path))
@@ -1063,6 +1106,7 @@ class PasteService:
         # 获取文件列表（与内容接口一起返回，便于一次性加载）
         files = db.query(File).filter(File.paste_id == paste_id).all()
         if files:
+
             def _manifest_fields(
                 file_id: str,
             ) -> int | None:
@@ -1086,7 +1130,9 @@ class PasteService:
                     decrypted_name: str
                     try:
                         encrypted_name_bytes = str_to_bytes(encrypted_name)
-                        decrypted_name_bytes = decrypt_with_key(encrypted_name_bytes, key_bytes)
+                        decrypted_name_bytes = decrypt_with_key(
+                            encrypted_name_bytes, key_bytes
+                        )
                         decrypted_name = decrypted_name_bytes.decode(errors="replace")
                     except Exception:
                         decrypted_name = f"mb_encrypted_{file_id}"
@@ -1194,7 +1240,8 @@ class PasteService:
                 if file_path.exists():
                     file_path.unlink()
                 manifest_path = PasteService._final_manifest_path(
-                    paste_id, str(file_record.id)  # type: ignore
+                    paste_id,
+                    str(file_record.id),  # type: ignore
                 )
                 if manifest_path.exists():
                     manifest_path.unlink()

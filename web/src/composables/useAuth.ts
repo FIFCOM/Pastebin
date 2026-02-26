@@ -10,6 +10,7 @@ import {
 } from '../services/auth'
 import { refreshAccessToken } from '../services/http'
 import { AUTH_TOKEN_EVENT, clearAccessToken, loadAccessToken, saveAccessToken } from '../services/token'
+import { useHistory, clearUserHistoryCache, resetHistoryState } from './useHistory'
 
 /**
  * 全局认证状态（单例）
@@ -88,6 +89,9 @@ async function login(email: string, password: string): Promise<LoginResponse> {
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
+    resetHistoryState()
+    // 登录成功后导入游客历史
+    void useHistory().importGuestAndSync(resp.user.id)
     return resp
   } catch (e) {
     // 登录失败时清理本地状态，但把错误抛给调用方处理
@@ -114,6 +118,8 @@ async function loginWithTotp(
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
+    resetHistoryState()
+    void useHistory().importGuestAndSync(resp.user.id)
     return resp
   } catch (e) {
     clearAccessToken()
@@ -141,6 +147,8 @@ async function registerAndAutoLogin(
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
+    resetHistoryState()
+    void useHistory().importGuestAndSync(resp.user.id)
     return resp
   } catch (e) {
     clearAccessToken()
@@ -156,7 +164,11 @@ async function registerAndAutoLogin(
  * 退出登录：清理本地 token 和用户信息
  */
 function logout(): void {
-  // 前端先清理状态，后端撤销 refresh token cookie（不阻塞 UI）
+  // 登出前清理当前用户的本地历史缓存
+  if (currentUser.value) {
+    clearUserHistoryCache(currentUser.value.id)
+  }
+  resetHistoryState()
   currentUser.value = null
   accessToken.value = null
   clearAccessToken()
@@ -164,6 +176,10 @@ function logout(): void {
 }
 
 function logoutAll(): void {
+  if (currentUser.value) {
+    clearUserHistoryCache(currentUser.value.id)
+  }
+  resetHistoryState()
   currentUser.value = null
   accessToken.value = null
   clearAccessToken()

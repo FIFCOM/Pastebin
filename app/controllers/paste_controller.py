@@ -88,7 +88,7 @@ def _build_content_disposition(
 
     # RFC 5987 (filename*)：UTF-8 + percent-encoding
     encoded = quote(name, safe="")
-    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _iter_file(path, chunk_size: int = 1024 * 1024):
@@ -336,14 +336,22 @@ async def init_file_upload(
         )
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            ) from None
         elif "不存在" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from None
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from None
 
 
-@router.get("/{paste_id}/files/{upload_id}/status", response_model=FileUploadStatusResponse)
+@router.get(
+    "/{paste_id}/files/{upload_id}/status", response_model=FileUploadStatusResponse
+)
 async def get_file_upload_status(
     paste_id: str,
     upload_id: str,
@@ -360,16 +368,26 @@ async def get_file_upload_status(
         return PasteService.get_file_upload_status(db, paste_id, upload_id, admin_key)
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            ) from None
         elif "不存在" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from None
         elif "过期" in str(e):
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail=str(e)
+            ) from None
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from None
 
 
-@router.put("/{paste_id}/files/{upload_id}/chunk/{index}", response_model=MessageResponse)
+@router.put(
+    "/{paste_id}/files/{upload_id}/chunk/{index}", response_model=MessageResponse
+)
 async def upload_file_chunk(
     paste_id: str,
     upload_id: str,
@@ -454,13 +472,21 @@ async def upload_file_chunk(
 
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            ) from None
         elif "不存在" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from None
         elif "过期" in str(e):
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail=str(e)
+            ) from None
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -491,13 +517,21 @@ async def complete_file_upload(
         )
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            ) from None
         elif "不存在" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from None
         elif "过期" in str(e):
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE, detail=str(e)
+            ) from None
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from None
 
 
 @router.post("/{paste_id}/files/{upload_id}/abort", response_model=MessageResponse)
@@ -516,11 +550,17 @@ async def abort_file_upload(
         return MessageResponse(message="上传已取消", timestamp=int(time.time()))
     except ValueError as e:
         if "权限" in str(e) or "密钥" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            ) from None
         elif "不存在" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from None
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from None
 
 
 @router.delete("/{paste_id}/files/{file_id}", response_model=MessageResponse)
@@ -594,6 +634,7 @@ async def publish_paste(
 async def get_paste_info(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -601,8 +642,11 @@ async def get_paste_info(
 
     - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
     """
+    admin_key = _try_get_admin_key_from_header(authorization)
     try:
-        return PasteService.get_paste_info(db, paste_id, access_key)
+        return PasteService.get_paste_info(
+            db, paste_id, access_key, admin_key=admin_key
+        )
     except ValueError as e:
         if "不存在" in str(e):
             raise HTTPException(
@@ -631,6 +675,7 @@ async def get_paste_content(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -639,8 +684,15 @@ async def get_paste_content(
     - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
     - **encryption_key**: 解密密钥（可选，如果提供且正确则返回解密后的内容）
     """
+    admin_key = _try_get_admin_key_from_header(authorization)
     try:
-        return PasteService.get_paste_content(db, paste_id, access_key, encryption_key)
+        return PasteService.get_paste_content(
+            db,
+            paste_id,
+            access_key,
+            encryption_key,
+            admin_key=admin_key,
+        )
     except ValueError as e:
         if "不存在" in str(e):
             raise HTTPException(
@@ -710,9 +762,7 @@ async def get_file_manifest(
 
         paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
         if is_expired(paste_expire_at):
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE, detail="Paste已过期"
-            )
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Paste已过期")
 
         if not admin_ok:
             paste_max_views = int(paste.max_views or -1)  # type: ignore
@@ -724,9 +774,7 @@ async def get_file_manifest(
 
         # 获取文件记录
         file_record = (
-            db.query(File)
-            .filter(File.id == file_id, File.paste_id == paste_id)
-            .first()
+            db.query(File).filter(File.id == file_id, File.paste_id == paste_id).first()
         )
 
         if not file_record:
@@ -863,9 +911,7 @@ async def get_file_meta(
 
         paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
         if is_expired(paste_expire_at):
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE, detail="Paste已过期"
-            )
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Paste已过期")
 
         if not admin_ok:
             paste_max_views = int(paste.max_views or -1)  # type: ignore
@@ -876,9 +922,7 @@ async def get_file_meta(
                 )
 
         file_record = (
-            db.query(File)
-            .filter(File.id == file_id, File.paste_id == paste_id)
-            .first()
+            db.query(File).filter(File.id == file_id, File.paste_id == paste_id).first()
         )
         if not file_record:
             raise HTTPException(
@@ -926,7 +970,9 @@ async def get_file(
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
     authorization: str | None = Header(None),
-    range_header: str | None = Header(None, alias="Range", description="HTTP Range头（bytes=...）"),
+    range_header: str | None = Header(
+        None, alias="Range", description="HTTP Range头（bytes=...）"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -967,9 +1013,7 @@ async def get_file(
 
         paste_expire_at: datetime | None = cast(datetime | None, paste.expire_at)
         if is_expired(paste_expire_at):
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE, detail="Paste已过期"
-            )
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Paste已过期")
 
         if not admin_ok:
             paste_max_views = int(paste.max_views or -1)  # type: ignore
@@ -981,9 +1025,7 @@ async def get_file(
 
         # 获取文件记录
         file_record = (
-            db.query(File)
-            .filter(File.id == file_id, File.paste_id == paste_id)
-            .first()
+            db.query(File).filter(File.id == file_id, File.paste_id == paste_id).first()
         )
 
         if not file_record:
@@ -1033,7 +1075,10 @@ async def get_file(
 
                 # 分片上传：manifest 存在时可按chunk流式解密，避免一次性读入内存
                 manifest_path = (
-                    Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
+                    Path(settings.data_dir)
+                    / "files"
+                    / paste_id
+                    / f"{file_id}.manifest.json"
                 )
                 if manifest_path.exists():
                     import json
@@ -1067,13 +1112,17 @@ async def get_file(
                                     expected_plain = (
                                         chunk_size
                                         if idx < total_chunks - 1
-                                        else plain_size - chunk_size * (total_chunks - 1)
+                                        else plain_size
+                                        - chunk_size * (total_chunks - 1)
                                     )
                                     if expected_plain < 0:
                                         expected_plain = 0
                                     iv = f.read(12)
                                     ciphertext = f.read(expected_plain + 16)
-                                    if len(iv) != 12 or len(ciphertext) != expected_plain + 16:
+                                    if (
+                                        len(iv) != 12
+                                        or len(ciphertext) != expected_plain + 16
+                                    ):
                                         raise ValueError("文件分片格式错误")
 
                                     encrypted_chunk = iv + ciphertext
@@ -1081,13 +1130,21 @@ async def get_file(
                                         paste_id, file_id, idx, total_chunks
                                     )
                                     if aad_required:
-                                        plain = decrypt_with_key(encrypted_chunk, key_bytes, aad=aad)
+                                        plain = decrypt_with_key(
+                                            encrypted_chunk, key_bytes, aad=aad
+                                        )
                                     else:
-                                        plain = decrypt_with_key(encrypted_chunk, key_bytes, aad=None)
+                                        plain = decrypt_with_key(
+                                            encrypted_chunk, key_bytes, aad=None
+                                        )
 
-                                    slice_start = start_in_chunk if idx == start_chunk else 0
+                                    slice_start = (
+                                        start_in_chunk if idx == start_chunk else 0
+                                    )
                                     slice_end_exclusive = (
-                                        end_in_chunk + 1 if idx == end_chunk else len(plain)
+                                        end_in_chunk + 1
+                                        if idx == end_chunk
+                                        else len(plain)
                                     )
                                     chunk_out = plain[slice_start:slice_end_exclusive]
                                     if chunk_out:
@@ -1119,7 +1176,10 @@ async def get_file(
                                     expected_plain = 0
                                 iv = f.read(12)
                                 ciphertext = f.read(expected_plain + 16)
-                                if len(iv) != 12 or len(ciphertext) != expected_plain + 16:
+                                if (
+                                    len(iv) != 12
+                                    or len(ciphertext) != expected_plain + 16
+                                ):
                                     raise ValueError("文件分片格式错误")
 
                                 encrypted_chunk = iv + ciphertext
@@ -1127,9 +1187,13 @@ async def get_file(
                                     paste_id, file_id, idx, total_chunks
                                 )
                                 if aad_required:
-                                    yield decrypt_with_key(encrypted_chunk, key_bytes, aad=aad)
+                                    yield decrypt_with_key(
+                                        encrypted_chunk, key_bytes, aad=aad
+                                    )
                                 else:
-                                    yield decrypt_with_key(encrypted_chunk, key_bytes, aad=None)
+                                    yield decrypt_with_key(
+                                        encrypted_chunk, key_bytes, aad=None
+                                    )
 
                     return StreamingResponse(
                         _iter_decrypted_chunks(),

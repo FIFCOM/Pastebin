@@ -9,6 +9,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -35,20 +36,41 @@ class UserHistory(Base):
         index=True,
     )
 
-    # 加密的paste密钥
+    # 加密的paste密钥（使用用户密钥加密）
     encrypted_paste_key = Column(Text, nullable=False)
 
+    # 加密的admin_key（使用用户密钥加密，不明文存储）
+    encrypted_admin_key = Column(Text, nullable=False)
+
     # 用户是否标记为收藏
-    is_starred = Column(Boolean, default=False)
+    is_starred = Column(Boolean, default=False, nullable=False)
+
+    # 软删除标记
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
     # 关系
     user = relationship("User")
     paste = relationship("Paste")
 
     # 索引和约束定义
-    __table_args__ = (UniqueConstraint("user_id", "paste_id", name="uq_user_history"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "paste_id", name="uq_user_history"),
+        Index("idx_user_history_list", "user_id", "is_deleted", "updated_at"),
+        Index(
+            "idx_user_history_starred",
+            "user_id",
+            "is_deleted",
+            "is_starred",
+            "updated_at",
+        ),
+    )
 
     def __repr__(self):
-        return f"<UserHistory(id={self.id}, user_id={self.user_id}, paste_id={self.paste_id}, is_starred={self.is_starred})>"
+        return f"<UserHistory(id={self.id}, user_id={self.user_id}, paste_id={self.paste_id}, is_starred={self.is_starred}, is_deleted={self.is_deleted})>"

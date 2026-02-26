@@ -31,21 +31,6 @@
           @click="copyToClipboard(pasteUrl, '分享链接已复制')"
         ></mdui-button-icon>
       </mdui-text-field>
-
-      <mdui-text-field
-        label="Admin Key (请妥善保管)"
-        readonly
-        :value="adminKey"
-        variant="outlined"
-        class="full-width"
-      >
-        <mdui-button-icon
-          slot="suffix"
-          icon="content_copy"
-          :disabled="!adminKey"
-          @click="copyToClipboard(adminKey, 'Admin Key 已复制')"
-        ></mdui-button-icon>
-      </mdui-text-field>
     </div>
 
     <div class="advanced-section">

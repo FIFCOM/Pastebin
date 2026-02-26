@@ -22,7 +22,8 @@ export interface PasteData {
 }
 
 export interface PasteContent {
-  encrypted_content: string
+  encrypted_content?: string | null
+  content?: string | null
   files: PasteFile[]
 }
 
@@ -157,16 +158,37 @@ export async function updatePaste(
   )
 }
 
-export async function getPaste(pasteId: string, accessKey?: string): Promise<PasteData> {
+export async function getPaste(
+  pasteId: string,
+  accessKey?: string,
+  adminKey?: string
+): Promise<PasteData> {
   const response = await apiClient.get(`/pastes/${pasteId}`, {
-    params: accessKey ? { access_key: accessKey } : undefined
+    params: accessKey ? { access_key: accessKey } : undefined,
+    headers: adminKey
+      ? {
+          Authorization: `Bearer ${adminKey}`
+        }
+      : undefined
   })
   return response.data
 }
 
-export async function getPasteContent(pasteId: string, accessKey?: string): Promise<PasteContent> {
+export async function getPasteContent(
+  pasteId: string,
+  accessKey?: string,
+  adminKey?: string
+): Promise<PasteContent> {
+  const params: Record<string, string> = {}
+  if (accessKey) params.access_key = accessKey
+
   const response = await apiClient.get(`/pastes/${pasteId}/content`, {
-    params: accessKey ? { access_key: accessKey } : undefined
+    params: Object.keys(params).length > 0 ? params : undefined,
+    headers: adminKey
+      ? {
+          Authorization: `Bearer ${adminKey}`
+        }
+      : undefined
   })
   return response.data
 }

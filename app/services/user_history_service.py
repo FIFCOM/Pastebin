@@ -2,6 +2,10 @@
 用户History管理服务层 - 业务逻辑处理
 """
 
+import logging
+from datetime import UTC, datetime
+
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import (
@@ -15,7 +19,11 @@ from app.core.security import (
 from app.models.paste import Paste
 from app.models.user_history import UserHistory
 from app.schemas.user_history import (
-    UserHistoryInfo,
+    GuestHistoryItem,
+    ImportGuestHistoryRequest,
+    ImportGuestHistoryResponse,
+    UserHistoryDetail,
+    UserHistoryListItem,
     UserHistoryListResponse,
     UserHistorySaveRequest,
     UserHistorySearchParams,
@@ -23,23 +31,137 @@ from app.schemas.user_history import (
 )
 from app.services.paste_service import PasteService
 
+# 游客导入上限
+IMPORT_GUEST_MAX_ITEMS = 500
+logger = logging.getLogger(__name__)
+
 
 class UserHistoryService:
     """用户History管理服务类"""
 
     @staticmethod
-    def _encrypt_paste_key_for_user(paste_key: str, user_key: bytes) -> str:
-        """使用用户密钥加密paste密钥（paste_key是URL-safe格式）"""
-        paste_key_bytes = urlsafe_str_to_key(paste_key)
-        encrypted_paste_key = encrypt_with_key(paste_key_bytes, user_key)
-        return bytes_to_str(encrypted_paste_key)
+    def _encrypt_key_for_user(key_str: str, user_key: bytes) -> str:
+        """使用用户密钥加密URL-safe格式的密钥字符串"""
+        key_bytes = urlsafe_str_to_key(key_str, expected_length=None)
+        encrypted = encrypt_with_key(key_bytes, user_key)
+        return bytes_to_str(encrypted)
 
     @staticmethod
-    def _decrypt_paste_key_for_user(encrypted_paste_key: str, user_key: bytes) -> str:
-        """使用用户密钥解密paste密钥（返回URL-safe格式）"""
-        encrypted_paste_key_bytes = str_to_bytes(encrypted_paste_key)
-        decrypted_paste_key = decrypt_with_key(encrypted_paste_key_bytes, user_key)
-        return key_to_urlsafe_str(decrypted_paste_key)
+    def _decrypt_key_for_user(encrypted_key_str: str, user_key: bytes) -> str:
+        """使用用户密钥解密，返回URL-safe格式的密钥字符串"""
+        encrypted_bytes = str_to_bytes(encrypted_key_str)
+        decrypted = decrypt_with_key(encrypted_bytes, user_key)
+        return key_to_urlsafe_str(decrypted)
+
+    @staticmethod
+    def _encrypt_admin_key_for_user(admin_key: str, user_key: bytes) -> str:
+        """使用用户密钥加密admin_key（admin_key是普通字符串）"""
+        admin_key_bytes = admin_key.encode("utf-8")
+        encrypted = encrypt_with_key(admin_key_bytes, user_key)
+        return bytes_to_str(encrypted)
+
+    @staticmethod
+    def _decrypt_admin_key_for_user(
+        encrypted_admin_key_str: str, user_key: bytes
+    ) -> str:
+        """使用用户密钥解密admin_key"""
+        encrypted_bytes = str_to_bytes(encrypted_admin_key_str)
+        decrypted = decrypt_with_key(encrypted_bytes, user_key)
+        return decrypted.decode("utf-8")
+
+    @staticmethod
+    def _build_list_item(user_history: UserHistory) -> UserHistoryListItem:
+        """从 UserHistory ORM 对象构建列表条目（不含明文密钥）"""
+        paste = user_history.paste
+        return UserHistoryListItem(
+            paste_id=str(paste.id),
+            status=str(paste.status),
+            title=str(paste.title) if paste.title else None,
+            max_views=int(paste.max_views or -1),
+            view_count=int(paste.view_count or 0),
+            is_starred=bool(user_history.is_starred),
+            published_at=paste.published_at,
+            paste_updated_at=paste.updated_at,
+            history_updated_at=user_history.updated_at,
+            expire_at=paste.expire_at,
+        )
+
+    @staticmethod
+    def _upsert_history(
+        db: Session,
+        user_id: int,
+        paste_id: str,
+        user_key: bytes,
+        admin_key: str,
+        encryption_key: str,
+    ) -> UserHistory:
+        """
+        原子 upsert：不存在则插入，存在则更新密文并恢复软删除。
+        返回最终的 UserHistory 记录。
+        """
+        encrypted_paste_key = UserHistoryService._encrypt_key_for_user(
+            encryption_key, user_key
+        )
+        encrypted_admin_key = UserHistoryService._encrypt_admin_key_for_user(
+            admin_key, user_key
+        )
+        now = datetime.now(UTC)
+
+        # 先尝试查找已有记录（含软删除）
+        existing = (
+            db.query(UserHistory)
+            .filter(
+                UserHistory.user_id == user_id,
+                UserHistory.paste_id == paste_id,
+            )
+            .first()
+        )
+
+        if existing:
+            existing.encrypted_paste_key = encrypted_paste_key
+            existing.encrypted_admin_key = encrypted_admin_key
+            existing.is_deleted = False
+            existing.updated_at = now
+            db.commit()
+            db.refresh(existing)
+            return existing
+
+        # 不存在，尝试插入；并发下可能触发 IntegrityError
+        record = UserHistory(
+            user_id=user_id,
+            paste_id=paste_id,
+            encrypted_paste_key=encrypted_paste_key,
+            encrypted_admin_key=encrypted_admin_key,
+            is_starred=False,
+            is_deleted=False,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(record)
+        try:
+            db.commit()
+            db.refresh(record)
+            return record
+        except IntegrityError:
+            db.rollback()
+            # 并发插入冲突，回退到更新
+            existing = (
+                db.query(UserHistory)
+                .filter(
+                    UserHistory.user_id == user_id,
+                    UserHistory.paste_id == paste_id,
+                )
+                .first()
+            )
+            if existing is None:
+                raise
+            existing.encrypted_paste_key = encrypted_paste_key
+            existing.encrypted_admin_key = encrypted_admin_key
+            existing.is_deleted = False
+            existing.updated_at = now
+            db.commit()
+            db.refresh(existing)
+            return existing
 
     @staticmethod
     def save_paste_to_history(
@@ -50,139 +172,126 @@ class UserHistoryService:
         save_request: UserHistorySaveRequest,
     ) -> None:
         """
-        将Paste保存到用户账户
-
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            paste_id: Paste ID
-            user_key: 用户密钥（用于加密paste密钥）
-            save_request: 保存请求数据
+        将Paste保存到用户账户（upsert）
 
         Raises:
             ValueError: 当验证失败时
         """
-        # 验证Paste是否存在
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
         if not paste:
             raise ValueError("Paste不存在")
 
-        # 验证admin_key权限
         if not PasteService._verify_admin_key(paste, save_request.admin_key):
             raise ValueError("管理权限验证失败")
 
-        # 检查是否已经保存过
-        existing_user_history = (
-            db.query(UserHistory)
-            .filter(UserHistory.user_id == user_id, UserHistory.paste_id == paste_id)
-            .first()
+        UserHistoryService._upsert_history(
+            db,
+            user_id,
+            paste_id,
+            user_key,
+            save_request.admin_key,
+            save_request.encryption_key,
         )
-        if existing_user_history:
-            raise ValueError("该Paste已保存到用户账户")
-
-        # 使用用户密钥加密paste密钥
-        encrypted_paste_key = UserHistoryService._encrypt_paste_key_for_user(
-            save_request.encryption_key, user_key
-        )
-
-        # 创建UserHistory记录
-        user_history = UserHistory(
-            user_id=user_id,
-            paste_id=paste_id,
-            encrypted_paste_key=encrypted_paste_key,
-            is_starred=False,
-        )
-
-        db.add(user_history)
-        db.commit()
 
     @staticmethod
     def get_user_history(
         db: Session,
         user_id: int,
-        user_key: bytes,
         search_params: UserHistorySearchParams,
     ) -> UserHistoryListResponse:
-        """
-        获取用户的所有Paste
-
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            user_key: 用户密钥（用于解密paste密钥）
-            search_params: 搜索参数
-
-        Returns:
-            用户Paste列表响应
-        """
-        # 构建基础查询
+        """获取用户的历史记录列表（不含明文密钥）"""
         query = (
             db.query(UserHistory)
             .join(Paste, UserHistory.paste_id == Paste.id)
-            .filter(UserHistory.user_id == user_id)
+            .filter(
+                UserHistory.user_id == user_id,
+                UserHistory.is_deleted == False,  # noqa: E712
+            )
             .options(joinedload(UserHistory.paste))
         )
 
-        # 状态过滤
-        if search_params.status and search_params.status != "all":
-            query = query.filter(Paste.status == search_params.status)
-
-        # 收藏状态过滤
         if search_params.starred is not None:
             query = query.filter(UserHistory.is_starred == search_params.starred)
 
-        # 搜索关键词过滤
         if search_params.search:
             search_term = f"%{search_params.search}%"
             query = query.filter(Paste.title.ilike(search_term))
 
-        # 计算总数
         total = query.count()
 
-        # 分页
         offset = (search_params.page - 1) * search_params.limit
-        user_history_list = (
-            query.order_by(UserHistory.created_at.desc())
+        records = (
+            query.order_by(UserHistory.updated_at.desc())
             .offset(offset)
             .limit(search_params.limit)
             .all()
         )
 
-        # 构建响应数据
-        paste_infos = []
-        for user_history in user_history_list:
-            paste = user_history.paste
-
-            # 解密paste密钥
-            try:
-                decrypted_paste_key = UserHistoryService._decrypt_paste_key_for_user(
-                    str(user_history.encrypted_paste_key),
-                    user_key,  # type: ignore
-                )
-            except Exception:
-                # 如果解密失败，跳过这个paste或使用空字符串
-                decrypted_paste_key = ""
-
-            paste_info = UserHistoryInfo(
-                paste_id=str(paste.id),  # type: ignore
-                status=str(paste.status),  # type: ignore
-                title=str(paste.title) if paste.title else None,  # type: ignore
-                admin_key=str(paste.admin_key),  # type: ignore
-                encryption_key=decrypted_paste_key,
-                max_views=int(paste.max_views or -1),  # type: ignore
-                view_count=int(paste.view_count or 0),  # type: ignore
-                is_starred=bool(user_history.is_starred),  # type: ignore
-                published_at=paste.published_at,  # type: ignore
-                updated_at=paste.updated_at,  # type: ignore
-                expire_at=paste.expire_at,  # type: ignore
-            )
-            paste_infos.append(paste_info)
+        items = [UserHistoryService._build_list_item(r) for r in records]
 
         return UserHistoryListResponse(
-            pastes=paste_infos,
+            items=items,
             total=total,
             page=search_params.page,
             limit=search_params.limit,
+        )
+
+    @staticmethod
+    def get_user_history_detail(
+        db: Session,
+        user_id: int,
+        paste_id: str,
+        user_key: bytes,
+    ) -> UserHistoryDetail | None:
+        """获取单条历史详情（含解密后的密钥）"""
+        record = (
+            db.query(UserHistory)
+            .join(Paste, UserHistory.paste_id == Paste.id)
+            .filter(
+                UserHistory.user_id == user_id,
+                UserHistory.paste_id == paste_id,
+                UserHistory.is_deleted == False,  # noqa: E712
+            )
+            .options(joinedload(UserHistory.paste))
+            .first()
+        )
+
+        if not record:
+            return None
+
+        paste = record.paste
+
+        try:
+            decrypted_paste_key = UserHistoryService._decrypt_key_for_user(
+                str(record.encrypted_paste_key), user_key
+            )
+        except Exception as e:
+            raise ValueError(
+                "历史记录密钥解密失败，可能存在数据损坏或用户密钥不匹配"
+            ) from e
+
+        try:
+            decrypted_admin_key = UserHistoryService._decrypt_admin_key_for_user(
+                str(record.encrypted_admin_key), user_key
+            )
+        except Exception as e:
+            raise ValueError(
+                "历史记录管理密钥解密失败，可能存在数据损坏或用户密钥不匹配"
+            ) from e
+
+        return UserHistoryDetail(
+            paste_id=str(paste.id),
+            status=str(paste.status),
+            title=str(paste.title) if paste.title else None,
+            admin_key=decrypted_admin_key,
+            encryption_key=decrypted_paste_key,
+            max_views=int(paste.max_views or -1),
+            view_count=int(paste.view_count or 0),
+            is_starred=bool(record.is_starred),
+            published_at=paste.published_at,
+            paste_updated_at=paste.updated_at,
+            history_updated_at=record.updated_at,
+            expire_at=paste.expire_at,
         )
 
     @staticmethod
@@ -192,110 +301,128 @@ class UserHistoryService:
         paste_id: str,
         star_request: UserHistoryStarRequest,
     ) -> None:
-        """
-        更新Paste收藏状态
-
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            paste_id: Paste ID
-            star_request: 收藏状态请求
-
-        Raises:
-            ValueError: 当UserHistory不存在时
-        """
-        user_history = (
+        """更新Paste收藏状态"""
+        record = (
             db.query(UserHistory)
-            .filter(UserHistory.user_id == user_id, UserHistory.paste_id == paste_id)
+            .filter(
+                UserHistory.user_id == user_id,
+                UserHistory.paste_id == paste_id,
+                UserHistory.is_deleted == False,  # noqa: E712
+            )
             .first()
         )
 
-        if not user_history:
+        if not record:
             raise ValueError("该Paste未保存到用户账户")
 
-        user_history.is_starred = star_request.is_starred  # type: ignore
+        record.is_starred = star_request.is_starred
+        record.updated_at = datetime.now(UTC)
         db.commit()
 
     @staticmethod
-    def remove_paste_from_history(
+    def soft_delete_history(
         db: Session,
         user_id: int,
         paste_id: str,
     ) -> None:
-        """
-        从用户账户移除Paste
-
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            paste_id: Paste ID
-
-        Raises:
-            ValueError: 当UserHistory不存在时
-        """
-        user_history = (
+        """软删除历史记录"""
+        record = (
             db.query(UserHistory)
-            .filter(UserHistory.user_id == user_id, UserHistory.paste_id == paste_id)
+            .filter(
+                UserHistory.user_id == user_id,
+                UserHistory.paste_id == paste_id,
+            )
             .first()
         )
 
-        if not user_history:
+        if not record:
             raise ValueError("该Paste未保存到用户账户")
 
-        db.delete(user_history)
+        record.is_deleted = True
+        record.updated_at = datetime.now(UTC)
         db.commit()
 
     @staticmethod
-    def get_user_history_item(
+    def import_guest_history(
         db: Session,
         user_id: int,
-        paste_id: str,
         user_key: bytes,
-    ) -> UserHistoryInfo | None:
+        request: ImportGuestHistoryRequest,
+    ) -> ImportGuestHistoryResponse:
         """
-        获取单个用户History信息
-
-        Args:
-            db: 数据库会话
-            user_id: 用户ID
-            paste_id: Paste ID
-            user_key: 用户密钥
-
-        Returns:
-            用户History信息或None
+        导入游客历史并合并到用户账户。
+        允许部分成功，返回 imported/skipped 统计与失败原因摘要。
         """
-        user_history = (
-            db.query(UserHistory)
-            .join(Paste, UserHistory.paste_id == Paste.id)
-            .filter(UserHistory.user_id == user_id, UserHistory.paste_id == paste_id)
-            .options(joinedload(UserHistory.paste))
-            .first()
+        # 去重（按 pasteId）
+        seen: set[str] = set()
+        deduped: list[GuestHistoryItem] = []
+        for item in request.items:
+            if item.paste_id not in seen:
+                seen.add(item.paste_id)
+                deduped.append(item)
+
+        # 上限保护
+        deduped = deduped[:IMPORT_GUEST_MAX_ITEMS]
+
+        imported = 0
+        imported_ids: list[str] = []
+        skipped = 0
+        errors: list[str] = []
+
+        for item in deduped:
+            try:
+                paste = db.query(Paste).filter(Paste.id == item.paste_id).first()
+                if not paste:
+                    skipped += 1
+                    logger.warning(
+                        "导入游客历史校验失败 user_id=%s paste_id=%s reason=paste_not_found",
+                        user_id,
+                        item.paste_id,
+                    )
+                    errors.append(f"{item.paste_id}: 校验失败")
+                    continue
+
+                if not PasteService._verify_admin_key(paste, item.admin_key):
+                    skipped += 1
+                    logger.warning(
+                        "导入游客历史校验失败 user_id=%s paste_id=%s reason=admin_key_invalid",
+                        user_id,
+                        item.paste_id,
+                    )
+                    errors.append(f"{item.paste_id}: 校验失败")
+                    continue
+
+                UserHistoryService._upsert_history(
+                    db,
+                    user_id,
+                    item.paste_id,
+                    user_key,
+                    item.admin_key,
+                    item.encryption_key,
+                )
+                imported += 1
+                imported_ids.append(item.paste_id)
+            except Exception as e:
+                skipped += 1
+                logger.exception(
+                    "导入游客历史失败 user_id=%s paste_id=%s error=%s",
+                    user_id,
+                    item.paste_id,
+                    str(e),
+                )
+                errors.append(f"{item.paste_id}: 导入失败")
+
+        # 返回最新快照（第一页）
+        snapshot = UserHistoryService.get_user_history(
+            db,
+            user_id,
+            UserHistorySearchParams(page=1, limit=50),
         )
 
-        if not user_history:
-            return None
-
-        paste = user_history.paste
-
-        # 解密paste密钥
-        try:
-            decrypted_paste_key = UserHistoryService._decrypt_paste_key_for_user(
-                str(user_history.encrypted_paste_key),
-                user_key,  # type: ignore
-            )
-        except Exception:
-            decrypted_paste_key = ""
-
-        return UserHistoryInfo(
-            paste_id=str(paste.id),  # type: ignore
-            status=str(paste.status),  # type: ignore
-            title=str(paste.title) if paste.title else None,  # type: ignore
-            admin_key=str(paste.admin_key),  # type: ignore
-            encryption_key=decrypted_paste_key,
-            max_views=int(paste.max_views or -1),  # type: ignore
-            view_count=int(paste.view_count or 0),  # type: ignore
-            is_starred=bool(user_history.is_starred),  # type: ignore
-            published_at=paste.published_at,  # type: ignore
-            updated_at=paste.updated_at,  # type: ignore
-            expire_at=paste.expire_at,  # type: ignore
+        return ImportGuestHistoryResponse(
+            imported=imported,
+            imported_ids=imported_ids,
+            skipped=skipped,
+            errors=errors[:20],  # 最多返回20条错误摘要
+            snapshot=snapshot,
         )

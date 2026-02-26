@@ -25,6 +25,11 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/history',
+    name: 'History',
+    component: () => import('../views/History.vue'),
+  },
+  {
     path: '/install',
     name: 'Install',
     component: () => import('../views/Install.vue')

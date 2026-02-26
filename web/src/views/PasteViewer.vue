@@ -236,6 +236,10 @@ async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?:
       getPasteContent(pasteId, accessKey)
     ])
 
+    if (!content.encrypted_content) {
+      throw new Error('内容为空或格式不正确')
+    }
+
     pasteData.value = data
     pasteFiles.value = Array.isArray(content.files) ? content.files : []
     decryptedContent.value = await decryptContent(content.encrypted_content, encryptionKey)

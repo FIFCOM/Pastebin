@@ -107,6 +107,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
 import 'mdui/components/switch.js'
@@ -120,15 +121,28 @@ import { isImageFileName } from '../composables/useFile'
 import {
   generateRandomId,
   generateEncryptionKey,
+  decryptContent,
   encryptContent,
-  keyToUrlSafeStr
+  keyToUrlSafeStr,
+  urlSafeStrToKey
 } from '../utils/crypto'
 import {
   createPaste,
+  getPaste,
+  getPasteContent,
   uploadPasteContent,
   publishPaste,
   updatePaste
 } from '../services/paste'
+import { useAuth } from '../composables/useAuth'
+import { useHistory } from '../composables/useHistory'
+
+const { currentUser } = useAuth()
+const { addToHistory } = useHistory()
+const route = useRoute()
+const router = useRouter()
+const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
+const EDIT_CONTEXT_TTL_MS = 10 * 60 * 1000
 
 // 数据定义
 const title = ref(`未命名的Paste.ID-${generateRandomId()}`)
@@ -183,10 +197,143 @@ const uploaderRef = ref<{
   ) => Promise<void>
   isUploading: boolean
 } | null>(null)
+const isBootstrappingEdit = ref(false)
 const isUploaderUploading = computed(() => uploaderRef.value?.isUploading ?? false)
 const isSubmitDisabled = computed(
-  () => showPublishPanel.value || !canSubmit.value || isSubmitting.value || isUploaderUploading.value
+  () =>
+    showPublishPanel.value ||
+    !canSubmit.value ||
+    isSubmitting.value ||
+    isUploaderUploading.value ||
+    isBootstrappingEdit.value
 )
+
+function firstQueryValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+  return ''
+}
+
+interface EditBootstrapContext {
+  pasteId: string
+  adminKey: string
+  encryptionKey: string
+}
+
+function readEditContextFromStorage(expectedPasteId: string): EditBootstrapContext | null {
+  let raw = ''
+
+  try {
+    raw = sessionStorage.getItem(EDIT_CONTEXT_STORAGE_KEY) || ''
+    sessionStorage.removeItem(EDIT_CONTEXT_STORAGE_KEY)
+  } catch {
+    return null
+  }
+
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      paste_id?: unknown
+      admin_key?: unknown
+      encryption_key?: unknown
+      created_at?: unknown
+    }
+
+    const pasteId = typeof parsed.paste_id === 'string' ? parsed.paste_id.trim() : ''
+    const adminKey = typeof parsed.admin_key === 'string' ? parsed.admin_key.trim() : ''
+    const encryptionKey =
+      typeof parsed.encryption_key === 'string' ? parsed.encryption_key.trim() : ''
+    const createdAt =
+      typeof parsed.created_at === 'number' && Number.isFinite(parsed.created_at)
+        ? parsed.created_at
+        : 0
+
+    if (!pasteId || !adminKey || !encryptionKey) return null
+    if (Date.now() - createdAt > EDIT_CONTEXT_TTL_MS) return null
+    if (expectedPasteId && expectedPasteId !== pasteId) return null
+
+    return { pasteId, adminKey, encryptionKey }
+  } catch {
+    return null
+  }
+}
+
+async function preloadExistingPasteForEdit(
+  pasteId: string,
+  adminKey: string,
+  key: Uint8Array
+): Promise<void> {
+  try {
+    const [pasteData, contentData] = await Promise.all([
+      getPaste(pasteId, undefined, adminKey),
+      getPasteContent(pasteId, undefined, adminKey)
+    ])
+
+    if (typeof pasteData.title === 'string' && pasteData.title.trim()) {
+      title.value = pasteData.title.trim()
+    }
+    contentType.value = pasteData.type === 'md' ? 'md' : 'txt'
+    maxViews.value = Number.isFinite(pasteData.max_views) ? pasteData.max_views : -1
+
+    const decryptedText =
+      typeof contentData.content === 'string'
+        ? contentData.content
+        : contentData.encrypted_content
+          ? await decryptContent(contentData.encrypted_content, key)
+          : ''
+
+    plainContent.value = decryptedText
+    markdownContent.value = decryptedText
+  } catch (error) {
+    console.error('加载待编辑内容失败:', error)
+    snackbar({ message: '已进入编辑模式，但无法自动加载原内容', closeable: true })
+  }
+}
+
+async function tryBootstrapEditContextFromRoute(): Promise<void> {
+  const queryPasteId = firstQueryValue(route.query.paste_id).trim()
+  const storageContext = readEditContextFromStorage(queryPasteId)
+
+  if (!queryPasteId && !storageContext) {
+    return
+  }
+
+  if (!storageContext) {
+    snackbar({ message: '编辑上下文已失效，请从历史记录重新进入', closeable: true })
+    void router.replace({ path: '/', query: {}, hash: '' })
+    return
+  }
+
+  const pasteId = storageContext.pasteId
+  const adminKey = storageContext.adminKey
+  const rawEncryptionKey = storageContext.encryptionKey
+
+  if (!pasteId || !adminKey || !rawEncryptionKey) {
+    snackbar({ message: '编辑参数不完整，已忽略本次编辑上下文', closeable: true })
+    return
+  }
+
+  try {
+    const key = urlSafeStrToKey(rawEncryptionKey)
+    isBootstrappingEdit.value = true
+    pasteKey.value = key
+    currentPasteId.value = pasteId
+    currentAdminKey.value = adminKey
+    encryptionKey.value = rawEncryptionKey
+    isEditingExisting.value = true
+    showPublishPanel.value = false
+    showUploader.value = false
+
+    await preloadExistingPasteForEdit(pasteId, adminKey, key)
+
+    void router.replace({ path: '/', query: {}, hash: '' })
+  } catch {
+    snackbar({ message: '编辑密钥无效，无法进入编辑模式', closeable: true })
+  } finally {
+    isBootstrappingEdit.value = false
+  }
+}
 
 const handleSubmitClick = async () => {
   if (!isSubmitDisabled.value) {
@@ -262,8 +409,8 @@ const handleInsertFile = (file: { fileId: string; name: string; size: number }) 
 
 // 处理内容类型切换
 const handleContentTypeChange = (e: Event) => {
-  const target = e.target as any
-  const isMarkdown = target.checked
+  const target = e.target as HTMLInputElement | null
+  const isMarkdown = Boolean(target?.checked)
   contentType.value = isMarkdown ? 'md' : 'txt'
   
   // 保存到 localStorage
@@ -272,12 +419,12 @@ const handleContentTypeChange = (e: Event) => {
 
 watch(contentType, (newType, oldType) => {
   if (oldType === 'md') {
-    plainContent.value = markdownContent.value;
+    plainContent.value = markdownContent.value
   }
   if (newType === 'md') {
-    markdownContent.value = plainContent.value;
+    markdownContent.value = plainContent.value
   }
-});
+})
 
 // 处理标题输入框的 Tab 键
 const handleTitleTabKey = (e: KeyboardEvent) => {
@@ -347,6 +494,8 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
+    const wasEditing = isEditingExisting.value
+    const finalTitle = title.value.trim()
     // 1. 确保 Paste 已创建（可能已通过文件上传创建）
     const ensured = await ensurePasteCreated()
     if (!ensured || !pasteKey.value) return
@@ -357,23 +506,20 @@ const handleSubmit = async () => {
       encrypted_content: encryptedContent
     })
 
-    if (!isEditingExisting.value) {
+    if (!wasEditing) {
       // 3. 立即发布，并展示发布面板
       await publishPaste(currentPasteId.value, currentAdminKey.value, {
-        title: title.value.trim(),
+        title: finalTitle,
         type: contentType.value === 'md' ? 'md' : 'txt',
         expire_time: expireTime.value,
         max_views: maxViews.value,
         access_key: accessKey.value || undefined
       })
     } else {
-      // 已发布/已编辑的 Paste：通过 update 接口更新设置（避免重复 publish）
+      // 已发布/已编辑的 Paste：更新标题和类型，避免误覆盖高级设置。
       await updatePaste(currentPasteId.value, currentAdminKey.value, {
-        title: title.value.trim(),
-        type: contentType.value === 'md' ? 'md' : 'txt',
-        expire_time: expireTime.value,
-        max_views: maxViews.value,
-        access_key: accessKey.value
+        title: finalTitle,
+        type: contentType.value === 'md' ? 'md' : 'txt'
       })
     }
 
@@ -381,6 +527,17 @@ const handleSubmit = async () => {
     showPublishPanel.value = true
     isEditingExisting.value = false
     snackbar({ message: '已保存' })
+    // 保存到历史记录（游客写本地，已登录写服务端）
+    void addToHistory(
+      currentPasteId.value,
+      currentAdminKey.value,
+      encryptionKey.value,
+      currentUser.value?.id ?? null,
+      {
+        title: finalTitle,
+        status: wasEditing ? 'edited' : 'published'
+      }
+    )
   } catch (error) {
     console.error('提交失败:', error)
     snackbar({ 
@@ -431,6 +588,8 @@ onMounted(() => {
     // 如果没有保存的偏好，默认使用 txt
     contentType.value = 'txt'
   }
+
+  void tryBootstrapEditContextFromRoute()
 })
 </script>
 

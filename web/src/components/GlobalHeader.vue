@@ -7,7 +7,7 @@
     <mdui-button-icon>
       <mdui-icon-groups />
     </mdui-button-icon>
-    <mdui-button-icon>
+    <mdui-button-icon @click="goHistory">
       <mdui-icon-history />
     </mdui-button-icon>
     <mdui-button-icon>
@@ -101,6 +101,10 @@ const handleLogout = () => {
 
 const goUserManagement = () => {
   router.push('/users')
+}
+
+const goHistory = () => {
+  router.push('/history')
 }
 </script>
 

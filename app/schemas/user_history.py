@@ -24,24 +24,57 @@ class UserHistoryStarRequest(BaseModel):
     is_starred: bool = Field(..., description="是否收藏")
 
 
+class GuestHistoryItem(BaseModel):
+    """游客历史条目（导入时使用）"""
+
+    paste_id: str = Field(..., description="Paste ID")
+    admin_key: str = Field(..., description="管理权限令牌")
+    encryption_key: str = Field(..., description="paste密钥")
+
+
+class ImportGuestHistoryRequest(BaseModel):
+    """导入游客历史请求"""
+
+    items: list[GuestHistoryItem] = Field(..., description="游客历史条目列表")
+
+
 # ===============================
 # 响应模型
 # ===============================
 
 
-class UserHistoryInfo(BaseModel):
-    """用户History信息"""
+class UserHistoryListItem(BaseModel):
+    """用户History列表条目（不含明文密钥）"""
 
     paste_id: str = Field(..., description="Paste ID")
     status: str = Field(..., description="Paste状态：published或edited")
     title: str | None = Field(default=None, description="Paste标题")
-    admin_key: str = Field(..., description="管理权限令牌")
-    encryption_key: str = Field(..., description="paste密钥")
     max_views: int = Field(..., description="最大查看次数")
     view_count: int = Field(..., description="当前查看次数")
     is_starred: bool = Field(..., description="是否收藏")
     published_at: datetime | None = Field(default=None, description="发布时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    paste_updated_at: datetime = Field(..., description="Paste更新时间")
+    history_updated_at: datetime = Field(..., description="历史记录更新时间")
+    expire_at: datetime | None = Field(default=None, description="过期时间")
+
+    class Config:
+        from_attributes = True
+
+
+class UserHistoryDetail(BaseModel):
+    """用户History详情（含解密后的密钥，按需返回）"""
+
+    paste_id: str = Field(..., description="Paste ID")
+    status: str = Field(..., description="Paste状态：published或edited")
+    title: str | None = Field(default=None, description="Paste标题")
+    admin_key: str = Field(..., description="管理权限令牌（解密后）")
+    encryption_key: str = Field(..., description="paste密钥（解密后）")
+    max_views: int = Field(..., description="最大查看次数")
+    view_count: int = Field(..., description="当前查看次数")
+    is_starred: bool = Field(..., description="是否收藏")
+    published_at: datetime | None = Field(default=None, description="发布时间")
+    paste_updated_at: datetime = Field(..., description="Paste更新时间")
+    history_updated_at: datetime = Field(..., description="历史记录更新时间")
     expire_at: datetime | None = Field(default=None, description="过期时间")
 
     class Config:
@@ -51,23 +84,31 @@ class UserHistoryInfo(BaseModel):
 class UserHistoryListResponse(BaseModel):
     """用户History列表响应"""
 
-    pastes: list[UserHistoryInfo] = Field(..., description="Paste列表")
+    items: list[UserHistoryListItem] = Field(..., description="历史记录列表")
     total: int = Field(..., description="总数")
     page: int = Field(..., description="当前页码")
     limit: int = Field(..., description="每页数量")
+
+
+class ImportGuestHistoryResponse(BaseModel):
+    """导入游客历史响应"""
+
+    imported: int = Field(..., description="成功导入条数")
+    imported_ids: list[str] = Field(
+        default_factory=list, description="成功导入的paste_id列表"
+    )
+    skipped: int = Field(..., description="跳过条数")
+    errors: list[str] = Field(default_factory=list, description="失败原因摘要")
+    snapshot: UserHistoryListResponse = Field(..., description="导入后的最新历史快照")
 
 
 class UserHistorySearchParams(BaseModel):
     """用户History搜索参数"""
 
     page: int = Field(1, ge=1, description="页码")
-    limit: int = Field(10, ge=1, le=100, description="每页数量")
-    status: str | None = Field(
-        default=None, description="状态过滤：published|edited|all"
-    )
+    limit: int = Field(20, ge=1, le=100, description="每页数量")
     starred: bool | None = Field(default=None, description="收藏状态过滤：true|false")
     search: str | None = Field(default=None, description="搜索关键词，搜索title")
 
     class Config:
-        # 允许使用额外字段用于查询参数
         extra = "forbid"
