@@ -3,15 +3,30 @@
     <div class="install-card-wrapper">
       <mdui-card v-if="showRestartCard" class="install-card restart-card">
         <h1 class="install-title">安装已完成</h1>
-        <p class="install-subtitle">已生成 .env，必须重启后端服务后新配置才会生效。</p>
+        <p class="install-subtitle">已生成 .env，新配置会在服务端重启后自动生效。</p>
         <div class="restart-banner">
-          <div class="restart-banner-title">请先重启服务</div>
+          <div class="restart-banner-title">正在等待服务端重启</div>
+          <div v-if="isRestartPolling" class="restart-loading-row">
+            <mdui-circular-progress></mdui-circular-progress>
+            <div class="restart-loading-text">正在自动检测重启状态，恢复后将继续安装流程。</div>
+          </div>
           <div v-if="effectiveRestartMessage" class="restart-banner-detail">{{ effectiveRestartMessage }}</div>
-          <div class="restart-banner-detail">重启完成后点击下方按钮重新检测状态。</div>
+          <div v-if="restartPollTimedOut" class="restart-timeout-hint">
+            自动检测超过 1 分钟仍未完成，请手动重启服务端。
+          </div>
+          <div v-else-if="showManualRestartHint" class="restart-banner-detail">
+            如果长时间未重启，则请尝试手动重启。
+          </div>
         </div>
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
-        <mdui-button class="submit-button" variant="filled" :disabled="isLoading" @click="handleRestartCheck">
-          重启后重新检测
+        <mdui-button
+          v-if="restartPollTimedOut"
+          class="submit-button"
+          variant="filled"
+          :disabled="isLoading"
+          @click="handleRestartCheck"
+        >
+          手动重启后重新检测
         </mdui-button>
       </mdui-card>
 
@@ -205,12 +220,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/card.js'
+import 'mdui/components/circular-progress.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/segmented-button-group.js'
 import 'mdui/components/segmented-button.js'
@@ -233,6 +249,16 @@ const isSubmitting = ref(false)
 const errorMessage = ref('')
 const restartRequired = ref(false)
 const restartMessage = ref('')
+const showManualRestartHint = ref(false)
+const restartPollTimedOut = ref(false)
+
+const RESTART_POLL_INTERVAL_MS = 1500
+const RESTART_MANUAL_HINT_MS = 30000
+const RESTART_POLL_TIMEOUT_MS = 60000
+let restartPollTimer: number | null = null
+let restartHintTimer: number | null = null
+let restartTimeoutTimer: number | null = null
+const isRestartPolling = ref(false)
 
 const envValues = ref<Record<string, string>>({})
 const SQLITE_DATABASE_URL = 'sqlite:///./material_bin.db'
@@ -441,12 +467,15 @@ function handleDatabaseModeChange(event: Event) {
   envValues.value.DATABASE_URL = nextUrl
 }
 
-async function loadStatus(options: { preserveRestartView?: boolean } = {}) {
+async function loadStatus(options: { preserveRestartView?: boolean; silentError?: boolean } = {}) {
   isLoading.value = true
-  clearError()
+  if (!options.silentError) {
+    clearError()
+  }
   if (!options.preserveRestartView) {
     restartRequired.value = false
     restartMessage.value = ''
+    restartPollTimedOut.value = false
   }
 
   try {
@@ -458,9 +487,7 @@ async function loadStatus(options: { preserveRestartView?: boolean } = {}) {
       restartMessage.value = installStatus.restart_message || restartMessage.value
     } else {
       restartRequired.value = false
-      if (!options.preserveRestartView) {
-        restartMessage.value = ''
-      }
+      restartMessage.value = ''
     }
 
     if (!installStatus.needs_install) {
@@ -487,7 +514,9 @@ async function loadStatus(options: { preserveRestartView?: boolean } = {}) {
       }
     }
   } catch (error: unknown) {
-    setError(extractErrorMessage(error, '加载安装状态失败'))
+    if (!options.silentError) {
+      setError(extractErrorMessage(error, '加载安装状态失败'))
+    }
   } finally {
     isLoading.value = false
   }
@@ -518,6 +547,7 @@ async function handleSubmit() {
     if (setupResp.restart_required || setupResp.env_created) {
       restartRequired.value = true
       restartMessage.value = setupResp.message
+      restartPollTimedOut.value = false
       return
     }
 
@@ -541,9 +571,101 @@ async function handleSubmit() {
   }
 }
 
-function handleRestartCheck() {
-  void loadStatus({ preserveRestartView: true })
+function stopRestartPolling(options: { resetHintState?: boolean } = {}) {
+  const { resetHintState = true } = options
+  isRestartPolling.value = false
+
+  if (resetHintState) {
+    showManualRestartHint.value = false
+    restartPollTimedOut.value = false
+  }
+
+  if (restartPollTimer !== null) {
+    window.clearTimeout(restartPollTimer)
+    restartPollTimer = null
+  }
+
+  if (restartHintTimer !== null) {
+    window.clearTimeout(restartHintTimer)
+    restartHintTimer = null
+  }
+
+  if (restartTimeoutTimer !== null) {
+    window.clearTimeout(restartTimeoutTimer)
+    restartTimeoutTimer = null
+  }
 }
+
+function handleRestartPollingTimeout() {
+  if (!isRestartPolling.value) return
+  stopRestartPolling({ resetHintState: false })
+  restartPollTimedOut.value = true
+  showManualRestartHint.value = true
+  setError('自动检测超过 1 分钟仍未完成，请手动重启服务端后重新检测。')
+}
+
+function scheduleRestartPolling(delay = RESTART_POLL_INTERVAL_MS) {
+  if (!isRestartPolling.value || restartPollTimer !== null) return
+  restartPollTimer = window.setTimeout(() => {
+    restartPollTimer = null
+    void pollRestartStatus()
+  }, delay)
+}
+
+async function pollRestartStatus() {
+  if (!isRestartPolling.value) return
+  await loadStatus({ preserveRestartView: true, silentError: true })
+  if (!isRestartPolling.value) return
+
+  if (!showRestartCard.value) {
+    stopRestartPolling()
+    return
+  }
+
+  scheduleRestartPolling()
+}
+
+function startRestartPolling() {
+  if (isRestartPolling.value) return
+  isRestartPolling.value = true
+  showManualRestartHint.value = false
+  restartPollTimedOut.value = false
+
+  restartHintTimer = window.setTimeout(() => {
+    showManualRestartHint.value = true
+  }, RESTART_MANUAL_HINT_MS)
+
+  restartTimeoutTimer = window.setTimeout(() => {
+    handleRestartPollingTimeout()
+  }, RESTART_POLL_TIMEOUT_MS)
+
+  scheduleRestartPolling(0)
+}
+
+async function handleRestartCheck() {
+  restartPollTimedOut.value = false
+  showManualRestartHint.value = false
+  await loadStatus({ preserveRestartView: true })
+  if (showRestartCard.value) {
+    startRestartPolling()
+  }
+}
+
+watch(
+  showRestartCard,
+  (visible) => {
+    if (visible) {
+      startRestartPolling()
+      return
+    }
+    stopRestartPolling()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  stopRestartPolling()
+})
 
 void loadStatus()
 </script>
@@ -836,10 +958,29 @@ void loadStatus()
   font-weight: 600;
 }
 
+.restart-loading-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.restart-loading-text {
+  font-size: 13px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
 .restart-banner-detail {
   margin-top: 6px;
   font-size: 13px;
   color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.restart-timeout-hint {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--mdui-color-error));
 }
 
 .submit-button {

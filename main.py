@@ -111,6 +111,7 @@ def run_server():
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
+        reload_includes=["*.py", ".env"],
         log_level="debug" if settings.debug else "info",
     )
 
