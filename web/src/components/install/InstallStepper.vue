@@ -1,33 +1,40 @@
 <template>
-  <div class="steps beer" aria-label="安装进度">
-    <nav class="install-stepper-nav">
+  <div class="steps" :style="{ '--step-count': String(nodes.length) }" aria-label="安装进度">
+    <div class="steps-track">
       <template v-for="(step, index) in nodes" :key="step.key">
-        <div class="stepper-node">
-          <div
-            class="button circle small fill stepper-indicator"
-            :class="{
-              primary: step.state !== 'pending',
-              'stepper-indicator-pending': step.state === 'pending'
-            }"
-            :aria-current="step.state === 'active' ? 'step' : undefined"
-            :aria-label="`${step.title}：${stepStateLabel(step.state)}`"
-          >
-            <mdui-icon v-if="step.state === 'done'" class="step-done-icon" name="done" aria-hidden="true"></mdui-icon>
-            <span v-else class="step-index">{{ index + 1 }}</span>
-          </div>
-          <div class="stepper-content">
-            <div class="step-title">{{ step.title }}</div>
-            <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
-          </div>
-        </div>
-        <hr
-          v-if="index < nodes.length - 1"
-          class="max stepper-line"
-          :class="{ primary: step.state === 'done' }"
+        <div
+          v-if="index === 0"
+          class="step-connector step-connector-head"
+          :class="{ done: step.state !== 'pending' }"
           aria-hidden="true"
-        >
+        ></div>
+
+        <div class="step-node" :class="`is-${step.state}`">
+          <div class="step-circle">{{ step.state === 'done' ? '✓' : index + 1 }}</div>
+        </div>
+
+        <div
+          v-if="index < nodes.length - 1"
+          class="step-connector step-connector-mid"
+          :class="{ done: step.state === 'done' }"
+          aria-hidden="true"
+        ></div>
+
+        <div
+          v-else
+          class="step-connector step-connector-tail"
+          :class="{ done: step.state === 'done' }"
+          aria-hidden="true"
+        ></div>
       </template>
-    </nav>
+    </div>
+
+    <div class="steps-content">
+      <div v-for="step in nodes" :key="`content-${step.key}`" class="step-content">
+        <div class="step-title">{{ step.title }}</div>
+        <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -58,62 +65,77 @@ function stepStateLabel(state: StepState): string {
   margin: 10px 0 18px;
 }
 
-.install-stepper-nav {
-  --stepper-indicator-size: 2rem;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.install-stepper-nav > :not(ul, ol, header, footer) {
-  margin: unset;
-}
-
-.stepper-node {
-  min-width: 0;
+.steps-track {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 8px;
 }
 
-.stepper-indicator {
-  pointer-events: none;
-  cursor: default;
-  user-select: none;
-  inline-size: var(--stepper-indicator-size);
-  block-size: var(--stepper-indicator-size);
-}
-
-.stepper-indicator-pending {
-  opacity: 0.62;
-}
-
-.step-index {
-  display: inline-flex;
+.step-node {
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 1ch;
+  flex: 0 0 auto;
+}
+
+.step-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(var(--mdui-color-outline));
+  font-size: 13px;
   font-weight: 600;
+  color: rgb(var(--mdui-color-on-surface));
+  background: rgb(var(--mdui-color-surface-container));
 }
 
-.step-done-icon {
-  --mdui-icon-size: 1rem;
+.step-node.is-done .step-circle {
+  color: rgb(var(--mdui-color-on-primary));
+  background: rgb(var(--mdui-color-primary));
+  border-color: rgb(var(--mdui-color-primary));
 }
 
-.stepper-content {
+.step-node.is-active .step-circle {
+  color: rgb(var(--mdui-color-primary));
+  background: rgba(var(--mdui-color-primary), 0.14);
+  border-color: rgba(var(--mdui-color-primary), 0.45);
+}
+
+.step-connector {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(var(--mdui-color-outline), 0.45);
+}
+
+.step-connector-head,
+.step-connector-tail {
+  flex: 0.5 1 0;
+}
+
+.step-connector-mid {
+  flex: 1 1 0;
+  min-width: 24px;
+}
+
+.step-connector.done {
+  background: rgba(var(--mdui-color-primary), 0.75);
+}
+
+.steps-content {
   min-width: 0;
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(var(--step-count), minmax(0, 1fr));
+  column-gap: 0;
+  row-gap: 8px;
 }
 
-.stepper-line {
-  align-self: flex-start;
-  margin-top: calc((var(--stepper-indicator-size) - 0.0625rem) / 2) !important;
-  opacity: 0.42;
-  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.stepper-line.primary {
-  opacity: 1;
+.step-content {
+  min-width: 0;
+  text-align: center;
+  padding: 0 6px;
 }
 
 .step-title {
@@ -127,8 +149,14 @@ function stepStateLabel(state: StepState): string {
 }
 
 @media (max-width: 640px) {
-  .install-stepper-nav {
-    gap: 8px;
+  .step-circle {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .step-connector-mid {
+    min-width: 16px;
   }
 
   .step-title {
@@ -137,6 +165,11 @@ function stepStateLabel(state: StepState): string {
 
   .step-subtitle {
     font-size: 11px;
+  }
+
+  .steps-content {
+    column-gap: 0;
+    row-gap: 6px;
   }
 }
 </style>

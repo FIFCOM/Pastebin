@@ -13,7 +13,6 @@
     "@types/markdown-it": "^14.1.2",
     "@vscode/markdown-it-katex": "^1.1.2",
     "axios": "^1.13.2",
-    "beercss": "^4.0.16",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.25",
     "markdown-it": "^14.1.0",

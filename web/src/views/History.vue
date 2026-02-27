@@ -126,10 +126,12 @@
             type="number"
             variant="outlined"
             min="1"
+            step="1"
+            inputmode="numeric"
             :max="totalPages"
             @keydown.enter.prevent="handleJumpPage"
           ></mdui-text-field>
-          <mdui-button variant="tonal" :disabled="historyLoading" @click="handleJumpPage">
+          <mdui-button variant="tonal" :disabled="!canJumpPage" @click="handleJumpPage">
             跳转
           </mdui-button>
         </div>
@@ -140,7 +142,8 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import type { LocationQueryRaw } from 'vue-router'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
@@ -158,6 +161,7 @@ import { useHistory, loadGuestHistory } from '../composables/useHistory'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const route = useRoute()
 const { currentUser } = useAuth()
 const {
   historyItems,
@@ -165,17 +169,40 @@ const {
   historyPage,
   historyLimit,
   historyLoading,
+  historySearch,
   fetchHistory,
   toggleStar,
   removeFromHistory,
   initFromCache
 } = useHistory()
 
+type StarredFilterValue = 'all' | 'starred'
+
+interface HistoryRouteState {
+  page: number
+  search: string
+  starred: StarredFilterValue
+}
+
+interface FetchHistoryOptions {
+  page?: number
+  reset?: boolean
+  search?: string
+  starred?: boolean | null
+}
+
 const searchInput = ref('')
-const starredFilter = ref<'all' | 'starred'>('all')
+const starredFilter = ref<StarredFilterValue>('all')
 const jumpPageInput = ref('1')
 const showViewsColumn = computed(() => !!currentUser.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
+const canJumpPage = computed(() => {
+  if (historyLoading.value) return false
+  const page = parsePositiveInteger(jumpPageInput.value)
+  if (page === null) return false
+  if (page < 1 || page > totalPages.value) return false
+  return page !== historyPage.value
+})
 const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 const HAS_TZ_SUFFIX_RE = /(Z|[+\-]\d{2}:\d{2})$/i
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
@@ -190,6 +217,99 @@ watch(
 
 function currentUserId(): number | null {
   return currentUser.value?.id ?? null
+}
+
+function firstQueryValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+  return ''
+}
+
+function parsePositiveInteger(value: string): number | null {
+  const normalized = value.trim()
+  if (!/^\d+$/.test(normalized)) return null
+
+  const parsed = Number(normalized)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return null
+  return parsed
+}
+
+function parseRouteState(): HistoryRouteState {
+  const search = firstQueryValue(route.query.search).trim()
+  const starred = firstQueryValue(route.query.starred).trim() === 'starred' ? 'starred' : 'all'
+  const parsedPage = parsePositiveInteger(firstQueryValue(route.query.page))
+
+  return {
+    page: parsedPage ?? 1,
+    search,
+    starred
+  }
+}
+
+function syncRouteQueryFromState() {
+  const desiredPage = historyPage.value > 1 ? String(historyPage.value) : ''
+  const desiredSearch = historySearch.value.trim()
+  const desiredStarred = starredFilter.value === 'starred' ? 'starred' : ''
+  const currentPage = firstQueryValue(route.query.page).trim()
+  const currentSearch = firstQueryValue(route.query.search).trim()
+  const currentStarred = firstQueryValue(route.query.starred).trim()
+
+  if (
+    currentPage === desiredPage &&
+    currentSearch === desiredSearch &&
+    currentStarred === desiredStarred
+  ) {
+    return
+  }
+
+  const nextQuery: LocationQueryRaw = { ...route.query }
+  if (desiredPage) {
+    nextQuery.page = desiredPage
+  } else {
+    delete nextQuery.page
+  }
+  if (desiredSearch) {
+    nextQuery.search = desiredSearch
+  } else {
+    delete nextQuery.search
+  }
+  if (desiredStarred) {
+    nextQuery.starred = desiredStarred
+  } else {
+    delete nextQuery.starred
+  }
+
+  void router.replace({ query: nextQuery })
+}
+
+async function fetchHistoryAndSyncRoute(opts: FetchHistoryOptions = {}) {
+  const applied = await fetchHistory(opts, currentUserId())
+  if (!applied) return
+  syncRouteQueryFromState()
+}
+
+async function applyRouteQuery() {
+  const state = parseRouteState()
+  const searchChanged = historySearch.value !== state.search
+  const filterChanged = starredFilter.value !== state.starred
+  const pageChanged = historyPage.value !== state.page
+
+  if (!searchChanged && !filterChanged && !pageChanged) {
+    if (searchInput.value !== state.search) {
+      searchInput.value = state.search
+    }
+    syncRouteQueryFromState()
+    return
+  }
+
+  searchInput.value = state.search
+  starredFilter.value = state.starred
+  await fetchHistoryAndSyncRoute({
+    page: state.page,
+    reset: searchChanged || filterChanged,
+    search: state.search,
+    starred: state.starred === 'starred' ? true : null
+  })
 }
 
 function statusLabel(status: string): string {
@@ -234,7 +354,7 @@ function formatTime(iso: string): string {
 }
 
 function handleSearch() {
-  void fetchHistory({ reset: true, search: searchInput.value }, currentUserId())
+  void fetchHistoryAndSyncRoute({ reset: true, search: searchInput.value })
 }
 
 function eventValue(e: Event): string {
@@ -245,7 +365,7 @@ function eventValue(e: Event): string {
 
 function handleClearSearch() {
   searchInput.value = ''
-  void fetchHistory({ reset: true, search: '' }, currentUserId())
+  void fetchHistoryAndSyncRoute({ reset: true, search: '' })
 }
 
 function handleStarredFilterChange(e: Event) {
@@ -253,38 +373,40 @@ function handleStarredFilterChange(e: Event) {
   if (!val) return
   starredFilter.value = val === 'starred' ? 'starred' : 'all'
   const starred = val === 'starred' ? true : null
-  void fetchHistory({ reset: true, starred }, currentUserId())
+  void fetchHistoryAndSyncRoute({ reset: true, starred })
 }
 
 function handleRefresh() {
-  void fetchHistory({ page: historyPage.value, search: searchInput.value }, currentUserId())
+  void fetchHistoryAndSyncRoute({ page: historyPage.value, search: searchInput.value })
 }
 
 function goToPage(page: number) {
   const target = Math.min(Math.max(Math.trunc(page), 1), totalPages.value)
   if (target === historyPage.value) return
-  void fetchHistory({ page: target }, currentUserId())
+  void fetchHistoryAndSyncRoute({ page: target })
 }
 
 function handleJumpPage() {
   const raw = jumpPageInput.value.trim()
-  if (!raw) return
-
-  const page = Number(raw)
-  if (!Number.isFinite(page)) {
-    snackbar({ message: '请输入有效页码', closeable: true })
+  if (!raw) {
+    snackbar({ message: '请输入页码', closeable: true })
     jumpPageInput.value = String(historyPage.value)
     return
   }
 
-  const target = Math.trunc(page)
-  if (target < 1 || target > totalPages.value) {
+  const page = parsePositiveInteger(raw)
+  if (page === null) {
+    snackbar({ message: '请输入正整数页码', closeable: true })
+    jumpPageInput.value = String(historyPage.value)
+    return
+  }
+  if (page > totalPages.value) {
     snackbar({ message: `页码范围：1 - ${totalPages.value}`, closeable: true })
     jumpPageInput.value = String(historyPage.value)
     return
   }
 
-  goToPage(target)
+  goToPage(page)
 }
 
 function navigateToEditor(pasteId: string, adminKey: string, encryptionKey: string) {
@@ -356,7 +478,7 @@ async function handleToggleStar(item: HistoryListItem) {
     await toggleStar(item.paste_id, nextStarred, currentUser.value.id)
     if (starredFilter.value === 'starred' && !nextStarred) {
       const targetPage = Math.min(historyPage.value, totalPages.value)
-      await fetchHistory({ page: targetPage }, currentUser.value.id)
+      await fetchHistoryAndSyncRoute({ page: targetPage })
     }
   } catch {
     snackbar({ message: '操作失败', closeable: true })
@@ -375,7 +497,7 @@ function handleDelete(item: HistoryListItem) {
           try {
             await removeFromHistory(item.paste_id, currentUser.value?.id ?? null)
             const targetPage = Math.min(historyPage.value, totalPages.value)
-            await fetchHistory({ page: targetPage }, currentUserId())
+            await fetchHistoryAndSyncRoute({ page: targetPage })
             snackbar({ message: '已删除' })
           } catch {
             snackbar({ message: '删除失败', closeable: true })
@@ -391,15 +513,24 @@ onMounted(() => {
   if (userId !== null) {
     initFromCache(userId)
   }
-  void fetchHistory(
-    {
-      reset: true,
-      search: searchInput.value,
-      starred: starredFilter.value === 'starred' ? true : null
-    },
-    userId
-  )
+  const state = parseRouteState()
+  searchInput.value = state.search
+  starredFilter.value = state.starred
+
+  void fetchHistoryAndSyncRoute({
+    page: state.page,
+    reset: true,
+    search: state.search,
+    starred: state.starred === 'starred' ? true : null
+  })
 })
+
+watch(
+  [() => route.query.page, () => route.query.search, () => route.query.starred],
+  () => {
+    void applyRouteQuery()
+  }
+)
 </script>
 
 <style scoped>

@@ -1,5 +1,4 @@
 import { ref } from 'vue'
-import { ui } from 'beercss/scoped'
 import { setTheme } from 'mdui/functions/setTheme.js'
 import { setColorScheme } from 'mdui/functions/setColorScheme.js'
 
@@ -34,17 +33,10 @@ const isValidHexColor = (value: unknown): value is string => {
 
 const syncThemeMode = (mode: ActualTheme) => {
   setTheme(mode)
-  ui('mode', mode)
 }
 
 const syncThemeColor = (color: string) => {
   setColorScheme(color)
-  const result = ui('theme', color)
-  if (result instanceof Promise) {
-    result.catch((error) => {
-      console.warn('BeerCSS dynamic theme apply failed:', error)
-    })
-  }
 }
 
 /**

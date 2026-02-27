@@ -1,78 +1,46 @@
 <template>
   <div class="install-page">
     <div class="install-card-wrapper">
-      <mdui-card v-if="showRestartCard" class="install-card restart-card">
-        <h1 class="install-title">安装已完成</h1>
-        <p class="install-subtitle">已生成 .env，新配置会在服务端重启后自动生效。</p>
-
-        <InstallStepper v-if="status" :nodes="installStepperNodes" />
-
-        <div class="restart-status-title">正在等待服务端重启</div>
-        <div v-if="isRestartPolling" class="restart-loading-row">
-          <mdui-circular-progress></mdui-circular-progress>
-          <div class="restart-loading-text">正在自动检测重启状态，恢复后将继续安装流程。</div>
-        </div>
-        <div v-if="effectiveRestartMessage" class="restart-status-detail">{{ effectiveRestartMessage }}</div>
-        <div v-if="restartPollTimedOut" class="restart-timeout-hint">
-          自动检测超过 1 分钟仍未完成，请手动重启服务端。
-        </div>
-        <div v-else-if="showManualRestartHint" class="restart-status-detail">
-          如果长时间未重启，则请尝试手动重启。
-        </div>
-
-        <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
-
-        <mdui-button
-          v-if="restartPollTimedOut"
-          class="submit-button"
-          variant="filled"
-          :disabled="isLoading"
-          @click="handleRestartCheck"
-        >
-          手动重启后重新检测
-        </mdui-button>
-      </mdui-card>
-
-      <mdui-card v-else class="install-card">
+      <mdui-card class="install-card">
         <h1 class="install-title">系统安装向导</h1>
 
-        <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
-
         <InstallStepper v-if="status" :nodes="installStepperNodes" />
 
-        <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+        <div class="install-content">
+          <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-        <form v-if="status" class="install-form" @submit.prevent="handleSubmit">
-          <section v-if="isEnvStep" class="form-section">
-            <InstallEnvGroupList
-              :groups="basicEnvGroups"
-              group-key-prefix="basic-"
-              :env-values="envValues"
-              :is-submitting="isSubmitting"
-              :database-mode="databaseMode"
-              :database-url-placeholder="databaseUrlPlaceholder"
-              :can-generate-secret="canGenerateSecret"
-              @database-mode-change="handleDatabaseModeChange"
-              @generate-secret="handleGenerateSecret"
-            />
+          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
-            <button
-              v-if="advancedEnvGroups.length > 0"
-              type="button"
-              class="advanced-toggle"
-              :class="{ open: showAdvanced }"
-              :disabled="isSubmitting"
-              :aria-expanded="showAdvanced ? 'true' : 'false'"
-              @click="showAdvanced = !showAdvanced"
+          <template v-if="showRestartCard">
+            <div class="restart-status-title">正在等待服务端重启</div>
+            <div v-if="isRestartPolling" class="restart-loading-row">
+              <mdui-circular-progress></mdui-circular-progress>
+              <div class="restart-loading-text">正在自动检测重启状态，恢复后将继续安装流程。</div>
+            </div>
+            <div v-if="effectiveRestartMessage" class="restart-status-detail">{{ effectiveRestartMessage }}</div>
+            <div v-if="restartPollTimedOut" class="restart-timeout-hint">
+              自动检测超过 1 分钟仍未完成，请手动重启服务端。
+            </div>
+            <div v-else-if="showManualRestartHint" class="restart-status-detail">
+              如果长时间未重启，则请尝试手动重启。
+            </div>
+
+            <mdui-button
+              v-if="restartPollTimedOut"
+              class="submit-button"
+              variant="filled"
+              :disabled="isLoading"
+              @click="handleRestartCheck"
             >
-              <span class="advanced-toggle-chevron" aria-hidden="true"></span>
-              <span>高级配置</span>
-            </button>
+              手动重启后重新检测
+            </mdui-button>
+          </template>
 
-            <div v-show="showAdvanced" class="advanced-config">
+          <form v-else-if="status" class="install-form" @submit.prevent="handleSubmit">
+            <section v-if="isEnvStep" class="form-section">
               <InstallEnvGroupList
-                :groups="advancedEnvGroups"
-                group-key-prefix="advanced-"
+                :groups="basicEnvGroups"
+                group-key-prefix="basic-"
                 :env-values="envValues"
                 :is-submitting="isSubmitting"
                 :database-mode="databaseMode"
@@ -81,51 +49,78 @@
                 @database-mode-change="handleDatabaseModeChange"
                 @generate-secret="handleGenerateSecret"
               />
-            </div>
 
-            <div v-if="missingRequiredEnvKeys.length > 0" class="required-hint">
-              必填项未完成：{{ missingRequiredEnvKeys.join(', ') }}
-            </div>
-          </section>
+              <button
+                v-if="advancedEnvGroups.length > 0"
+                type="button"
+                class="advanced-toggle"
+                :class="{ open: showAdvanced }"
+                :disabled="isSubmitting"
+                :aria-expanded="showAdvanced ? 'true' : 'false'"
+                @click="showAdvanced = !showAdvanced"
+              >
+                <span class="advanced-toggle-chevron" aria-hidden="true"></span>
+                <span>高级配置</span>
+              </button>
 
-          <section v-if="isAdminStep" class="form-section">
-            <div class="step-hint">已完成基础配置，请创建首个管理员账户。</div>
-            <mdui-text-field
-              v-model="adminEmail"
-              label="管理员邮箱 *"
-              type="email"
-              variant="outlined"
-              :disabled="isSubmitting"
-            ></mdui-text-field>
+              <div v-show="showAdvanced" class="advanced-config">
+                <InstallEnvGroupList
+                  :groups="advancedEnvGroups"
+                  group-key-prefix="advanced-"
+                  :env-values="envValues"
+                  :is-submitting="isSubmitting"
+                  :database-mode="databaseMode"
+                  :database-url-placeholder="databaseUrlPlaceholder"
+                  :can-generate-secret="canGenerateSecret"
+                  @database-mode-change="handleDatabaseModeChange"
+                  @generate-secret="handleGenerateSecret"
+                />
+              </div>
 
-            <mdui-text-field
-              v-model="adminPassword"
-              label="管理员密码 *"
-              type="password"
-              variant="outlined"
-              :disabled="isSubmitting"
-            ></mdui-text-field>
+              <div v-if="missingRequiredEnvKeys.length > 0" class="required-hint">
+                必填项未完成：{{ missingRequiredEnvKeys.join(', ') }}
+              </div>
+            </section>
 
-            <mdui-text-field
-              v-model="adminPasswordConfirm"
-              label="确认管理员密码 *"
-              type="password"
-              variant="outlined"
-              :disabled="isSubmitting"
-            ></mdui-text-field>
-            <div v-if="passwordMismatch" class="field-error">两次密码不一致</div>
-          </section>
+            <section v-if="isAdminStep" class="form-section">
+              <div class="step-hint">已完成基础配置，请创建首个管理员账户。</div>
+              <mdui-text-field
+                v-model="adminEmail"
+                label="管理员邮箱 *"
+                type="email"
+                variant="outlined"
+                :disabled="isSubmitting"
+              ></mdui-text-field>
 
-          <mdui-button
-            class="submit-button"
-            type="submit"
-            variant="filled"
-            :disabled="!canSubmit || isSubmitting"
-            :loading="isSubmitting"
-          >
-            {{ submitButtonLabel }}
-          </mdui-button>
-        </form>
+              <mdui-text-field
+                v-model="adminPassword"
+                label="管理员密码 *"
+                type="password"
+                variant="outlined"
+                :disabled="isSubmitting"
+              ></mdui-text-field>
+
+              <mdui-text-field
+                v-model="adminPasswordConfirm"
+                label="确认管理员密码 *"
+                type="password"
+                variant="outlined"
+                :disabled="isSubmitting"
+              ></mdui-text-field>
+              <div v-if="passwordMismatch" class="field-error">两次密码不一致</div>
+            </section>
+
+            <mdui-button
+              class="submit-button"
+              type="submit"
+              variant="filled"
+              :disabled="!canSubmit || isSubmitting"
+              :loading="isSubmitting"
+            >
+              {{ submitButtonLabel }}
+            </mdui-button>
+          </form>
+        </div>
       </mdui-card>
     </div>
   </div>
@@ -269,7 +264,7 @@ const installStepperNodes = computed<Array<{ key: StepKey; title: string; state:
   const states = stepStates.value
   return [
     { key: 'env', title: '配置环境变量', state: states.env },
-    { key: 'restart', title: '等待服务端重启', state: states.restart },
+    { key: 'restart', title: '重启服务端', state: states.restart },
     { key: 'admin', title: '创建系统管理员', state: states.admin }
   ]
 })
@@ -526,22 +521,10 @@ void loadStatus()
   box-sizing: border-box;
 }
 
-.restart-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .install-title {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-}
-
-.install-subtitle {
-  margin: 6px 0 14px;
-  font-size: 14px;
-  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .error-banner {

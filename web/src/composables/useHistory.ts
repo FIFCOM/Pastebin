@@ -154,8 +154,10 @@ const historyLimit = ref(20)
 const historyLoading = ref(false)
 const historySearch = ref('')
 const historyStarredFilter = ref<boolean | null>(null)
+let latestFetchRequestId = 0
 
 export function resetHistoryState(): void {
+  latestFetchRequestId += 1
   historyItems.value = []
   historyTotal.value = 0
   historyPage.value = 1
@@ -174,7 +176,8 @@ export function useHistory() {
     reset?: boolean
     search?: string
     starred?: boolean | null
-  } = {}, userId?: number | null) {
+  } = {}, userId?: number | null): Promise<boolean> {
+    const requestId = ++latestFetchRequestId
     const requestedPage = opts.page ?? (opts.reset ? 1 : historyPage.value)
     if (opts.reset) {
       historyItems.value = []
@@ -201,11 +204,12 @@ export function useHistory() {
         const total = visibleItems.length
         const totalPages = Math.max(1, Math.ceil(total / historyLimit.value))
         const safePage = Math.min(Math.max(requestedPage, 1), totalPages)
+        if (requestId !== latestFetchRequestId) return false
         const start = (safePage - 1) * historyLimit.value
         historyItems.value = visibleItems.slice(start, start + historyLimit.value)
         historyTotal.value = total
         historyPage.value = safePage
-        return
+        return true
       }
 
       const params: Record<string, unknown> = {
@@ -216,6 +220,7 @@ export function useHistory() {
       if (historyStarredFilter.value !== null) params.starred = historyStarredFilter.value
 
       let resp = await getHistory(params)
+      if (requestId !== latestFetchRequestId) return false
       const totalPages = Math.max(1, Math.ceil(resp.total / historyLimit.value))
       const safePage = Math.min(Math.max(requestedPage, 1), totalPages)
 
@@ -224,16 +229,21 @@ export function useHistory() {
           ...params,
           page: safePage
         })
+        if (requestId !== latestFetchRequestId) return false
       }
 
+      if (requestId !== latestFetchRequestId) return false
       historyItems.value = resp.items
       historyTotal.value = resp.total
       historyPage.value = safePage
       if (!historySearch.value && historyStarredFilter.value === null && historyPage.value === 1) {
         saveUserHistoryCache(userId, historyItems.value)
       }
+      return true
     } finally {
-      historyLoading.value = false
+      if (requestId === latestFetchRequestId) {
+        historyLoading.value = false
+      }
     }
   }
 

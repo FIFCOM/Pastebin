@@ -15,7 +15,7 @@
             <mdui-icon-code v-else></mdui-icon-code>
           </mdui-button-icon>
         </mdui-tooltip>
-        <h1 class="mdui-typo-headline">{{ pasteTitle }}</h1>
+        <h1 class="paste-title">{{ pasteTitle }}</h1>
       </div>
 
       <div class="paste-meta">
@@ -387,19 +387,24 @@ onMounted(async () => {
 }
 
 .paste-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   margin-bottom: 4px;
 }
 
-.paste-header h1 {
+.paste-title {
   margin: 0;
-  display: inline;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 2rem;
+  line-height: 1.25;
+  font-weight: 700;
 }
 
 .paste-header mdui-tooltip {
-  display: inline-block;
-  vertical-align: top;
-  margin-top: 3px;
-  margin-right: 2px;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
 .paste-meta {
