@@ -4,36 +4,9 @@
       <mdui-card v-if="showRestartCard" class="install-card restart-card">
         <h1 class="install-title">安装已完成</h1>
         <p class="install-subtitle">已生成 .env，新配置会在服务端重启后自动生效。</p>
-        <div v-if="status" class="steps beer" aria-label="安装进度">
-          <nav class="install-stepper-nav">
-            <template v-for="(step, index) in installStepperNodes" :key="step.key">
-              <div class="stepper-node">
-                <div
-                  class="button circle small fill stepper-indicator"
-                  :class="{
-                    primary: step.state !== 'pending',
-                    'stepper-indicator-pending': step.state === 'pending'
-                  }"
-                  :aria-current="step.state === 'active' ? 'step' : undefined"
-                  :aria-label="`${step.title}：${stepStateLabel(step.state)}`"
-                >
-                  <mdui-icon v-if="step.state === 'done'" class="step-done-icon" name="done" aria-hidden="true"></mdui-icon>
-                  <span v-else class="step-index">{{ index + 1 }}</span>
-                </div>
-                <div class="stepper-content">
-                  <div class="step-title">{{ step.title }}</div>
-                  <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
-                </div>
-              </div>
-              <hr
-                v-if="index < installStepperNodes.length - 1"
-                class="max stepper-line"
-                :class="{ primary: step.state === 'done' }"
-                aria-hidden="true"
-              >
-            </template>
-          </nav>
-        </div>
+
+        <InstallStepper v-if="status" :nodes="installStepperNodes" />
+
         <div class="restart-status-title">正在等待服务端重启</div>
         <div v-if="isRestartPolling" class="restart-loading-row">
           <mdui-circular-progress></mdui-circular-progress>
@@ -46,7 +19,9 @@
         <div v-else-if="showManualRestartHint" class="restart-status-detail">
           如果长时间未重启，则请尝试手动重启。
         </div>
+
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+
         <mdui-button
           v-if="restartPollTimedOut"
           class="submit-button"
@@ -63,80 +38,23 @@
 
         <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-        <div v-if="status" class="steps beer" aria-label="安装进度">
-          <nav class="install-stepper-nav">
-            <template v-for="(step, index) in installStepperNodes" :key="step.key">
-              <div class="stepper-node">
-                <div
-                  class="button circle small fill stepper-indicator"
-                  :class="{
-                    primary: step.state !== 'pending',
-                    'stepper-indicator-pending': step.state === 'pending'
-                  }"
-                  :aria-current="step.state === 'active' ? 'step' : undefined"
-                  :aria-label="`${step.title}：${stepStateLabel(step.state)}`"
-                >
-                  <mdui-icon v-if="step.state === 'done'" class="step-done-icon" name="done" aria-hidden="true"></mdui-icon>
-                  <span v-else class="step-index">{{ index + 1 }}</span>
-                </div>
-                <div class="stepper-content">
-                  <div class="step-title">{{ step.title }}</div>
-                  <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
-                </div>
-              </div>
-              <hr
-                v-if="index < installStepperNodes.length - 1"
-                class="max stepper-line"
-                :class="{ primary: step.state === 'done' }"
-                aria-hidden="true"
-              >
-            </template>
-          </nav>
-        </div>
+        <InstallStepper v-if="status" :nodes="installStepperNodes" />
 
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
         <form v-if="status" class="install-form" @submit.prevent="handleSubmit">
           <section v-if="isEnvStep" class="form-section">
-            <div v-for="group in basicEnvGroups" :key="`basic-${group.name}`" class="env-group">
-              <h3 class="group-title">{{ group.name }}</h3>
-              <div class="env-grid">
-                <div v-for="item in group.items" :key="item.key" class="env-item">
-                  <div v-if="item.key === 'DATABASE_URL'" class="database-mode-row">
-                    <div class="database-mode-label">数据库类型</div>
-                    <mdui-segmented-button-group
-                      :value="databaseMode"
-                      selects="single"
-                      required
-                      :disabled="isSubmitting"
-                      @change="handleDatabaseModeChange"
-                    >
-                      <mdui-segmented-button value="sqlite">SQLite</mdui-segmented-button>
-                      <mdui-segmented-button value="mysql">MySQL</mdui-segmented-button>
-                    </mdui-segmented-button-group>
-                    <br>
-                  </div>
-                  <mdui-text-field
-                    v-model="envValues[item.key]"
-                    :label="item.required ? `${item.key} *` : item.key"
-                    variant="outlined"
-                    :placeholder="item.key === 'DATABASE_URL' ? databaseUrlPlaceholder : item.default_value"
-                    :disabled="isSubmitting"
-                  >
-                    <mdui-button-icon
-                      v-if="canGenerateSecret(item.key)"
-                      slot="end-icon"
-                      icon="refresh"
-                      type="button"
-                      class="random-secret-icon"
-                      :disabled="isSubmitting"
-                      @click.stop="handleGenerateSecret(item.key)"
-                    ></mdui-button-icon>
-                  </mdui-text-field>
-                  <div v-if="item.comment && item.key !== 'DATABASE_URL'" class="env-comment">{{ item.comment }}</div>
-                </div>
-              </div>
-            </div>
+            <InstallEnvGroupList
+              :groups="basicEnvGroups"
+              group-key-prefix="basic-"
+              :env-values="envValues"
+              :is-submitting="isSubmitting"
+              :database-mode="databaseMode"
+              :database-url-placeholder="databaseUrlPlaceholder"
+              :can-generate-secret="canGenerateSecret"
+              @database-mode-change="handleDatabaseModeChange"
+              @generate-secret="handleGenerateSecret"
+            />
 
             <button
               v-if="advancedEnvGroups.length > 0"
@@ -152,44 +70,17 @@
             </button>
 
             <div v-show="showAdvanced" class="advanced-config">
-              <div v-for="group in advancedEnvGroups" :key="`advanced-${group.name}`" class="env-group">
-                <h3 class="group-title">{{ group.name }}</h3>
-                <div class="env-grid">
-                  <div v-for="item in group.items" :key="item.key" class="env-item">
-                    <div v-if="item.key === 'DATABASE_URL'" class="database-mode-row">
-                      <div class="database-mode-label">数据库类型</div>
-                      <mdui-segmented-button-group
-                        :value="databaseMode"
-                        selects="single"
-                        required
-                        :disabled="isSubmitting"
-                        @change="handleDatabaseModeChange"
-                      >
-                        <mdui-segmented-button value="sqlite">SQLite</mdui-segmented-button>
-                        <mdui-segmented-button value="mysql">MySQL</mdui-segmented-button>
-                      </mdui-segmented-button-group>
-                    </div>
-                    <mdui-text-field
-                      v-model="envValues[item.key]"
-                      :label="item.required ? `${item.key} *` : item.key"
-                      variant="outlined"
-                      :placeholder="item.key === 'DATABASE_URL' ? databaseUrlPlaceholder : item.default_value"
-                      :disabled="isSubmitting"
-                    >
-                      <mdui-button-icon
-                        v-if="canGenerateSecret(item.key)"
-                        slot="end-icon"
-                        icon="refresh"
-                        type="button"
-                        class="random-secret-icon"
-                        :disabled="isSubmitting"
-                        @click.stop="handleGenerateSecret(item.key)"
-                      ></mdui-button-icon>
-                    </mdui-text-field>
-                    <div v-if="item.comment && item.key !== 'DATABASE_URL'" class="env-comment">{{ item.comment }}</div>
-                  </div>
-                </div>
-              </div>
+              <InstallEnvGroupList
+                :groups="advancedEnvGroups"
+                group-key-prefix="advanced-"
+                :env-values="envValues"
+                :is-submitting="isSubmitting"
+                :database-mode="databaseMode"
+                :database-url-placeholder="databaseUrlPlaceholder"
+                :can-generate-secret="canGenerateSecret"
+                @database-mode-change="handleDatabaseModeChange"
+                @generate-secret="handleGenerateSecret"
+              />
             </div>
 
             <div v-if="missingRequiredEnvKeys.length > 0" class="required-hint">
@@ -241,19 +132,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
 import 'mdui/components/card.js'
 import 'mdui/components/circular-progress.js'
-import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
-import 'mdui/components/segmented-button-group.js'
-import 'mdui/components/segmented-button.js'
 import 'mdui/components/text-field.js'
 
+import InstallEnvGroupList from '../components/install/InstallEnvGroupList.vue'
+import InstallStepper from '../components/install/InstallStepper.vue'
+import { useRestartPolling } from '../composables/useRestartPolling'
 import { sha256Hex } from '../services/auth'
 import {
   fetchInstallContext,
@@ -271,16 +161,6 @@ const isSubmitting = ref(false)
 const errorMessage = ref('')
 const restartRequired = ref(false)
 const restartMessage = ref('')
-const showManualRestartHint = ref(false)
-const restartPollTimedOut = ref(false)
-
-const RESTART_POLL_INTERVAL_MS = 1500
-const RESTART_MANUAL_HINT_MS = 30000
-const RESTART_POLL_TIMEOUT_MS = 60000
-let restartPollTimer: number | null = null
-let restartHintTimer: number | null = null
-let restartTimeoutTimer: number | null = null
-const isRestartPolling = ref(false)
 
 const envValues = ref<Record<string, string>>({})
 const SQLITE_DATABASE_URL = 'sqlite:///./material_bin.db'
@@ -406,12 +286,6 @@ const currentStep = computed<InstallStep>(() => {
 const isEnvStep = computed(() => currentStep.value === 'env')
 const isAdminStep = computed(() => currentStep.value === 'admin')
 
-function stepStateLabel(state: StepState): string {
-  if (state === 'done') return '已完成'
-  if (state === 'active') return '进行中'
-  return '待完成'
-}
-
 const submitButtonLabel = computed(() => {
   if (isEnvStep.value) return '保存配置并继续'
   if (currentStep.value === 'restart') return '等待服务端重启'
@@ -515,7 +389,7 @@ async function loadStatus(options: { preserveRestartView?: boolean; silentError?
   if (!options.preserveRestartView) {
     restartRequired.value = false
     restartMessage.value = ''
-    restartPollTimedOut.value = false
+    resetRestartHintState()
   }
 
   try {
@@ -587,7 +461,7 @@ async function handleSubmit() {
     if (setupResp.restart_required || setupResp.env_created) {
       restartRequired.value = true
       restartMessage.value = setupResp.message
-      restartPollTimedOut.value = false
+      resetRestartHintState()
       return
     }
 
@@ -611,100 +485,18 @@ async function handleSubmit() {
   }
 }
 
-function stopRestartPolling(options: { resetHintState?: boolean } = {}) {
-  const { resetHintState = true } = options
-  isRestartPolling.value = false
-
-  if (resetHintState) {
-    showManualRestartHint.value = false
-    restartPollTimedOut.value = false
+const {
+  isRestartPolling,
+  showManualRestartHint,
+  restartPollTimedOut,
+  resetRestartHintState,
+  handleRestartCheck
+} = useRestartPolling({
+  isRestartCardVisible: showRestartCard,
+  loadStatus,
+  onTimeout: () => {
+    setError('自动检测超过 1 分钟仍未完成，请手动重启服务端后重新检测。')
   }
-
-  if (restartPollTimer !== null) {
-    window.clearTimeout(restartPollTimer)
-    restartPollTimer = null
-  }
-
-  if (restartHintTimer !== null) {
-    window.clearTimeout(restartHintTimer)
-    restartHintTimer = null
-  }
-
-  if (restartTimeoutTimer !== null) {
-    window.clearTimeout(restartTimeoutTimer)
-    restartTimeoutTimer = null
-  }
-}
-
-function handleRestartPollingTimeout() {
-  if (!isRestartPolling.value) return
-  stopRestartPolling({ resetHintState: false })
-  restartPollTimedOut.value = true
-  showManualRestartHint.value = true
-  setError('自动检测超过 1 分钟仍未完成，请手动重启服务端后重新检测。')
-}
-
-function scheduleRestartPolling(delay = RESTART_POLL_INTERVAL_MS) {
-  if (!isRestartPolling.value || restartPollTimer !== null) return
-  restartPollTimer = window.setTimeout(() => {
-    restartPollTimer = null
-    void pollRestartStatus()
-  }, delay)
-}
-
-async function pollRestartStatus() {
-  if (!isRestartPolling.value) return
-  await loadStatus({ preserveRestartView: true, silentError: true })
-  if (!isRestartPolling.value) return
-
-  if (!showRestartCard.value) {
-    stopRestartPolling()
-    return
-  }
-
-  scheduleRestartPolling()
-}
-
-function startRestartPolling() {
-  if (isRestartPolling.value) return
-  isRestartPolling.value = true
-  showManualRestartHint.value = false
-  restartPollTimedOut.value = false
-
-  restartHintTimer = window.setTimeout(() => {
-    showManualRestartHint.value = true
-  }, RESTART_MANUAL_HINT_MS)
-
-  restartTimeoutTimer = window.setTimeout(() => {
-    handleRestartPollingTimeout()
-  }, RESTART_POLL_TIMEOUT_MS)
-
-  scheduleRestartPolling(0)
-}
-
-async function handleRestartCheck() {
-  restartPollTimedOut.value = false
-  showManualRestartHint.value = false
-  await loadStatus({ preserveRestartView: true })
-  if (showRestartCard.value) {
-    startRestartPolling()
-  }
-}
-
-watch(
-  showRestartCard,
-  (visible) => {
-    if (visible) {
-      startRestartPolling()
-      return
-    }
-    stopRestartPolling()
-  },
-  { immediate: true }
-)
-
-onBeforeUnmount(() => {
-  stopRestartPolling()
 })
 
 void loadStatus()
@@ -752,78 +544,6 @@ void loadStatus()
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-.steps {
-  margin: 10px 0 18px;
-}
-
-.install-stepper-nav {
-  --stepper-indicator-size: 2rem;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.install-stepper-nav > :not(ul, ol, header, footer) {
-  margin: unset;
-}
-
-.stepper-node {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-}
-
-.stepper-indicator {
-  pointer-events: none;
-  cursor: default;
-  user-select: none;
-  inline-size: var(--stepper-indicator-size);
-  block-size: var(--stepper-indicator-size);
-}
-
-.stepper-indicator-pending {
-  opacity: 0.62;
-}
-
-.step-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1ch;
-  font-weight: 600;
-}
-
-.step-done-icon {
-  --mdui-icon-size: 1rem;
-}
-
-.stepper-content {
-  min-width: 0;
-}
-
-.stepper-line {
-  align-self: flex-start;
-  margin-top: calc((var(--stepper-indicator-size) - 0.0625rem) / 2) !important;
-  opacity: 0.42;
-  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.stepper-line.primary {
-  opacity: 1;
-}
-
-.step-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.step-subtitle {
-  font-size: 12px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
 .error-banner {
   margin: 8px 0 14px;
   border: 1px solid rgb(var(--mdui-color-error));
@@ -846,39 +566,9 @@ void loadStatus()
   gap: 10px;
 }
 
-.section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
 .step-hint {
   font-size: 12px;
   color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.env-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.group-title {
-  margin: 4px 0 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.env-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.env-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .advanced-toggle {
@@ -925,27 +615,6 @@ void loadStatus()
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.random-secret-icon {
-  --mdui-comp-button-icon-state-layer-color: var(--mdui-color-primary);
-}
-
-.database-mode-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.database-mode-label {
-  font-size: 12px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.env-comment {
-  font-size: 12px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-  white-space: pre-wrap;
 }
 
 .required-hint {
@@ -995,19 +664,5 @@ void loadStatus()
 
 .submit-button {
   width: 100%;
-}
-
-@media (max-width: 640px) {
-  .install-stepper-nav {
-    gap: 8px;
-  }
-
-  .step-title {
-    font-size: 13px;
-  }
-
-  .step-subtitle {
-    font-size: 11px;
-  }
 }
 </style>
