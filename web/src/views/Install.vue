@@ -4,19 +4,47 @@
       <mdui-card v-if="showRestartCard" class="install-card restart-card">
         <h1 class="install-title">安装已完成</h1>
         <p class="install-subtitle">已生成 .env，新配置会在服务端重启后自动生效。</p>
-        <div class="restart-banner">
-          <div class="restart-banner-title">正在等待服务端重启</div>
-          <div v-if="isRestartPolling" class="restart-loading-row">
-            <mdui-circular-progress></mdui-circular-progress>
-            <div class="restart-loading-text">正在自动检测重启状态，恢复后将继续安装流程。</div>
-          </div>
-          <div v-if="effectiveRestartMessage" class="restart-banner-detail">{{ effectiveRestartMessage }}</div>
-          <div v-if="restartPollTimedOut" class="restart-timeout-hint">
-            自动检测超过 1 分钟仍未完成，请手动重启服务端。
-          </div>
-          <div v-else-if="showManualRestartHint" class="restart-banner-detail">
-            如果长时间未重启，则请尝试手动重启。
-          </div>
+        <div v-if="status" class="steps beer" aria-label="安装进度">
+          <nav class="install-stepper-nav">
+            <template v-for="(step, index) in installStepperNodes" :key="step.key">
+              <div class="stepper-node">
+                <div
+                  class="button circle small fill stepper-indicator"
+                  :class="{
+                    primary: step.state !== 'pending',
+                    'stepper-indicator-pending': step.state === 'pending'
+                  }"
+                  :aria-current="step.state === 'active' ? 'step' : undefined"
+                  :aria-label="`${step.title}：${stepStateLabel(step.state)}`"
+                >
+                  <mdui-icon v-if="step.state === 'done'" class="step-done-icon" name="done" aria-hidden="true"></mdui-icon>
+                  <span v-else class="step-index">{{ index + 1 }}</span>
+                </div>
+                <div class="stepper-content">
+                  <div class="step-title">{{ step.title }}</div>
+                  <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
+                </div>
+              </div>
+              <hr
+                v-if="index < installStepperNodes.length - 1"
+                class="max stepper-line"
+                :class="{ primary: step.state === 'done' }"
+                aria-hidden="true"
+              >
+            </template>
+          </nav>
+        </div>
+        <div class="restart-status-title">正在等待服务端重启</div>
+        <div v-if="isRestartPolling" class="restart-loading-row">
+          <mdui-circular-progress></mdui-circular-progress>
+          <div class="restart-loading-text">正在自动检测重启状态，恢复后将继续安装流程。</div>
+        </div>
+        <div v-if="effectiveRestartMessage" class="restart-status-detail">{{ effectiveRestartMessage }}</div>
+        <div v-if="restartPollTimedOut" class="restart-timeout-hint">
+          自动检测超过 1 分钟仍未完成，请手动重启服务端。
+        </div>
+        <div v-else-if="showManualRestartHint" class="restart-status-detail">
+          如果长时间未重启，则请尝试手动重启。
         </div>
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
         <mdui-button
@@ -35,42 +63,35 @@
 
         <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-        <div v-if="status" class="steps" aria-label="安装进度">
-          <div
-            class="step-connector step-connector-head"
-            :class="{ done: stepStates.env !== 'pending' }"
-            aria-hidden="true"
-          ></div>
-
-          <div class="step-node step-node-start" :class="`is-${stepStates.env}`">
-            <div class="step-circle">{{ stepStates.env === 'done' ? '✓' : '1' }}</div>
-          </div>
-
-          <div
-            class="step-connector step-connector-mid"
-            :class="{ done: stepStates.env === 'done' }"
-            aria-hidden="true"
-          ></div>
-
-          <div class="step-node step-node-end" :class="`is-${stepStates.admin}`">
-            <div class="step-circle">{{ stepStates.admin === 'done' ? '✓' : '2' }}</div>
-          </div>
-
-          <div
-            class="step-connector step-connector-tail"
-            :class="{ done: stepStates.admin === 'done' }"
-            aria-hidden="true"
-          ></div>
-
-          <div class="step-content step-content-start">
-            <div class="step-title">配置环境变量</div>
-            <div class="step-subtitle">{{ stepStateLabel(stepStates.env) }}</div>
-          </div>
-
-          <div class="step-content step-content-end">
-            <div class="step-title">创建系统管理员</div>
-            <div class="step-subtitle">{{ stepStateLabel(stepStates.admin) }}</div>
-          </div>
+        <div v-if="status" class="steps beer" aria-label="安装进度">
+          <nav class="install-stepper-nav">
+            <template v-for="(step, index) in installStepperNodes" :key="step.key">
+              <div class="stepper-node">
+                <div
+                  class="button circle small fill stepper-indicator"
+                  :class="{
+                    primary: step.state !== 'pending',
+                    'stepper-indicator-pending': step.state === 'pending'
+                  }"
+                  :aria-current="step.state === 'active' ? 'step' : undefined"
+                  :aria-label="`${step.title}：${stepStateLabel(step.state)}`"
+                >
+                  <mdui-icon v-if="step.state === 'done'" class="step-done-icon" name="done" aria-hidden="true"></mdui-icon>
+                  <span v-else class="step-index">{{ index + 1 }}</span>
+                </div>
+                <div class="stepper-content">
+                  <div class="step-title">{{ step.title }}</div>
+                  <div class="step-subtitle">{{ stepStateLabel(step.state) }}</div>
+                </div>
+              </div>
+              <hr
+                v-if="index < installStepperNodes.length - 1"
+                class="max stepper-line"
+                :class="{ primary: step.state === 'done' }"
+                aria-hidden="true"
+              >
+            </template>
+          </nav>
         </div>
 
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
@@ -227,6 +248,7 @@ import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/card.js'
 import 'mdui/components/circular-progress.js'
+import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/segmented-button-group.js'
 import 'mdui/components/segmented-button.js'
@@ -313,7 +335,8 @@ const missingRequiredEnvKeys = computed(() => {
 
 type DatabaseMode = 'sqlite' | 'mysql'
 type StepState = 'done' | 'active' | 'pending'
-type InstallStep = 'env' | 'admin' | 'done'
+type InstallStep = 'env' | 'restart' | 'admin' | 'done'
+type StepKey = 'env' | 'restart' | 'admin'
 
 function resolveDatabaseMode(rawUrl: string): DatabaseMode {
   return rawUrl.trim().toLowerCase().startsWith('mysql') ? 'mysql' : 'sqlite'
@@ -336,25 +359,45 @@ const databaseUrlPlaceholder = computed(() =>
   databaseMode.value === 'mysql' ? MYSQL_DATABASE_URL : SQLITE_DATABASE_URL
 )
 
-const stepStates = computed<{ env: StepState; admin: StepState }>(() => {
+const isRestartStepActive = computed(() => {
+  const currentStatus = status.value
+  if (currentStatus?.restart_required) return true
+  if (currentStatus && !currentStatus.restart_required && currentStatus.env_exists) return false
+  return restartRequired.value
+})
+
+const stepStates = computed<{ env: StepState; restart: StepState; admin: StepState }>(() => {
   const currentStatus = status.value
   if (!currentStatus) {
-    return { env: 'pending', admin: 'pending' }
+    return { env: 'pending', restart: 'pending', admin: 'pending' }
   }
 
-  const env: StepState = currentStatus.env_exists ? 'done' : 'active'
+  const restartActive = isRestartStepActive.value
+  const envReady = currentStatus.env_exists || restartActive
+  const env: StepState = envReady ? 'done' : 'active'
+  const restart: StepState = !envReady ? 'pending' : restartActive ? 'active' : 'done'
   let admin: StepState = 'pending'
   if (currentStatus.admin_exists) {
     admin = 'done'
-  } else if (currentStatus.env_exists) {
+  } else if (envReady && !restartActive) {
     admin = 'active'
   }
-  return { env, admin }
+  return { env, restart, admin }
+})
+
+const installStepperNodes = computed<Array<{ key: StepKey; title: string; state: StepState }>>(() => {
+  const states = stepStates.value
+  return [
+    { key: 'env', title: '配置环境变量', state: states.env },
+    { key: 'restart', title: '等待服务端重启', state: states.restart },
+    { key: 'admin', title: '创建系统管理员', state: states.admin }
+  ]
 })
 
 const currentStep = computed<InstallStep>(() => {
   const currentStatus = status.value
-  if (!currentStatus) return 'env'
+  if (!currentStatus) return isRestartStepActive.value ? 'restart' : 'env'
+  if (isRestartStepActive.value) return 'restart'
   if (!currentStatus.env_exists) return 'env'
   if (!currentStatus.admin_exists) return 'admin'
   return 'done'
@@ -371,16 +414,12 @@ function stepStateLabel(state: StepState): string {
 
 const submitButtonLabel = computed(() => {
   if (isEnvStep.value) return '保存配置并继续'
+  if (currentStep.value === 'restart') return '等待服务端重启'
   if (isAdminStep.value) return '创建管理员并完成安装'
   return '安装已完成'
 })
 
-const showRestartCard = computed(() => {
-  const currentStatus = status.value
-  if (currentStatus?.restart_required) return true
-  if (currentStatus && !currentStatus.restart_required && currentStatus.env_exists) return false
-  return restartRequired.value
-})
+const showRestartCard = computed(() => isRestartStepActive.value)
 
 const effectiveRestartMessage = computed(() => {
   return restartMessage.value || status.value?.restart_message || ''
@@ -396,6 +435,7 @@ const passwordMismatch = computed(() => {
 const canSubmit = computed(() => {
   if (!status.value) return false
   if (currentStep.value === 'done') return false
+  if (currentStep.value === 'restart') return false
 
   if (isEnvStep.value && missingRequiredEnvKeys.value.length > 0) {
     return false
@@ -714,92 +754,64 @@ void loadStatus()
 
 .steps {
   margin: 10px 0 18px;
-  display: grid;
-  grid-template-columns: minmax(40px, 1fr) auto minmax(48px, 1fr) auto minmax(40px, 1fr);
-  grid-template-areas:
-    'connector-head node-start connector-mid node-end connector-tail'
-    '. content-start . content-end .';
-  column-gap: 12px;
-  row-gap: 8px;
-  align-items: center;
 }
 
-.step-node {
+.install-stepper-nav {
+  --stepper-indicator-size: 2rem;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.install-stepper-nav > :not(ul, ol, header, footer) {
+  margin: unset;
+}
+
+.stepper-node {
+  min-width: 0;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.stepper-indicator {
+  pointer-events: none;
+  cursor: default;
+  user-select: none;
+  inline-size: var(--stepper-indicator-size);
+  block-size: var(--stepper-indicator-size);
+}
+
+.stepper-indicator-pending {
+  opacity: 0.62;
+}
+
+.step-index {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.step-node-start {
-  grid-area: node-start;
-}
-
-.step-node-end {
-  grid-area: node-end;
-}
-
-.step-circle {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgb(var(--mdui-color-outline));
-  font-size: 13px;
+  min-width: 1ch;
   font-weight: 600;
-  color: rgb(var(--mdui-color-on-surface));
-  background: rgb(var(--mdui-color-surface-container));
 }
 
-.step-node.is-done .step-circle {
-  color: rgb(var(--mdui-color-on-primary));
-  background: rgb(var(--mdui-color-primary));
-  border-color: rgb(var(--mdui-color-primary));
+.step-done-icon {
+  --mdui-icon-size: 1rem;
 }
 
-.step-node.is-active .step-circle {
-  color: rgb(var(--mdui-color-primary));
-  background: rgba(var(--mdui-color-primary), 0.14);
-  border-color: rgba(var(--mdui-color-primary), 0.45);
-}
-
-.step-connector {
-  width: 100%;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(var(--mdui-color-outline), 0.45);
-}
-
-.step-connector-head {
-  grid-area: connector-head;
-}
-
-.step-connector-mid {
-  grid-area: connector-mid;
-}
-
-.step-connector-tail {
-  grid-area: connector-tail;
-}
-
-.step-connector.done {
-  background: rgba(var(--mdui-color-primary), 0.75);
-}
-
-.step-content {
+.stepper-content {
   min-width: 0;
 }
 
-.step-content-start {
-  grid-area: content-start;
-  justify-self: center;
-  text-align: center;
+.stepper-line {
+  align-self: flex-start;
+  margin-top: calc((var(--stepper-indicator-size) - 0.0625rem) / 2) !important;
+  opacity: 0.42;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.step-content-end {
-  grid-area: content-end;
-  justify-self: center;
-  text-align: center;
+.stepper-line.primary {
+  opacity: 1;
 }
 
 .step-title {
@@ -946,34 +958,31 @@ void loadStatus()
   color: rgb(var(--mdui-color-error));
 }
 
-.restart-banner {
-  border: 1px solid rgb(var(--mdui-color-primary));
-  border-radius: 10px;
-  padding: 12px;
-  background: rgba(var(--mdui-color-primary), 0.08);
-}
-
-.restart-banner-title {
+.restart-status-title {
   font-size: 15px;
   font-weight: 600;
+  text-align: center;
 }
 
 .restart-loading-row {
   margin-top: 8px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .restart-loading-text {
   font-size: 13px;
   color: rgb(var(--mdui-color-on-surface-variant));
+  text-align: center;
 }
 
-.restart-banner-detail {
+.restart-status-detail {
   margin-top: 6px;
   font-size: 13px;
   color: rgb(var(--mdui-color-on-surface-variant));
+  text-align: center;
 }
 
 .restart-timeout-hint {
@@ -981,6 +990,7 @@ void loadStatus()
   font-size: 13px;
   font-weight: 500;
   color: rgb(var(--mdui-color-error));
+  text-align: center;
 }
 
 .submit-button {
@@ -988,13 +998,16 @@ void loadStatus()
 }
 
 @media (max-width: 640px) {
-  .steps {
-    grid-template-columns: minmax(16px, 1fr) auto minmax(24px, 1fr) auto minmax(16px, 1fr);
-    grid-template-areas:
-      'connector-head node-start connector-mid node-end connector-tail'
-      '. content-start . content-end .';
-    column-gap: 8px;
-    row-gap: 6px;
+  .install-stepper-nav {
+    gap: 8px;
+  }
+
+  .step-title {
+    font-size: 13px;
+  }
+
+  .step-subtitle {
+    font-size: 11px;
   }
 }
 </style>

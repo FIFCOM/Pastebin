@@ -1,6 +1,8 @@
 import './assets/mdui-grid.css'
 import './style.css'
 import 'material-icons/iconfont/material-icons.css'
+import 'beercss/scoped'
+import 'material-dynamic-colors'
 
 import { createApp } from 'vue'
 import App from './App.vue'

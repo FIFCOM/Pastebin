@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell">
-    <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
     <mdui-layout class="app-layout">
+      <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
       <mdui-layout-main class="mdui-container app-main">
         <router-view />
       </mdui-layout-main>

@@ -1,6 +1,7 @@
 import { ref } from 'vue'
+import { ui } from 'beercss/scoped'
 import { setTheme } from 'mdui/functions/setTheme.js'
-import { setColorScheme } from 'mdui/functions/setColorScheme.js';
+import { setColorScheme } from 'mdui/functions/setColorScheme.js'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 type ActualTheme = 'light' | 'dark'
@@ -16,13 +17,35 @@ export const presetColors = [
 
 type ThemeColor = (typeof presetColors)[number] | string
 
-
 const themeMode = ref<ThemeMode>('auto')
 const actualTheme = ref<ActualTheme>('light')
 const themeColor = ref<ThemeColor>(presetColors[0])
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null
+
+const isThemeMode = (value: string | null): value is ThemeMode => {
+  return value === 'auto' || value === 'light' || value === 'dark'
+}
+
+const isValidHexColor = (value: unknown): value is string => {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
+}
+
+const syncThemeMode = (mode: ActualTheme) => {
+  setTheme(mode)
+  ui('mode', mode)
+}
+
+const syncThemeColor = (color: string) => {
+  setColorScheme(color)
+  const result = ui('theme', color)
+  if (result instanceof Promise) {
+    result.catch((error) => {
+      console.warn('BeerCSS dynamic theme apply failed:', error)
+    })
+  }
+}
 
 /**
  * 获取系统主题偏好
@@ -55,31 +78,28 @@ const applyTheme = (newTheme: ThemeMode) => {
   }
 
   localStorage.setItem('theme', newTheme)
-  setTheme(actualTheme.value)
+  syncThemeMode(actualTheme.value)
 }
 
 const applyColor = (newColor: ThemeColor) => {
   // 简单格式校验：必须为 #RRGGBB，否则回退为当前已记录或默认颜色
-  const isValidHex =
-    typeof newColor === 'string' &&
-    /^#[0-9a-fA-F]{6}$/.test(newColor)
-
-  const finalColor = isValidHex ? newColor : themeColor.value
+  const fallbackColor = isValidHexColor(themeColor.value) ? themeColor.value : presetColors[0]
+  const finalColor = isValidHexColor(newColor) ? newColor : fallbackColor
 
   themeColor.value = finalColor
   localStorage.setItem('theme_color', finalColor)
-  setColorScheme(finalColor)
+  syncThemeColor(finalColor)
 }
-
 
 /**
  * 系统主题变化处理
  */
 const handleSystemThemeChange = (e: MediaQueryListEvent) => {
-  if (themeMode.value === 'auto') {
-    const newTheme = e.matches ? 'dark' : 'light'
-    applyTheme(newTheme)
+  if (themeMode.value !== 'auto') {
+    return
   }
+  actualTheme.value = e.matches ? 'dark' : 'light'
+  syncThemeMode(actualTheme.value)
 }
 
 /**
@@ -87,7 +107,8 @@ const handleSystemThemeChange = (e: MediaQueryListEvent) => {
  */
 const initTheme = () => {
   // 读取用户设置（默认 auto）
-  const savedMode = (localStorage.getItem('theme') as ThemeMode | null) || 'auto'
+  const rawMode = localStorage.getItem('theme')
+  const savedMode = isThemeMode(rawMode) ? rawMode : 'auto'
 
   // 通过 applyTheme 统一处理 themeMode、actualTheme 和监听器
   applyTheme(savedMode)
