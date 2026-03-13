@@ -1,123 +1,121 @@
 <template>
-  <UserPanelCard title="用户列表" subtitle="管理员可搜索、编辑、禁用或删除用户">
+  <UserPanelCard title="用户列表">
     <template #actions>
       <mdui-button
-        variant="tonal"
-        :disabled="!canAccess || isLoading"
-        :loading="isLoading"
-        @click="load"
+        variant="filled"
+        :disabled="!canAccess"
+        @click="openCreateDialog"
       >
-        刷新
-      </mdui-button>
-      <mdui-button variant="filled" :disabled="!canAccess" @click="openCreateDialog">
         创建用户
       </mdui-button>
     </template>
 
-    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
-    <div v-else-if="!canAccess" class="user-panel-empty-hint">仅管理员可查看用户列表</div>
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
+    <div v-else-if="!canAccess" class="user-panel-empty-hint">仅管理员可查看。</div>
 
-    <div v-else>
-      <div class="toolbar">
-        <mdui-text-field
-          v-model="searchInput"
-          class="search-input"
-          label="搜索用户名或邮箱"
-          variant="outlined"
-          clearable
-          :disabled="isLoading"
-          @keydown.enter.prevent="applyFilters"
-        ></mdui-text-field>
+    <div v-else class="user-panel-stack">
+      <div class="user-panel-section user-panel-section--soft">
+        <div class="filters-grid">
+          <div class="search-row">
+            <mdui-text-field
+              v-model="searchInput"
+              class="search-input"
+              label="搜索用户名或邮箱"
+              variant="outlined"
+              clearable
+              :disabled="isLoading"
+              @keydown.enter.prevent="applyFilters"
+            ></mdui-text-field>
 
-        <mdui-select
-          class="role-filter"
-          label="角色"
-          variant="outlined"
-          :value="roleFilter"
-          @change="handleRoleFilterChange"
-        >
-          <mdui-menu-item value="all">全部</mdui-menu-item>
-          <mdui-menu-item value="admin">管理员</mdui-menu-item>
-          <mdui-menu-item value="user">普通用户</mdui-menu-item>
-        </mdui-select>
+            <mdui-button-icon class="search-trigger" title="搜索" :disabled="isLoading" @click="applyFilters">
+              <mdui-icon name="search"></mdui-icon>
+            </mdui-button-icon>
+          </div>
 
-        <mdui-select
-          class="status-filter"
-          label="状态"
-          variant="outlined"
-          :value="statusFilter"
-          @change="handleStatusFilterChange"
-        >
-          <mdui-menu-item value="all">全部</mdui-menu-item>
-          <mdui-menu-item value="active">可登录</mdui-menu-item>
-          <mdui-menu-item value="disabled">已禁用</mdui-menu-item>
-        </mdui-select>
-
-        <mdui-button variant="filled" :disabled="isLoading" @click="applyFilters">筛选</mdui-button>
-      </div>
-
-      <div class="toolbar pager-toolbar">
-        <div class="pager">
-          <mdui-button variant="text" :disabled="page <= 1 || isLoading" @click="page = page - 1">
-            上一页
-          </mdui-button>
-          <div class="pager-info">第 {{ page }} / {{ totalPages }} 页（共 {{ total }} 条）</div>
-          <mdui-button
-            variant="text"
-            :disabled="page >= totalPages || isLoading"
-            @click="page = page + 1"
+          <mdui-select
+            label="角色"
+            variant="outlined"
+            :value="roleFilter"
+            @change="handleRoleFilterChange"
           >
-            下一页
-          </mdui-button>
-        </div>
+            <mdui-menu-item value="all">全部</mdui-menu-item>
+            <mdui-menu-item value="admin">管理员</mdui-menu-item>
+            <mdui-menu-item value="user">普通用户</mdui-menu-item>
+          </mdui-select>
 
-        <mdui-select
-          class="size-select"
-          label="每页"
-          variant="outlined"
-          :value="String(size)"
-          @change="handleSizeChange"
-        >
-          <mdui-menu-item value="10">10</mdui-menu-item>
-          <mdui-menu-item value="20">20</mdui-menu-item>
-          <mdui-menu-item value="50">50</mdui-menu-item>
-          <mdui-menu-item value="100">100</mdui-menu-item>
-        </mdui-select>
+          <mdui-select
+            label="状态"
+            variant="outlined"
+            :value="statusFilter"
+            @change="handleStatusFilterChange"
+          >
+            <mdui-menu-item value="all">全部</mdui-menu-item>
+            <mdui-menu-item value="active">正常</mdui-menu-item>
+            <mdui-menu-item value="disabled">已封禁</mdui-menu-item>
+          </mdui-select>
+
+          <mdui-select
+            label="每页"
+            variant="outlined"
+            :value="String(size)"
+            @change="handleSizeChange"
+          >
+            <mdui-menu-item value="10">10</mdui-menu-item>
+            <mdui-menu-item value="20">20</mdui-menu-item>
+            <mdui-menu-item value="50">50</mdui-menu-item>
+            <mdui-menu-item value="100">100</mdui-menu-item>
+          </mdui-select>
+        </div>
       </div>
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && users.length === 0" class="user-panel-empty-hint">暂无用户</div>
+      <div v-if="!isLoading && users.length === 0" class="user-panel-empty-hint">暂无匹配用户。</div>
 
-      <mdui-list v-else class="user-panel-list">
-        <mdui-list-item
-          v-for="user in users"
-          :key="user.id"
-          :headline="user.username"
-          :description="userDescription(user)"
-          description-line="2"
-          rounded
-        >
-          <div slot="end-icon" class="user-actions">
-            <mdui-chip :variant="user.role === 'admin' ? 'filled' : 'outlined'">
-              {{ user.role === 'admin' ? 'Admin' : 'User' }}
-            </mdui-chip>
-            <mdui-chip :variant="user.is_active ? 'tonal' : 'outlined'">
-              {{ user.is_active ? '可登录' : '已禁用' }}
-            </mdui-chip>
-            <mdui-button-icon @click.stop="openEditDialog(user)">
-              <mdui-icon name="edit"></mdui-icon>
-            </mdui-button-icon>
-            <mdui-button-icon
+      <div v-else class="user-panel-row-list">
+        <article v-for="user in users" :key="user.id" class="user-panel-row">
+          <div class="user-panel-row-main">
+            <div class="user-panel-row-title-row">
+              <div class="user-panel-row-title">{{ user.username }}</div>
+              <mdui-chip :variant="user.role === 'admin' ? 'filled' : 'outlined'">
+                {{ user.role === 'admin' ? 'Admin' : 'User' }}
+              </mdui-chip>
+              <mdui-chip :variant="user.is_active ? 'tonal' : 'outlined'">
+                {{ user.is_active ? '正常' : '已封禁' }}
+              </mdui-chip>
+            </div>
+
+            <div class="user-panel-row-description">{{ user.email ?? '未设置邮箱' }}</div>
+
+            <div class="user-panel-meta">
+              <span class="user-panel-meta-item">创建 {{ formatDateTime(user.created_at) }}</span>
+              <span class="user-panel-meta-item">{{ user.totp_enabled ? 'TOTP 已启用' : 'TOTP 未启用' }}</span>
+              <span class="user-panel-meta-item">用户 ID #{{ user.id }}</span>
+            </div>
+          </div>
+
+          <div class="user-panel-row-actions">
+            <mdui-button variant="text" @click="openEditDialog(user)">编辑</mdui-button>
+            <mdui-button
+              variant="text"
               :disabled="deletingId === user.id"
               :loading="deletingId === user.id"
-              @click.stop="removeUser(user)"
+              @click="removeUser(user)"
             >
-              <mdui-icon name="delete"></mdui-icon>
-            </mdui-button-icon>
+              删除
+            </mdui-button>
           </div>
-        </mdui-list-item>
-      </mdui-list>
+        </article>
+      </div>
+
+      <PaginationFooter
+        v-if="total > 0"
+        :total="total"
+        :page="page"
+        :total-pages="totalPages"
+        :loading="isLoading"
+        @change-page="handlePageChange"
+      />
     </div>
 
     <mdui-dialog
@@ -246,8 +244,8 @@
           :disabled="isSavingEdit"
           @change="handleEditStatusChange"
         >
-          <mdui-menu-item value="active">可登录</mdui-menu-item>
-          <mdui-menu-item value="disabled">已禁用</mdui-menu-item>
+          <mdui-menu-item value="active">正常</mdui-menu-item>
+          <mdui-menu-item value="disabled">已封禁</mdui-menu-item>
         </mdui-select>
       </form>
 
@@ -276,12 +274,11 @@ import 'mdui/components/chip.js'
 import 'mdui/components/dialog.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
-import 'mdui/components/list.js'
-import 'mdui/components/list-item.js'
 import 'mdui/components/menu-item.js'
 import 'mdui/components/select.js'
 import 'mdui/components/text-field.js'
 
+import PaginationFooter from '../common/PaginationFooter.vue'
 import { useAuth } from '../../composables/useAuth'
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/user'
 import type { UserResponse } from '../../services/auth'
@@ -289,6 +286,8 @@ import { extractErrorMessage } from '../../utils/error'
 import { formatDateTime } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
 import './panel.css'
+
+type DialogElement = HTMLElement & { open: boolean }
 
 const { currentUser } = useAuth()
 
@@ -306,6 +305,10 @@ const statusFilter = ref<'all' | 'active' | 'disabled'>('all')
 const canAccess = computed(() => currentUser.value?.role === 'admin')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
 
+function handlePageChange(nextPage: number) {
+  page.value = nextPage
+}
+
 function roleParam(): 'admin' | 'user' | undefined {
   if (roleFilter.value === 'all') return undefined
   return roleFilter.value
@@ -314,14 +317,6 @@ function roleParam(): 'admin' | 'user' | undefined {
 function statusParam(): boolean | undefined {
   if (statusFilter.value === 'all') return undefined
   return statusFilter.value === 'active'
-}
-
-function userDescription(user: UserResponse): string {
-  return [
-    user.email ?? '未设置邮箱',
-    `创建 ${formatDateTime(user.created_at)}`,
-    user.totp_enabled ? 'TOTP 已启用' : 'TOTP 未启用'
-  ].join(' · ')
 }
 
 async function load() {
@@ -342,11 +337,22 @@ async function load() {
     })
     users.value = resp.users
     total.value = resp.total
+    page.value = resp.page
+    size.value = resp.size
   } catch (error: unknown) {
     snackbar({ message: extractErrorMessage(error, '获取用户列表失败'), closeable: true })
   } finally {
     isLoading.value = false
   }
+}
+
+function resetToFirstPageAndLoad() {
+  if (page.value !== 1) {
+    page.value = 1
+    return
+  }
+
+  void load()
 }
 
 watch([page, size], () => {
@@ -364,44 +370,40 @@ watch(
 watch(
   canAccess,
   () => {
-    page.value = 1
-    void load()
+    resetToFirstPageAndLoad()
   },
   { immediate: true }
 )
 
 function applyFilters() {
   appliedSearch.value = searchInput.value.trim()
-  page.value = 1
-  void load()
+  resetToFirstPageAndLoad()
 }
 
-function handleRoleFilterChange(e: Event) {
-  const next = String((e.target as { value?: unknown }).value ?? 'all')
+function handleRoleFilterChange(event: Event) {
+  const next = String((event.target as { value?: unknown }).value ?? 'all')
   if (next === 'all' || next === 'admin' || next === 'user') {
     roleFilter.value = next
-    page.value = 1
-    void load()
+    resetToFirstPageAndLoad()
   }
 }
 
-function handleStatusFilterChange(e: Event) {
-  const next = String((e.target as { value?: unknown }).value ?? 'all')
+function handleStatusFilterChange(event: Event) {
+  const next = String((event.target as { value?: unknown }).value ?? 'all')
   if (next === 'all' || next === 'active' || next === 'disabled') {
     statusFilter.value = next
-    page.value = 1
-    void load()
+    resetToFirstPageAndLoad()
   }
 }
 
-function handleSizeChange(e: Event) {
-  const next = Number((e.target as { value?: unknown }).value)
+function handleSizeChange(event: Event) {
+  const next = Number((event.target as { value?: unknown }).value)
   if (!Number.isFinite(next) || next <= 0) return
   size.value = next
   page.value = 1
 }
 
-const createDialogRef = ref<any>(null)
+const createDialogRef = ref<DialogElement | null>(null)
 const createUsername = ref('')
 const createEmail = ref('')
 const createRole = ref<'admin' | 'user'>('user')
@@ -417,11 +419,15 @@ const canCreate = computed(() => {
 })
 
 function openCreateDialog() {
-  createDialogRef.value.open = true
+  if (createDialogRef.value) {
+    createDialogRef.value.open = true
+  }
 }
 
 function closeCreateDialog() {
-  createDialogRef.value.open = false
+  if (createDialogRef.value) {
+    createDialogRef.value.open = false
+  }
 }
 
 function resetCreateForm() {
@@ -433,8 +439,8 @@ function resetCreateForm() {
   isCreating.value = false
 }
 
-function handleCreateRoleChange(e: Event) {
-  const next = String((e.target as { value?: unknown }).value ?? 'user')
+function handleCreateRoleChange(event: Event) {
+  const next = String((event.target as { value?: unknown }).value ?? 'user')
   if (next === 'admin' || next === 'user') {
     createRole.value = next
   }
@@ -461,7 +467,7 @@ async function create() {
   }
 }
 
-const editDialogRef = ref<any>(null)
+const editDialogRef = ref<DialogElement | null>(null)
 const editingUser = ref<UserResponse | null>(null)
 const editUsername = ref('')
 const editEmail = ref('')
@@ -477,6 +483,7 @@ const canSaveEdit = computed(() => {
 
   const nextUsername = editUsername.value.trim()
   if (!nextUsername) return false
+
   const hasUsernameChanged = nextUsername !== user.username
   const hasEmailChanged = editEmail.value.trim() !== (user.email ?? '')
   const hasPasswordChanged = editPassword.value.length > 0
@@ -493,11 +500,15 @@ function openEditDialog(user: UserResponse) {
   editPassword.value = ''
   editRole.value = user.role
   editIsActive.value = user.is_active
-  editDialogRef.value.open = true
+  if (editDialogRef.value) {
+    editDialogRef.value.open = true
+  }
 }
 
 function closeEditDialog() {
-  editDialogRef.value.open = false
+  if (editDialogRef.value) {
+    editDialogRef.value.open = false
+  }
 }
 
 function resetEditForm() {
@@ -510,15 +521,15 @@ function resetEditForm() {
   isSavingEdit.value = false
 }
 
-function handleEditRoleChange(e: Event) {
-  const next = String((e.target as { value?: unknown }).value ?? 'user')
+function handleEditRoleChange(event: Event) {
+  const next = String((event.target as { value?: unknown }).value ?? 'user')
   if (next === 'admin' || next === 'user') {
     editRole.value = next
   }
 }
 
-function handleEditStatusChange(e: Event) {
-  const next = String((e.target as { value?: unknown }).value ?? 'active')
+function handleEditStatusChange(event: Event) {
+  const next = String((event.target as { value?: unknown }).value ?? 'active')
   editIsActive.value = next === 'active'
 }
 
@@ -587,51 +598,30 @@ async function removeUser(user: UserResponse) {
     deletingId.value = null
   }
 }
-
 </script>
 
 <style scoped>
-.toolbar {
-  margin-top: 12px;
+.filters-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(140px, 0.6fr));
+  gap: 12px;
+}
+
+.search-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .search-input {
-  min-width: 260px;
-  flex: 1 1 280px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.role-filter,
-.status-filter,
-.size-select {
-  min-width: 140px;
-}
-
-.pager-toolbar {
-  justify-content: space-between;
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pager-info {
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.user-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.search-trigger {
+  flex-shrink: 0;
+  border-radius: 999px;
 }
 
 .dialog-form {
@@ -645,5 +635,11 @@ async function removeUser(user: UserResponse) {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

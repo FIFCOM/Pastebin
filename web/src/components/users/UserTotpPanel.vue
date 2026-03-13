@@ -1,106 +1,117 @@
 <template>
-  <UserPanelCard title="两步验证（TOTP）" subtitle="使用验证器应用增强账户安全">
-    <template #actions>
-      <mdui-button
-        variant="tonal"
-        :disabled="!currentUser || isLoading"
-        :loading="isLoading"
-        @click="refresh"
-      >
-        刷新
-      </mdui-button>
-    </template>
+  <UserPanelCard title="两步验证">
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
 
-    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
+    <div v-else class="user-panel-stack">
+      <div class="user-panel-split">
+        <section class="user-panel-section">
+          <div class="user-panel-section-header">
+            <div>
+              <div class="user-panel-section-title">状态</div>
+              <div class="user-panel-section-copy">
+                {{ status?.enabled ? '当前账号登录时需要输入验证码。' : '启用后登录时需要额外输入验证码。' }}
+              </div>
+            </div>
 
-    <div v-else class="content">
-      <div class="status-row">
-        <div class="status-label">当前状态</div>
-        <mdui-chip :variant="status?.enabled ? 'filled' : 'outlined'">
-          {{ status?.enabled ? '已启用' : '未启用' }}
-        </mdui-chip>
+            <mdui-chip :variant="status?.enabled ? 'filled' : 'outlined'">
+              {{ status?.enabled ? '已启用' : '未启用' }}
+            </mdui-chip>
+          </div>
+        </section>
+
+        <section class="user-panel-section user-panel-section--soft">
+          <div class="user-panel-section-header">
+            <div>
+              <div class="user-panel-section-title">验证器设置</div>
+              <div class="user-panel-section-copy">
+                使用
+                <a class="setup-link" href="https://support.google.com/accounts/answer/1066447" target="_blank" rel="noreferrer">Google Authenticator</a>
+                、
+                <a class="setup-link" href="https://support.1password.com/one-time-passwords/" target="_blank" rel="noreferrer">1Password</a>
+                等软件扫描下方二维码；若无法扫描，请手动复制下方设置密钥并添加到验证器中。
+              </div>
+            </div>
+          </div>
+
+          <div class="totp-action-row">
+            <mdui-button
+              v-if="!status?.enabled"
+              variant="filled"
+              :disabled="isSettingUp"
+              :loading="isSettingUp"
+              @click="setup"
+            >
+              启用
+            </mdui-button>
+            <template v-else>
+              <mdui-button
+                variant="tonal"
+                :disabled="isSettingUp"
+                :loading="isSettingUp"
+                @click="setup"
+              >
+                重新生成
+              </mdui-button>
+              <mdui-button
+                variant="text"
+                :disabled="isDisabling"
+                :loading="isDisabling"
+                @click="disable"
+              >
+                禁用
+              </mdui-button>
+            </template>
+          </div>
+        </section>
       </div>
 
-      <div class="hint">
-        {{
-          status?.enabled
-            ? '如更换手机或丢失验证器，请立即联系管理员重置两步验证。'
-            : '点击“生成二维码”后，使用验证器应用扫描二维码，并输入 6 位验证码完成验证。'
-        }}
-      </div>
+      <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div class="backup-note">
-        重要提示：请保存验证器应用的迁移备份，避免设备丢失后无法登录。
-      </div>
-
-      <div class="actions">
-        <mdui-button
-          v-if="!status?.enabled"
-          variant="filled"
-          :disabled="isSettingUp"
-          :loading="isSettingUp"
-          @click="setup"
-        >
-          生成二维码
-        </mdui-button>
-
-        <mdui-button
-          v-else
-          variant="tonal"
-          :disabled="isSettingUp"
-          :loading="isSettingUp"
-          @click="setup"
-        >
-          重新生成
-        </mdui-button>
-
-        <mdui-button
-          v-if="status?.enabled"
-          variant="text"
-          :disabled="isDisabling"
-          :loading="isDisabling"
-          @click="disable"
-        >
-          禁用
-        </mdui-button>
-      </div>
-
-      <div v-if="setupInfo" class="setup-area">
-        <div class="setup-title">扫码绑定</div>
-
-        <div class="qr-wrap">
-          <div class="qr-box">
-            <QrCode :value="setupInfo.provisioning_uri" :size="220" />
+      <section v-if="setupInfo" class="user-panel-section user-panel-section--soft setup-panel">
+        <div class="user-panel-section-header">
+          <div>
+            <div class="user-panel-section-title">绑定验证器</div>
+            <div class="user-panel-section-copy">扫码或复制设置密钥后，输入当前验证码完成绑定。</div>
           </div>
         </div>
 
-        <div class="secret-row">
-          <div class="secret-label">密钥</div>
-          <code class="secret">{{ setupInfo.secret }}</code>
-          <mdui-button variant="tonal" @click="copySecret">复制</mdui-button>
-        </div>
+        <div class="setup-grid">
+          <div class="qr-card">
+            <QrCode :value="setupInfo.provisioning_uri" :size="220" />
+          </div>
 
-        <div class="verify-row">
-          <mdui-text-field
-            v-model="totpCode"
-            label="验证码"
-            placeholder="6 位数字"
-            variant="outlined"
-            type="text"
-            maxlength="6"
-            :disabled="isVerifying"
-          ></mdui-text-field>
+          <div class="setup-form">
+            <div>
+              <div class="setup-label">设置密钥</div>
+              <div class="setup-secret-row">
+                <code class="user-panel-code">{{ setupInfo.secret }}</code>
+                <mdui-button variant="tonal" @click="copySecret">复制</mdui-button>
+              </div>
+            </div>
 
-          <mdui-button
-            variant="filled"
-            :disabled="!canVerify || isVerifying"
-            :loading="isVerifying"
-            @click="verify"
-          >
-            验证
-          </mdui-button>
+            <mdui-text-field
+              v-model="totpCode"
+              label="验证码"
+              placeholder="6 位数字"
+              variant="outlined"
+              type="text"
+              maxlength="6"
+              :disabled="isVerifying"
+            ></mdui-text-field>
+
+            <div class="setup-actions">
+              <mdui-button
+                variant="filled"
+                :disabled="!canVerify || isVerifying"
+                :loading="isVerifying"
+                @click="verify"
+              >
+                验证并启用
+              </mdui-button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   </UserPanelCard>
 </template>
@@ -111,6 +122,7 @@ import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/chip.js'
+import 'mdui/components/linear-progress.js'
 import 'mdui/components/text-field.js'
 
 import { useAuth } from '../../composables/useAuth'
@@ -155,7 +167,7 @@ async function setup() {
     setupInfo.value = await setupTotp()
     totpCode.value = ''
     await refresh()
-    snackbar({ message: '已生成二维码，请扫码后输入验证码验证' })
+    snackbar({ message: '已生成二维码，请继续完成验证' })
   } catch (error: unknown) {
     snackbar({ message: extractErrorMessage(error, '生成失败'), closeable: true })
   } finally {
@@ -168,7 +180,7 @@ async function copySecret() {
 
   try {
     await navigator.clipboard.writeText(setupInfo.value.secret)
-    snackbar({ message: '密钥已复制' })
+    snackbar({ message: '设置密钥已复制' })
   } catch (error: unknown) {
     console.warn('Copy secret failed', error)
     snackbar({ message: '复制失败，请手动复制', closeable: true })
@@ -232,87 +244,78 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.content {
-  margin-top: 12px;
+.totp-action-row {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup-link {
+  color: rgb(var(--mdui-color-primary));
+  text-decoration: none;
+}
+
+.setup-link:hover {
+  text-decoration: underline;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.qr-card {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  border-radius: 24px;
+  background: #fff;
+}
+
+.setup-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.status-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.status-label {
-  font-size: 13px;
-}
-
-.hint,
-.backup-note {
-  font-size: 13px;
+.setup-label {
+  font-size: 0.85rem;
+  font-weight: 600;
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-.actions {
+.setup-secret-row {
+  margin-top: 8px;
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-}
-
-.setup-area {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
-}
-
-.setup-title {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.qr-wrap {
-  display: flex;
-  justify-content: center;
-  padding: 12px;
-}
-
-.qr-box {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
-  box-sizing: border-box;
-}
-
-.secret-row {
-  display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
   gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 4px;
 }
 
-.secret-label {
-  font-size: 15px;
-}
+@media (max-width: 960px) {
+  .setup-grid {
+    grid-template-columns: 1fr;
+  }
 
-.secret {
-  word-break: break-all;
-  font-size: 15px;
-}
-
-.verify-row {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: end;
+  .setup-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 640px) {
-  .verify-row {
-    grid-template-columns: 1fr;
+  .qr-card {
+    padding: 12px;
+    border-radius: 20px;
   }
 }
 </style>

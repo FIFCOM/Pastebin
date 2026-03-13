@@ -4,6 +4,7 @@ API Key服务层 - 业务逻辑处理
 
 import hashlib
 from datetime import UTC, datetime, timedelta
+from typing import Protocol, cast
 
 from sqlalchemy.orm import Session
 
@@ -20,11 +21,17 @@ from app.schemas.api_key import (
 from app.schemas.user import UserResponse
 
 
+class _MutableApiKeyFields(Protocol):
+    key_preview: str | None
+    last_used_at: datetime | None
+    last_used_ip: str | None
+
+
 class ApiKeyService:
     """API密钥服务类"""
 
     _auth_cache: dict[str, int] = {}
-    _auth_cache_max_entries = 4096
+    _auth_cache_max_entries: int = 4096
 
     @staticmethod
     def _cache_key(api_key: str) -> str:
@@ -58,6 +65,41 @@ class ApiKeyService:
         if isinstance(value, int):
             return value != 0
         return False
+
+    @staticmethod
+    def _require_int_attr(model: object, attr: str) -> int:
+        value = getattr(model, attr, None)
+        if not isinstance(value, int):
+            raise ValueError("API Key 创建结果无效")
+        return value
+
+    @staticmethod
+    def _require_str_attr(model: object, attr: str) -> str:
+        value = getattr(model, attr, None)
+        if not isinstance(value, str):
+            raise ValueError("API Key 创建结果无效")
+        return value
+
+    @staticmethod
+    def _optional_str_attr(model: object, attr: str) -> str | None:
+        value = getattr(model, attr, None)
+        return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _require_datetime_attr(model: object, attr: str) -> datetime:
+        value = getattr(model, attr, None)
+        if not isinstance(value, datetime):
+            raise ValueError("API Key 创建结果无效")
+        return value
+
+    @staticmethod
+    def _optional_datetime_attr(model: object, attr: str) -> datetime | None:
+        value = getattr(model, attr, None)
+        return value if isinstance(value, datetime) else None
+
+    @staticmethod
+    def _mutable_fields(model: ApiKey) -> _MutableApiKeyFields:
+        return cast(_MutableApiKeyFields, model)
 
     @staticmethod
     def create_api_key(
@@ -108,15 +150,27 @@ class ApiKeyService:
         db.refresh(api_key)
         ApiKeyService._cache_clear()
 
+        api_key_id = ApiKeyService._require_int_attr(api_key, "id")
+        api_key_name = ApiKeyService._require_str_attr(api_key, "name")
+        api_key_preview = ApiKeyService._optional_str_attr(api_key, "key_preview")
+        api_key_created_at = ApiKeyService._require_datetime_attr(api_key, "created_at")
+        api_key_last_used_at = ApiKeyService._optional_datetime_attr(
+            api_key, "last_used_at"
+        )
+        api_key_last_used_ip = ApiKeyService._optional_str_attr(api_key, "last_used_ip")
+        api_key_expires_at = ApiKeyService._optional_datetime_attr(
+            api_key, "expires_at"
+        )
+
         return ApiKeyCreateResponse(
-            id=api_key.id,  # type: ignore
-            name=api_key.name,  # type: ignore
+            id=api_key_id,
+            name=api_key_name,
             api_key=api_key_plain,  # 仅创建时返回明文密钥
-            key_preview=api_key.key_preview,  # type: ignore
-            created_at=api_key.created_at,  # type: ignore
-            last_used_at=api_key.last_used_at,  # type: ignore
-            last_used_ip=api_key.last_used_ip,  # type: ignore
-            expires_at=api_key.expires_at,  # type: ignore
+            key_preview=api_key_preview,
+            created_at=api_key_created_at,
+            last_used_at=api_key_last_used_at,
+            last_used_ip=api_key_last_used_ip,
+            expires_at=api_key_expires_at,
         )
 
     @staticmethod
@@ -173,6 +227,22 @@ class ApiKeyService:
         return True
 
     @staticmethod
+    def cleanup_expired_api_keys(db: Session, user_id: int) -> int:
+        expired_keys = db.query(ApiKey).filter(
+            ApiKey.user_id == user_id,
+            ApiKey.expires_at.is_not(None),
+            ApiKey.expires_at < datetime.now(UTC),
+        )
+        count = expired_keys.count()
+        if count == 0:
+            return 0
+
+        _ = expired_keys.delete(synchronize_session=False)
+        db.commit()
+        ApiKeyService._cache_clear()
+        return count
+
+    @staticmethod
     def authenticate_api_key(
         db: Session,
         api_key: str,
@@ -195,16 +265,22 @@ class ApiKeyService:
         if cached_api_key_id is not None:
             cached = db.query(ApiKey).filter(ApiKey.id == cached_api_key_id).first()
             if cached is not None and verify_api_key(api_key, str(cached.key_hash)):
-                if is_expired(cached.expires_at):  # type: ignore[arg-type]
+                cached_expires_at = getattr(cached, "expires_at", None)
+                if is_expired(
+                    cached_expires_at
+                    if isinstance(cached_expires_at, datetime)
+                    else None
+                ):
                     return None
 
                 user = db.query(User).filter(User.id == cached.user_id).first()
                 if user is not None:
                     if not ApiKeyService._is_user_active(user):
                         return None
-                    cached.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
+                    mutable_cached = ApiKeyService._mutable_fields(cached)
+                    mutable_cached.last_used_at = datetime.now(UTC)
                     if ip_address is not None:
-                        cached.last_used_ip = ip_address  # type: ignore[assignment]
+                        mutable_cached.last_used_ip = ip_address
                     db.commit()
                     return UserResponse.model_validate(user)  # type: ignore
 
@@ -215,20 +291,26 @@ class ApiKeyService:
 
         for stored_api_key in api_keys:
             if verify_api_key(api_key, str(stored_api_key.key_hash)):
-                if is_expired(stored_api_key.expires_at):  # type: ignore[arg-type]
+                stored_expires_at = getattr(stored_api_key, "expires_at", None)
+                if is_expired(
+                    stored_expires_at
+                    if isinstance(stored_expires_at, datetime)
+                    else None
+                ):
                     return None
 
-                if stored_api_key.key_preview is None:
-                    stored_api_key.key_preview = preview  # type: ignore[assignment]
+                mutable_stored_api_key = ApiKeyService._mutable_fields(stored_api_key)
+                if getattr(stored_api_key, "key_preview", None) is None:
+                    mutable_stored_api_key.key_preview = preview
 
                 # 找到匹配的API密钥，返回对应用户
                 user = db.query(User).filter(User.id == stored_api_key.user_id).first()
                 if user is not None:
                     if not ApiKeyService._is_user_active(user):
                         return None
-                    stored_api_key.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
+                    mutable_stored_api_key.last_used_at = datetime.now(UTC)
                     if ip_address is not None:
-                        stored_api_key.last_used_ip = ip_address  # type: ignore[assignment]
+                        mutable_stored_api_key.last_used_ip = ip_address
                     db.commit()
                     api_key_id = getattr(stored_api_key, "id", None)
                     if isinstance(api_key_id, int):

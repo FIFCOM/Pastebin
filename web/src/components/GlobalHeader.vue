@@ -1,6 +1,16 @@
 <template>
   <mdui-top-app-bar>
-    <mdui-top-app-bar-title> # Material Bin </mdui-top-app-bar-title>
+    <mdui-top-app-bar-title>
+      <div class="brand-group">
+        <mdui-button-icon
+          class="menu-button"
+          @click="handleMenuClick"
+        >
+          <mdui-icon-menu />
+        </mdui-button-icon>
+        <button class="brand-link" type="button" @click="goHome">Material Bin</button>
+      </div>
+    </mdui-top-app-bar-title>
     <div class="header-spacer"></div>
 
     <!-- 功能图标按钮 -->
@@ -52,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import '@mdui/icons/menu.js'
 import '@mdui/icons/account-circle.js'
 import '@mdui/icons/groups.js'
 import '@mdui/icons/history.js'
@@ -66,7 +77,9 @@ import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
 
 import { useAuth } from '../composables/useAuth'
+import { useAppSidebarState } from '../composables/useAppSidebarState'
 const { isLoggedIn, currentUser, logout } = useAuth()
+const { toggleAppSidebar } = useAppSidebarState()
 
 const router = useRouter()
 const route = useRoute()
@@ -106,9 +119,49 @@ const goUserManagement = () => {
 const goHistory = () => {
   router.push('/history')
 }
+
+const handleMenuClick = () => {
+  toggleAppSidebar()
+}
+
+const goHome = () => {
+  router.push('/')
+}
 </script>
 
 <style scoped>
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-button {
+  flex-shrink: 0;
+}
+
+.brand-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.brand-link:hover {
+  color: rgb(var(--mdui-color-primary));
+}
+
+.brand-link:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
 .header-spacer {
   flex-grow: 1;
 }
@@ -125,6 +178,12 @@ const goHistory = () => {
   justify-content: center;
   margin-right: 4px;
   --mdui-icon-size: 22px;
+}
+
+@media (max-width: 640px) {
+  .brand-link {
+    font-size: 0.95rem;
+  }
 }
 
 </style>

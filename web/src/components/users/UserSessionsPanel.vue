@@ -1,79 +1,102 @@
 <template>
-  <UserPanelCard title="会话管理" subtitle="查看当前设备与历史会话并执行撤销">
-    <template #actions>
-      <mdui-button
-        variant="tonal"
-        :disabled="!currentUser || isLoading"
-        :loading="isLoading"
-        @click="loadSessions"
-      >
-        刷新
-      </mdui-button>
-      <mdui-button
-        variant="filled"
-        :disabled="!currentUser || !hasOtherSessions || isRevokingOthers"
-        :loading="isRevokingOthers"
-        @click="revokeOthers"
-      >
-        撤销其他会话
-      </mdui-button>
-      <mdui-button
-        v-if="isAdmin"
-        variant="text"
-        :disabled="!currentUser || isCleaning"
-        :loading="isCleaning"
-        @click="cleanup"
-      >
-        清理过期会话
-      </mdui-button>
-    </template>
+  <UserPanelCard title="会话管理">
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
 
-    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
+    <div v-else class="user-panel-stack">
+      <div class="user-panel-summary-grid">
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">当前设备</div>
+          <div class="user-panel-stat-value">{{ currentSessionCount }}</div>
+        </div>
 
-    <div v-else>
-      <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">其他会话</div>
+          <div class="user-panel-stat-value">{{ otherSessionCount }}</div>
+        </div>
 
-      <div v-if="!isLoading && sessions.length === 0" class="user-panel-empty-hint">
-        暂无会话
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">全部会话</div>
+          <div class="user-panel-stat-value">{{ sessions.length }}</div>
+        </div>
       </div>
 
-      <mdui-list v-else class="user-panel-list">
-        <mdui-list-item
-          v-for="s in sessions"
-          :key="s.id"
-          :headline="sessionHeadline(s)"
-          :description="sessionDescription(s)"
-          description-line="3"
-          rounded
-        >
-          <div slot="end-icon" class="session-actions">
-            <mdui-chip v-if="s.is_current" variant="filled">当前</mdui-chip>
-            <mdui-button-icon
-              :disabled="isRevokingId === s.id"
-              :loading="isRevokingId === s.id"
-              @click.stop="revoke(s.id, s.is_current)"
-            >
-              <mdui-icon name="delete"></mdui-icon>
-            </mdui-button-icon>
+      <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
+
+      <div v-if="!isLoading && pagedSessions.length === 0" class="user-panel-empty-hint">暂无会话。</div>
+
+      <div v-else class="user-panel-row-list">
+        <article v-for="session in pagedSessions" :key="session.id" class="user-panel-row">
+          <div class="user-panel-row-main">
+            <div class="user-panel-row-title-row">
+              <div class="user-panel-row-title">{{ sessionHeadline(session) }}</div>
+              <code class="session-id">{{ shortId(session.id) }}</code>
+              <mdui-chip :variant="session.is_current ? 'filled' : 'outlined'">
+                {{ session.is_current ? '当前设备' : '历史会话' }}
+              </mdui-chip>
+            </div>
+
+            <div class="user-panel-meta">
+              <span class="user-panel-meta-item">IP {{ session.ip_address ?? '-' }}</span>
+              <span class="user-panel-meta-item">登录于 {{ formatDate(session.created_at) }}</span>
+              <span class="user-panel-meta-item">最后活跃 {{ formatDate(session.last_active_at) }}</span>
+              <span class="user-panel-meta-item">将于 {{ formatDate(session.expires_at) }} 自动登出</span>
+            </div>
           </div>
-        </mdui-list-item>
-      </mdui-list>
+
+          <div class="user-panel-row-actions">
+            <mdui-button
+              variant="text"
+              :disabled="isRevokingId === session.id"
+              :loading="isRevokingId === session.id"
+              @click="revoke(session.id, session.is_current)"
+            >
+              {{ session.is_current ? '登出' : '撤销会话' }}
+            </mdui-button>
+          </div>
+        </article>
+      </div>
+
+      <div class="user-panel-toolbar session-toolbar">
+        <mdui-button
+          variant="filled"
+          :disabled="!currentUser || !hasOtherSessions || isRevokingOthers"
+          :loading="isRevokingOthers"
+          @click="revokeOthers"
+        >
+          撤销其他会话
+        </mdui-button>
+        <mdui-button
+          v-if="isAdmin"
+          variant="text"
+          :disabled="isCleaning"
+          :loading="isCleaning"
+          @click="cleanup"
+        >
+          清理过期会话
+        </mdui-button>
+      </div>
+
+      <PaginationFooter
+        v-if="sessions.length > 0"
+        :total="sessions.length"
+        :page="page"
+        :total-pages="totalPages"
+        :loading="isLoading"
+        @change-page="handlePageChange"
+      />
     </div>
   </UserPanelCard>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
 import 'mdui/components/chip.js'
-import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
-import 'mdui/components/list.js'
-import 'mdui/components/list-item.js'
 
+import PaginationFooter from '../common/PaginationFooter.vue'
 import { useAuth } from '../../composables/useAuth'
 import {
   cleanupExpiredSessions,
@@ -84,9 +107,11 @@ import {
 } from '../../services/user'
 import { getDeviceLabel } from '../../utils/device'
 import { extractErrorMessage } from '../../utils/error'
-import { formatDateTime } from '../../utils/format'
+import { formatDate } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
 import './panel.css'
+
+const PAGE_SIZE = 8
 
 const { currentUser } = useAuth()
 
@@ -95,9 +120,28 @@ const isLoading = ref(false)
 const isCleaning = ref(false)
 const isRevokingOthers = ref(false)
 const isRevokingId = ref<string | null>(null)
+const page = ref(1)
 
+const sortedSessions = computed(() => [...sessions.value].sort((a, b) => Number(b.is_current) - Number(a.is_current)))
 const hasOtherSessions = computed(() => sessions.value.some((session) => !session.is_current))
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const currentSessionCount = computed(() => sessions.value.filter((session) => session.is_current).length)
+const otherSessionCount = computed(() => sessions.value.filter((session) => !session.is_current).length)
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedSessions.value.length / PAGE_SIZE)))
+const pagedSessions = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
+  return sortedSessions.value.slice(start, start + PAGE_SIZE)
+})
+
+watch(totalPages, (nextTotalPages) => {
+  if (page.value > nextTotalPages) {
+    page.value = nextTotalPages
+  }
+})
+
+function handlePageChange(nextPage: number) {
+  page.value = nextPage
+}
 
 function shortId(id: string): string {
   if (id.length <= 12) return id
@@ -106,18 +150,6 @@ function shortId(id: string): string {
 
 function sessionHeadline(session: SessionResponse): string {
   return getDeviceLabel(session.user_agent)
-}
-
-function sessionDescription(session: SessionResponse): string {
-  const parts = [
-    `IP ${session.ip_address ?? '-'}`,
-    `最后活跃 ${formatDateTime(session.last_active_at)}`,
-    `创建 ${formatDateTime(session.created_at)}`,
-    `过期 ${formatDateTime(session.expires_at)}`,
-    `会话 ${shortId(session.id)}`
-  ]
-
-  return parts.join(' · ')
 }
 
 async function loadSessions() {
@@ -207,9 +239,19 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.session-actions {
-  display: flex;
+.session-id {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(var(--mdui-color-surface-container-high));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.session-toolbar {
+  justify-content: flex-start;
 }
 </style>

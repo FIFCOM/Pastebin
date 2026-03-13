@@ -1,9 +1,12 @@
 <template>
   <div class="app-shell">
-    <mdui-layout class="app-layout">
+    <mdui-layout class="app-layout" full-height>
       <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
-      <mdui-layout-main class="mdui-container app-main">
-        <router-view />
+      <AppSidebar v-if="!isInstallRoute"></AppSidebar>
+      <mdui-layout-main class="app-main">
+        <div class="app-main-shell">
+          <router-view />
+        </div>
       </mdui-layout-main>
     </mdui-layout>
     <GlobalFooter v-if="!isInstallRoute"></GlobalFooter>
@@ -14,21 +17,69 @@
 import 'mdui/mdui.css'
 import 'mdui'
 
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import AppSidebar from './components/AppSidebar.vue'
 import GlobalHeader from './components/GlobalHeader.vue'
 import GlobalFooter from './components/GlobalFooter.vue'
+import { useAppSidebarState } from './composables/useAppSidebarState'
 import { useAuth } from './composables/useAuth'
 
 const route = useRoute()
 const { initAuth } = useAuth()
+const { setAppSidebarOpen, closeAppSidebar } = useAppSidebarState()
 const isInstallRoute = computed(() => route.path === '/install' || route.path.startsWith('/install/'))
 
+let usersSidebarMediaQuery: MediaQueryList | null = null
+
+function shouldOpenUsersSidebarByDefault(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(min-width: 960px)').matches
+}
+
+function syncAppSidebarForRoute(path: string): void {
+  if (path === '/install' || path.startsWith('/install/')) {
+    closeAppSidebar()
+    return
+  }
+
+  if (path === '/users') {
+    setAppSidebarOpen(shouldOpenUsersSidebarByDefault())
+    return
+  }
+
+  closeAppSidebar()
+}
+
+function handleUsersSidebarBreakpointChange(event: MediaQueryListEvent): void {
+  if (route.path !== '/users') return
+  setAppSidebarOpen(event.matches)
+}
+
+watch(
+  () => route.path,
+  (path) => {
+    syncAppSidebarForRoute(path)
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
+  if (typeof window !== 'undefined') {
+    usersSidebarMediaQuery = window.matchMedia('(min-width: 960px)')
+    usersSidebarMediaQuery.addEventListener('change', handleUsersSidebarBreakpointChange)
+    syncAppSidebarForRoute(route.path)
+  }
+
   if (isInstallRoute.value) return
   initAuth().catch((e) => {
     console.error('Failed to initialize auth on app mount', e)
   })
+})
+
+onBeforeUnmount(() => {
+  usersSidebarMediaQuery?.removeEventListener('change', handleUsersSidebarBreakpointChange)
+  usersSidebarMediaQuery = null
 })
 </script>
 
@@ -45,7 +96,28 @@ onMounted(() => {
 }
 
 .app-main {
+  width: 100%;
   min-height: 0;
+}
+
+.app-main-shell {
+  box-sizing: border-box;
+  width: 96%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+
+@media (min-width: 600px) {
+  .app-main-shell {
+    width: 94%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-main-shell {
+    width: 92%;
+  }
 }
 
 /* 主题动画过渡 */

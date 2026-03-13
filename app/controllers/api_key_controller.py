@@ -75,3 +75,12 @@ async def delete_api_key(
         )
 
     return MessageResponse(message="API密钥已删除")
+
+
+@router.post("/cleanup-expired", response_model=MessageResponse)
+async def cleanup_expired_api_keys(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    count = ApiKeyService.cleanup_expired_api_keys(db, current_user.id)
+    return MessageResponse(message=f"已清理 {count} 个过期 API Key")

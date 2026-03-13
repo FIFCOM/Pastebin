@@ -228,3 +228,8 @@ export async function deleteApiKey(keyId: number): Promise<MessageResponse> {
   const response = await apiHttp.delete<MessageResponse>(`/user/apikeys/${keyId}`)
   return response.data
 }
+
+export async function cleanupExpiredApiKeys(): Promise<MessageResponse> {
+  const response = await apiHttp.post<MessageResponse>('/user/apikeys/cleanup-expired')
+  return response.data
+}

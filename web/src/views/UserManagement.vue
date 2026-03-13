@@ -1,48 +1,18 @@
 <template>
   <div class="user-management">
-    <div class="page-header">
-      <h1 class="page-title">用户管理</h1>
-      <p class="page-subtitle">账户信息、会话、安全设置与 API Keys</p>
+    <div class="workspace-panel">
+      <div class="content-panel">
+        <KeepAlive>
+          <component :is="activeComponent" />
+        </KeepAlive>
+      </div>
     </div>
-
-    <mdui-tabs
-      class="tabs"
-      variant="secondary"
-      full-width
-      :value="activeTab"
-      @change.self="handleTabChange"
-    >
-      <mdui-tab value="profile">我的账户</mdui-tab>
-      <mdui-tab value="sessions">会话</mdui-tab>
-      <mdui-tab value="totp">两步验证</mdui-tab>
-      <mdui-tab value="apikeys">API Keys</mdui-tab>
-      <mdui-tab v-if="isAdmin" value="users">用户列表</mdui-tab>
-
-      <mdui-tab-panel slot="panel" value="profile">
-        <UserProfilePanel />
-      </mdui-tab-panel>
-      <mdui-tab-panel slot="panel" value="sessions">
-        <UserSessionsPanel />
-      </mdui-tab-panel>
-      <mdui-tab-panel slot="panel" value="totp">
-        <UserTotpPanel />
-      </mdui-tab-panel>
-      <mdui-tab-panel slot="panel" value="apikeys">
-        <UserApiKeysPanel />
-      </mdui-tab-panel>
-      <mdui-tab-panel v-if="isAdmin" slot="panel" value="users">
-        <UserListPanel />
-      </mdui-tab-panel>
-    </mdui-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import 'mdui/components/tab.js'
-import 'mdui/components/tab-panel.js'
-import 'mdui/components/tabs.js'
 
 import { useAuth } from '../composables/useAuth'
 import UserApiKeysPanel from '../components/users/UserApiKeysPanel.vue'
@@ -50,29 +20,29 @@ import UserListPanel from '../components/users/UserListPanel.vue'
 import UserProfilePanel from '../components/users/UserProfilePanel.vue'
 import UserSessionsPanel from '../components/users/UserSessionsPanel.vue'
 import UserTotpPanel from '../components/users/UserTotpPanel.vue'
-
-const TAB_VALUES = ['profile', 'sessions', 'totp', 'apikeys', 'users'] as const
-
-type TabValue = (typeof TAB_VALUES)[number]
+import {
+  normalizeUserTab,
+  type UserTabValue
+} from '../components/users/navigation'
 
 const router = useRouter()
 const route = useRoute()
 const { currentUser, isAuthInitialized } = useAuth()
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
-const activeTab = ref<TabValue>('profile')
+const activeTab = ref<UserTabValue>('profile')
 
-function isTabValue(value: unknown): value is TabValue {
-  return typeof value === 'string' && (TAB_VALUES as readonly string[]).includes(value)
+const activeComponentMap: Record<UserTabValue, Component> = {
+  profile: UserProfilePanel,
+  sessions: UserSessionsPanel,
+  totp: UserTotpPanel,
+  apikeys: UserApiKeysPanel,
+  users: UserListPanel
 }
 
-function normalizeTab(value: unknown): TabValue {
-  if (!isTabValue(value)) return 'profile'
-  if (value === 'users' && !isAdmin.value && isAuthInitialized.value) return 'profile'
-  return value
-}
+const activeComponent = computed(() => activeComponentMap[activeTab.value])
 
-function updateRouteTab(tab: TabValue) {
+function updateRouteTab(tab: UserTabValue) {
   const current = typeof route.query.tab === 'string' ? route.query.tab : ''
   if (current === tab) return
 
@@ -84,20 +54,11 @@ function updateRouteTab(tab: TabValue) {
   })
 }
 
-function handleTabChange(e: Event) {
-  // 只处理 tabs 自身的 change，忽略内部表单控件冒泡出来的 change
-  if (e.target !== e.currentTarget) return
-
-  const tabs = e.currentTarget as { value?: unknown } | null
-  const next = normalizeTab(tabs?.value)
-  activeTab.value = next
-  updateRouteTab(next)
-}
-
 watch(
   [() => route.query.tab, isAdmin, isAuthInitialized],
   ([tab]) => {
-    const normalized = normalizeTab(tab)
+    const normalized = normalizeUserTab(tab, isAdmin.value && isAuthInitialized.value)
+
     if (activeTab.value !== normalized) {
       activeTab.value = normalized
     }
@@ -112,30 +73,34 @@ watch(
 
 <style scoped>
 .user-management {
-  padding: 16px 0;
+  padding: 18px 0 28px;
 }
 
-.page-header {
-  margin: 8px 0 16px;
+.workspace-panel {
+  margin-top: 20px;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+.content-panel {
+  padding: 28px;
+  border-radius: 30px;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.68);
+  background: rgb(var(--mdui-color-surface));
 }
 
-.page-subtitle {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
+@media (max-width: 960px) {
+  .content-panel {
+    padding: 20px;
+    border-radius: 24px;
+  }
 }
 
-.tabs {
-  width: 100%;
-}
+@media (max-width: 640px) {
+.user-management {
+    padding: 12px 0 24px;
+  }
 
-:deep(mdui-tab-panel[active]) {
-  padding-top: 16px;
+  .content-panel {
+    padding: 16px;
+  }
 }
 </style>

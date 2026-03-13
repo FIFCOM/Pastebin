@@ -14,9 +14,11 @@
         class="search-field"
         @keydown.enter="handleSearch"
         @clear="handleClearSearch"
-      >
-        <mdui-icon slot="icon" name="search"></mdui-icon>
-      </mdui-text-field>
+      ></mdui-text-field>
+
+      <mdui-button-icon class="circle-action" title="搜索" :disabled="historyLoading" @click="handleSearch">
+        <mdui-icon name="search"></mdui-icon>
+      </mdui-button-icon>
 
       <mdui-segmented-button-group
         :value="starredFilter"
@@ -99,43 +101,15 @@
         </mdui-collapse-item>
       </mdui-collapse>
 
-      <div class="pagination-wrapper" v-if="historyTotal > 0">
-        <div class="pagination-summary">共 {{ historyTotal }} 条 · 第 {{ historyPage }} / {{ totalPages }} 页</div>
-        <div class="pagination-controls">
-          <mdui-button-icon
-            class="circle-action"
-            title="上一页"
-            :disabled="historyLoading || historyPage <= 1"
-            @click="goToPage(historyPage - 1)"
-          >
-            <mdui-icon name="chevron_left"></mdui-icon>
-          </mdui-button-icon>
-          <mdui-button-icon
-            class="circle-action"
-            title="下一页"
-            :disabled="historyLoading || historyPage >= totalPages"
-            @click="goToPage(historyPage + 1)"
-          >
-            <mdui-icon name="chevron_right"></mdui-icon>
-          </mdui-button-icon>
-
-          <mdui-text-field
-            v-model="jumpPageInput"
-            class="jump-field"
-            label="跳转页码"
-            type="number"
-            variant="outlined"
-            min="1"
-            step="1"
-            inputmode="numeric"
-            :max="totalPages"
-            @keydown.enter.prevent="handleJumpPage"
-          ></mdui-text-field>
-          <mdui-button variant="tonal" :disabled="!canJumpPage" @click="handleJumpPage">
-            跳转
-          </mdui-button>
-        </div>
-      </div>
+      <PaginationFooter
+        v-if="historyTotal > 0"
+        :total="historyTotal"
+        :page="historyPage"
+        :total-pages="totalPages"
+        :loading="historyLoading"
+        show-jump
+        @change-page="goToPage"
+      />
     </div>
   </div>
 </template>
@@ -145,7 +119,6 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQueryRaw } from 'vue-router'
 import 'mdui/components/text-field.js'
-import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/circular-progress.js'
@@ -155,6 +128,7 @@ import 'mdui/components/collapse.js'
 import 'mdui/components/collapse-item.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import { dialog } from 'mdui/functions/dialog.js'
+import PaginationFooter from '../components/common/PaginationFooter.vue'
 import type { HistoryListItem } from '../services/history'
 import { getHistoryDetail } from '../services/history'
 import { useHistory, loadGuestHistory } from '../composables/useHistory'
@@ -193,27 +167,11 @@ interface FetchHistoryOptions {
 
 const searchInput = ref('')
 const starredFilter = ref<StarredFilterValue>('all')
-const jumpPageInput = ref('1')
 const showViewsColumn = computed(() => !!currentUser.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
-const canJumpPage = computed(() => {
-  if (historyLoading.value) return false
-  const page = parsePositiveInteger(jumpPageInput.value)
-  if (page === null) return false
-  if (page < 1 || page > totalPages.value) return false
-  return page !== historyPage.value
-})
 const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 const HAS_TZ_SUFFIX_RE = /(Z|[+\-]\d{2}:\d{2})$/i
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
-
-watch(
-  historyPage,
-  (page) => {
-    jumpPageInput.value = String(page)
-  },
-  { immediate: true }
-)
 
 function currentUserId(): number | null {
   return currentUser.value?.id ?? null
@@ -384,29 +342,6 @@ function goToPage(page: number) {
   const target = Math.min(Math.max(Math.trunc(page), 1), totalPages.value)
   if (target === historyPage.value) return
   void fetchHistoryAndSyncRoute({ page: target })
-}
-
-function handleJumpPage() {
-  const raw = jumpPageInput.value.trim()
-  if (!raw) {
-    snackbar({ message: '请输入页码', closeable: true })
-    jumpPageInput.value = String(historyPage.value)
-    return
-  }
-
-  const page = parsePositiveInteger(raw)
-  if (page === null) {
-    snackbar({ message: '请输入正整数页码', closeable: true })
-    jumpPageInput.value = String(historyPage.value)
-    return
-  }
-  if (page > totalPages.value) {
-    snackbar({ message: `页码范围：1 - ${totalPages.value}`, closeable: true })
-    jumpPageInput.value = String(historyPage.value)
-    return
-  }
-
-  goToPage(page)
 }
 
 function navigateToEditor(pasteId: string, adminKey: string, encryptionKey: string) {
@@ -666,31 +601,6 @@ watch(
 
 .circle-action {
   border-radius: 999px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 8px 0 2px;
-}
-
-.pagination-summary {
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.jump-field {
-  width: 130px;
 }
 
 @media (max-width: 768px) {

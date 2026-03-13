@@ -1,48 +1,80 @@
 <template>
-  <UserPanelCard title="API Keys" subtitle="用于 API 访问（创建时仅返回一次明文）">
+  <UserPanelCard title="API Keys">
     <template #actions>
+      <mdui-button variant="filled" :disabled="!currentUser" @click="openCreateDialog">创建 Key</mdui-button>
       <mdui-button
-        variant="tonal"
-        :disabled="!currentUser || isLoading"
-        :loading="isLoading"
-        @click="load"
+        variant="text"
+        :disabled="!currentUser || expiredCount === 0 || isCleaningExpired"
+        :loading="isCleaningExpired"
+        @click="cleanupExpired"
       >
-        刷新
-      </mdui-button>
-      <mdui-button variant="filled" :disabled="!currentUser" @click="openCreateDialog">
-        创建
+        清理过期 Key
       </mdui-button>
     </template>
 
-    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录</div>
+    <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
 
-    <div v-else>
+    <div v-else class="user-panel-stack">
+      <div class="user-panel-summary-grid">
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">可用 Key</div>
+          <div class="user-panel-stat-value">{{ activeCount }}</div>
+        </div>
+
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">已过期</div>
+          <div class="user-panel-stat-value">{{ expiredCount }}</div>
+        </div>
+
+        <div class="user-panel-stat">
+          <div class="user-panel-stat-label">从未使用</div>
+          <div class="user-panel-stat-value">{{ neverUsedCount }}</div>
+        </div>
+      </div>
+
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && apiKeys.length === 0" class="user-panel-empty-hint">暂无 API Key</div>
+      <div v-if="!isLoading && pagedApiKeys.length === 0" class="user-panel-empty-hint">暂无 API Key。</div>
 
-      <mdui-list v-else class="user-panel-list">
-        <mdui-list-item
-          v-for="key in apiKeys"
-          :key="key.id"
-          :headline="key.name"
-          :description="keyDescription(key)"
-          description-line="3"
-          rounded
-        >
-          <div slot="end-icon" class="key-actions">
-            <mdui-chip variant="outlined">{{ keyPreview(key.key_preview) }}</mdui-chip>
-            <mdui-chip v-if="isExpired(key.expires_at)" variant="filled">已过期</mdui-chip>
-            <mdui-button-icon
+      <div v-else class="user-panel-row-list">
+        <article v-for="key in pagedApiKeys" :key="key.id" class="user-panel-row">
+          <div class="user-panel-row-main">
+            <div class="user-panel-row-title-row">
+              <div class="user-panel-row-title">{{ key.name }}</div>
+              <mdui-chip v-if="isExpired(key.expires_at)" variant="filled">已过期</mdui-chip>
+            </div>
+
+            <div class="api-key-preview-text">{{ keyPreview(key.key_preview) }}</div>
+
+            <div class="user-panel-meta">
+              <span class="user-panel-meta-item">创建于 {{ formatDate(key.created_at) }}</span>
+              <span class="user-panel-meta-item">最后使用 {{ key.last_used_at ? formatDate(key.last_used_at) : '尚未使用' }}</span>
+              <span class="user-panel-meta-item">最后使用 IP {{ key.last_used_ip ?? '-' }}</span>
+              <span class="user-panel-meta-item">{{ expiresText(key.expires_at) }}</span>
+            </div>
+          </div>
+
+          <div class="user-panel-row-actions">
+            <mdui-button
+              variant="text"
               :disabled="deletingId === key.id"
               :loading="deletingId === key.id"
-              @click.stop="remove(key.id, key.name)"
+              @click="remove(key.id, key.name)"
             >
-              <mdui-icon name="delete"></mdui-icon>
-            </mdui-button-icon>
+              删除
+            </mdui-button>
           </div>
-        </mdui-list-item>
-      </mdui-list>
+        </article>
+      </div>
+
+      <PaginationFooter
+        v-if="apiKeys.length > 0"
+        :total="apiKeys.length"
+        :page="page"
+        :total-pages="totalPages"
+        :loading="isLoading || isCleaningExpired"
+        @change-page="handlePageChange"
+      />
     </div>
 
     <mdui-dialog
@@ -78,14 +110,16 @@
       </template>
 
       <template v-else>
-        <div class="created-hint">请立即复制保存（仅创建时返回一次）：</div>
-        <mdui-text-field
-          :value="createdKey.api_key"
-          label="API Key"
-          variant="outlined"
-          readonly
-        ></mdui-text-field>
-        <div class="created-meta">预览：{{ keyPreview(createdKey.key_preview) }}</div>
+        <div class="created-state">
+          <div class="created-hint">请立即复制保存，这个值之后不会再展示。</div>
+          <mdui-text-field
+            :value="createdKey.api_key"
+            label="API Key"
+            variant="outlined"
+            readonly
+          ></mdui-text-field>
+          <div class="created-meta">预览：{{ keyPreview(createdKey.key_preview) }}</div>
+        </div>
       </template>
 
       <div slot="action" class="dialog-actions">
@@ -106,21 +140,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
 import 'mdui/components/chip.js'
 import 'mdui/components/dialog.js'
-import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
-import 'mdui/components/list.js'
-import 'mdui/components/list-item.js'
 import 'mdui/components/text-field.js'
 
+import PaginationFooter from '../common/PaginationFooter.vue'
 import { useAuth } from '../../composables/useAuth'
 import {
+  cleanupExpiredApiKeys,
   createApiKey,
   deleteApiKey,
   listApiKeys,
@@ -128,16 +160,22 @@ import {
   type ApiKeyResponse
 } from '../../services/user'
 import { extractErrorMessage } from '../../utils/error'
-import { formatDateTime } from '../../utils/format'
+import { formatDate } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
 import './panel.css'
+
+type DialogElement = HTMLElement & { open: boolean }
+
+const PAGE_SIZE = 8
 
 const { currentUser } = useAuth()
 
 const apiKeys = ref<ApiKeyResponse[]>([])
 const isLoading = ref(false)
+const isCleaningExpired = ref(false)
+const page = ref(1)
 
-const createDialogRef = ref<any>(null)
+const createDialogRef = ref<DialogElement | null>(null)
 const newName = ref('')
 const expiresInDays = ref('')
 const isCreating = ref(false)
@@ -146,6 +184,24 @@ const createdKey = ref<ApiKeyCreateResponse | null>(null)
 const deletingId = ref<number | null>(null)
 
 const canCreate = computed(() => newName.value.trim().length > 0)
+const expiredCount = computed(() => apiKeys.value.filter((key) => isExpired(key.expires_at)).length)
+const activeCount = computed(() => apiKeys.value.length - expiredCount.value)
+const neverUsedCount = computed(() => apiKeys.value.filter((key) => !key.last_used_at).length)
+const totalPages = computed(() => Math.max(1, Math.ceil(apiKeys.value.length / PAGE_SIZE)))
+const pagedApiKeys = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
+  return apiKeys.value.slice(start, start + PAGE_SIZE)
+})
+
+watch(totalPages, (nextTotalPages) => {
+  if (page.value > nextTotalPages) {
+    page.value = nextTotalPages
+  }
+})
+
+function handlePageChange(nextPage: number) {
+  page.value = nextPage
+}
 
 function keyPreview(preview: string | null | undefined): string {
   return preview?.trim() || '-'
@@ -161,18 +217,14 @@ function parseExpiresInDays(): number | null {
 
 function isExpired(expiresAt: string | null): boolean {
   if (!expiresAt) return false
-  const d = new Date(expiresAt)
-  if (Number.isNaN(d.getTime())) return false
-  return d.getTime() <= Date.now()
+  const date = new Date(expiresAt)
+  if (Number.isNaN(date.getTime())) return false
+  return date.getTime() <= Date.now()
 }
 
-function keyDescription(key: ApiKeyResponse): string {
-  return [
-    `创建 ${formatDateTime(key.created_at)}`,
-    `最近使用 ${formatDateTime(key.last_used_at)}`,
-    `最后 IP ${key.last_used_ip ?? '-'}`,
-    `过期 ${formatDateTime(key.expires_at)}`
-  ].join(' · ')
+function expiresText(expiresAt: string | null): string {
+  if (!expiresAt) return '永不过期'
+  return `将于 ${formatDate(expiresAt)} 过期`
 }
 
 async function load() {
@@ -190,11 +242,15 @@ async function load() {
 }
 
 function openCreateDialog() {
-  createDialogRef.value.open = true
+  if (createDialogRef.value) {
+    createDialogRef.value.open = true
+  }
 }
 
 function closeCreateDialog() {
-  createDialogRef.value.open = false
+  if (createDialogRef.value) {
+    createDialogRef.value.open = false
+  }
 }
 
 function resetCreateDialog() {
@@ -261,35 +317,46 @@ async function remove(keyId: number, name: string) {
   }
 }
 
+async function cleanupExpired() {
+  if (!currentUser.value || expiredCount.value === 0) return
+
+  isCleaningExpired.value = true
+  try {
+    const resp = await cleanupExpiredApiKeys()
+    snackbar({ message: resp.message })
+    await load()
+  } catch (error: unknown) {
+    snackbar({ message: extractErrorMessage(error, '清理失败'), closeable: true })
+  } finally {
+    isCleaningExpired.value = false
+  }
+}
+
 onMounted(() => {
   void load()
 })
 </script>
 
 <style scoped>
-.key-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.api-key-preview-text {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  word-break: break-all;
 }
 
-.create-form {
+.create-form,
+.created-state {
   margin-top: 8px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
-.created-hint {
-  margin: 4px 0 10px;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
+.created-hint,
 .created-meta {
-  margin-top: 6px;
-  font-size: 12px;
+  font-size: 0.9rem;
+  line-height: 1.5;
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
