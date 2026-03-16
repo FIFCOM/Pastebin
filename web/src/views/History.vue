@@ -4,113 +4,137 @@
       <h1 class="page-title">历史记录</h1>
     </div>
 
-    <!-- 搜索和筛选栏 -->
-    <div class="filter-bar">
-      <mdui-text-field
-        v-model="searchInput"
-        label="搜索标题"
-        clearable
-        variant="outlined"
-        class="search-field"
-        @keydown.enter="handleSearch"
-        @clear="handleClearSearch"
-      ></mdui-text-field>
+    <section class="history-surface history-filters" aria-label="历史记录筛选和操作">
+      <div class="history-surface-header">
+        <div>
+          <div class="history-surface-eyebrow">筛选</div>
+          <div class="history-surface-title">搜索与视图选项</div>
+        </div>
+      </div>
 
-      <mdui-button-icon class="circle-action" title="搜索" :disabled="historyLoading" @click="handleSearch">
-        <mdui-icon name="search"></mdui-icon>
-      </mdui-button-icon>
+      <div class="filter-bar">
+        <mdui-text-field
+          v-model="searchInput"
+          label="搜索标题"
+          clearable
+          variant="outlined"
+          class="search-field"
+          @keydown.enter="handleSearch"
+          @clear="handleClearSearch"
+        ></mdui-text-field>
 
-      <mdui-segmented-button-group
-        :value="starredFilter"
-        @change="handleStarredFilterChange"
-        selects="single"
-      >
-        <mdui-segmented-button value="all">全部</mdui-segmented-button>
-        <mdui-segmented-button value="starred">已收藏</mdui-segmented-button>
-      </mdui-segmented-button-group>
-
-      <mdui-button-icon @click="handleRefresh" :disabled="historyLoading">
-        <mdui-icon name="refresh"></mdui-icon>
-      </mdui-button-icon>
-    </div>
-
-    <!-- 加载中 -->
-    <div v-if="historyLoading && historyItems.length === 0" class="loading-state">
-      <mdui-circular-progress></mdui-circular-progress>
-    </div>
-
-    <!-- 空状态 -->
-    <div v-else-if="!historyLoading && historyItems.length === 0" class="empty-state">
-      <mdui-icon name="history" class="empty-icon"></mdui-icon>
-      <p>暂无历史记录</p>
-    </div>
-
-    <!-- 历史记录列表（折叠面板） -->
-    <div v-else class="history-list-wrapper">
-      <mdui-collapse class="history-collapse">
-        <mdui-collapse-item
-          v-for="item in historyItems"
-          :key="item.paste_id"
-          :value="item.paste_id"
-          class="history-collapse-item"
+        <mdui-segmented-button-group
+          class="history-filter-group"
+          :value="starredFilter"
+          @change="handleStarredFilterChange"
+          selects="single"
         >
-          <div slot="header" class="history-item-header">
-            <div class="title-cell">
-              <mdui-icon
-                v-if="item.is_starred"
-                name="star"
-                class="star-icon starred"
-              ></mdui-icon>
-              <mdui-icon
-                v-else
-                name="star_border"
-                class="star-icon"
-              ></mdui-icon>
-              <span class="title-text">{{ item.title || '(无标题)' }}</span>
-            </div>
-            <div class="meta-cell">
-              <span class="status-badge" :data-status="item.status">
-                {{ statusLabel(item.status) }}
-              </span>
-              <span v-if="showViewsColumn" class="views-text">
-                <template v-if="item.max_views === -1">{{ item.view_count }}</template>
-                <template v-else>{{ item.view_count }} / {{ item.max_views }}</template>
-              </span>
-              <span class="time-text">{{ formatTime(item.history_updated_at) }}</span>
-            </div>
-          </div>
+          <mdui-segmented-button value="all">全部</mdui-segmented-button>
+          <mdui-segmented-button value="starred">已收藏</mdui-segmented-button>
+        </mdui-segmented-button-group>
 
-          <div class="history-item-actions">
-            <mdui-button-icon
-              class="circle-action"
-              :title="item.is_starred ? '取消收藏' : '收藏'"
-              @click="handleToggleStar(item)"
-            >
-              <mdui-icon :name="item.is_starred ? 'star' : 'star_border'"></mdui-icon>
-            </mdui-button-icon>
-            <mdui-button-icon class="circle-action" title="查看" @click="handleView(item)">
-              <mdui-icon name="open_in_new"></mdui-icon>
-            </mdui-button-icon>
-            <mdui-button-icon class="circle-action" title="编辑" @click="handleEdit(item)">
-              <mdui-icon name="edit"></mdui-icon>
-            </mdui-button-icon>
-            <mdui-button-icon class="circle-action" title="删除" @click="handleDelete(item)">
-              <mdui-icon name="delete_outline"></mdui-icon>
-            </mdui-button-icon>
-          </div>
-        </mdui-collapse-item>
-      </mdui-collapse>
+        <mdui-button
+          class="filter-search-button"
+          variant="filled"
+          :disabled="historyLoading"
+          @click="handleSearch"
+        >
+          搜索
+        </mdui-button>
+      </div>
+    </section>
 
-      <PaginationFooter
-        v-if="historyTotal > 0"
-        :total="historyTotal"
-        :page="historyPage"
-        :total-pages="totalPages"
-        :loading="historyLoading"
-        show-jump
-        @change-page="goToPage"
-      />
-    </div>
+    <section class="history-surface history-results" :aria-busy="historyLoading ? 'true' : 'false'">
+      <div class="history-surface-header history-results-header">
+        <div>
+          <div class="history-surface-eyebrow">结果</div>
+          <div class="history-surface-title">{{ resultsHeadline }}</div>
+        </div>
+      </div>
+
+      <div v-if="historyLoading && historyItems.length === 0" class="loading-state" role="status">
+        <mdui-circular-progress></mdui-circular-progress>
+        <div class="state-copy">正在加载历史记录…</div>
+      </div>
+
+      <div v-else-if="!historyLoading && historyItems.length === 0" class="empty-state" role="status">
+        <div class="empty-icon-wrap" aria-hidden="true">
+          <mdui-icon :name="emptyState.icon" class="empty-icon"></mdui-icon>
+        </div>
+        <div class="empty-title">{{ emptyState.title }}</div>
+        <p class="empty-copy">{{ emptyState.copy }}</p>
+      </div>
+
+      <div v-else class="history-list-wrapper">
+        <mdui-collapse class="history-collapse">
+          <mdui-collapse-item
+            v-for="item in historyItems"
+            :key="item.paste_id"
+            :value="item.paste_id"
+            class="history-collapse-item"
+          >
+            <div slot="header" class="history-item-header">
+              <div class="history-item-main">
+                <div class="title-cell">
+                  <mdui-icon
+                    v-if="item.is_starred"
+                    name="star"
+                    class="star-icon starred"
+                  ></mdui-icon>
+                  <mdui-icon
+                    v-else
+                    name="star_border"
+                    class="star-icon"
+                  ></mdui-icon>
+                  <span class="title-text">{{ item.title || '(无标题)' }}</span>
+                </div>
+
+                <div class="meta-cell">
+                  <span class="status-badge" :data-status="item.status">
+                    {{ statusLabel(item.status) }}
+                  </span>
+                  <span v-if="showViewsColumn" class="views-text">
+                    浏览 {{ item.max_views === -1 ? item.view_count : `${item.view_count} / ${item.max_views}` }}
+                  </span>
+                  <span class="time-text">{{ formatTime(item.history_updated_at) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="history-item-actions" role="group" :aria-label="`历史记录 ${item.title || item.paste_id} 的操作`">
+              <mdui-button-icon
+                class="circle-action"
+                :title="item.is_starred ? '取消收藏' : '收藏'"
+                :aria-label="item.is_starred ? '取消收藏' : '收藏此记录'"
+                :aria-pressed="item.is_starred ? 'true' : 'false'"
+                @click="handleToggleStar(item)"
+              >
+                <mdui-icon :name="item.is_starred ? 'star' : 'star_border'"></mdui-icon>
+              </mdui-button-icon>
+              <mdui-button-icon class="circle-action" title="查看" aria-label="查看记录" @click="handleView(item)">
+                <mdui-icon name="open_in_new"></mdui-icon>
+              </mdui-button-icon>
+              <mdui-button-icon class="circle-action" title="编辑" aria-label="编辑记录" @click="handleEdit(item)">
+                <mdui-icon name="edit"></mdui-icon>
+              </mdui-button-icon>
+              <mdui-button-icon class="circle-action" title="删除" aria-label="删除记录" @click="handleDelete(item)">
+                <mdui-icon name="delete_outline"></mdui-icon>
+              </mdui-button-icon>
+            </div>
+          </mdui-collapse-item>
+        </mdui-collapse>
+
+        <PaginationFooter
+          v-if="historyTotal > 0"
+          :total="historyTotal"
+          :page="historyPage"
+          :total-pages="totalPages"
+          :loading="historyLoading"
+          show-jump
+          @change-page="goToPage"
+        />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -118,6 +142,7 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQueryRaw } from 'vue-router'
+import 'mdui/components/button.js'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button-icon.js'
 import 'mdui/components/icon.js'
@@ -169,6 +194,31 @@ const searchInput = ref('')
 const starredFilter = ref<StarredFilterValue>('all')
 const showViewsColumn = computed(() => !!currentUser.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
+const hasActiveFilters = computed(() => historySearch.value.trim().length > 0 || starredFilter.value === 'starred')
+const resultsHeadline = computed(() => (starredFilter.value === 'starred' ? '已收藏记录' : '全部历史记录'))
+const emptyState = computed(() => {
+  if (hasActiveFilters.value) {
+    return {
+      icon: 'search_off',
+      title: '没有匹配的历史记录',
+      copy: '尝试清空搜索条件或切换回全部记录，以查看更多内容。'
+    }
+  }
+
+  if (currentUser.value) {
+    return {
+      icon: 'history',
+      title: '你的历史记录还是空的',
+      copy: '当你保存、编辑或收藏内容后，这里会自动显示对应的记录。'
+    }
+  }
+
+  return {
+    icon: 'history_toggle_off',
+    title: '还没有本地历史记录',
+    copy: '访客模式下的浏览器历史会显示在这里；登录后可查看账户级历史。'
+  }
+})
 const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 const HAS_TZ_SUFFIX_RE = /(Z|[+\-]\d{2}:\d{2})$/i
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
@@ -331,11 +381,7 @@ function handleStarredFilterChange(e: Event) {
   if (!val) return
   starredFilter.value = val === 'starred' ? 'starred' : 'all'
   const starred = val === 'starred' ? true : null
-  void fetchHistoryAndSyncRoute({ reset: true, starred })
-}
-
-function handleRefresh() {
-  void fetchHistoryAndSyncRoute({ page: historyPage.value, search: searchInput.value })
+  void fetchHistoryAndSyncRoute({ reset: true, starred, search: searchInput.value })
 }
 
 function goToPage(page: number) {
@@ -473,30 +519,88 @@ watch(
   max-width: 960px;
   margin: 0 auto;
   padding: 24px 16px;
+  display: grid;
+  gap: 20px;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  display: grid;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: clamp(1.7rem, 2vw, 2.1rem);
+  font-weight: 700;
   color: rgb(var(--mdui-color-on-surface));
   margin: 0;
 }
 
+.history-surface {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.72);
+  background: rgb(var(--mdui-color-surface));
+}
+
+.history-filters {
+  background: rgb(var(--mdui-color-surface-container-low));
+}
+
+.history-results {
+  min-height: 240px;
+  gap: 0;
+  padding: 0;
+}
+
+.history-surface-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-results-header {
+  padding: 20px 20px 18px;
+}
+
+.history-surface-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.history-surface-title {
+  margin-top: 4px;
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
 .filter-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
 }
 
 .search-field {
-  flex: 1;
-  min-width: 200px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.history-filter-group {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.filter-search-button {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  min-width: 108px;
 }
 
 .loading-state,
@@ -505,14 +609,40 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 64px 0;
+  padding: 40px 20px;
   gap: 16px;
   color: rgb(var(--mdui-color-on-surface-variant));
+  text-align: center;
+}
+
+.state-copy,
+.empty-copy {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.empty-title {
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.empty-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: rgb(var(--mdui-color-surface-container-low));
 }
 
 .empty-icon {
-  font-size: 48px;
-  opacity: 0.4;
+  font-size: 32px;
+  opacity: 0.72;
 }
 
 .history-list-wrapper {
@@ -526,45 +656,47 @@ watch(
 }
 
 .history-collapse-item {
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.72);
+  border-radius: 20px;
   background: rgb(var(--mdui-color-surface-container-low));
 }
 
 .history-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  padding: 16px 20px 8px;
+}
+
+.history-item-main {
+  display: grid;
+  gap: 10px;
 }
 
 .meta-cell {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   min-width: 0;
 }
 
 .views-text,
 .time-text {
-  font-size: 12px;
+  font-size: 0.79rem;
   color: rgb(var(--mdui-color-on-surface-variant));
-  white-space: nowrap;
 }
 
 .history-item-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 14px 14px;
+  padding: 0 20px 18px;
   flex-wrap: wrap;
 }
 
 .title-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -582,14 +714,18 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 320px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .status-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
   background: rgb(var(--mdui-color-surface-container-high));
   color: rgb(var(--mdui-color-on-surface-variant));
 }
@@ -604,18 +740,62 @@ watch(
 }
 
 @media (max-width: 768px) {
-  .history-item-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .history-surface {
+    padding: 18px;
   }
 
-  .meta-cell {
-    width: 100%;
-    justify-content: flex-start;
+  .history-results {
+    padding: 0;
+  }
+
+  .history-results-header {
+    padding: 18px 18px 16px;
+  }
+
+  .history-surface-header,
+  .history-results-header {
+    flex-direction: column;
+  }
+
+  .search-field,
+  .history-filter-group,
+  .filter-search-button {
+    flex-basis: 100%;
+  }
+
+  .filter-search-button {
+    margin-inline-start: 0;
   }
 
   .title-text {
-    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 640px) {
+  .history-page {
+    padding: 20px 12px;
+  }
+
+  .history-surface {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .history-results {
+    padding: 0;
+  }
+
+  .history-results-header {
+    padding: 16px 16px 14px;
+  }
+
+  .history-item-header {
+    padding: 14px 16px 8px;
+  }
+
+  .history-item-actions {
+    padding: 0 16px 16px;
   }
 }
 </style>

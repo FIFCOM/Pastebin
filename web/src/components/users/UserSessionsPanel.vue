@@ -22,41 +22,60 @@
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && pagedSessions.length === 0" class="user-panel-empty-hint">暂无会话。</div>
+      <div v-if="!isLoading && pagedSessions.length === 0" class="user-panel-empty-state" role="status">
+        <div class="user-panel-empty-state-icon" aria-hidden="true">
+          <mdui-icon name="devices"></mdui-icon>
+        </div>
+        <div>
+          <div class="user-panel-empty-state-title">还没有可管理的会话</div>
+          <div class="user-panel-empty-state-copy">当前账号登录后产生的设备会话会展示在这里，便于你单独撤销或批量清理。</div>
+        </div>
+      </div>
 
-      <div v-else class="user-panel-row-list">
-        <article v-for="session in pagedSessions" :key="session.id" class="user-panel-row">
-          <div class="user-panel-row-main">
-            <div class="user-panel-row-title-row">
-              <div class="user-panel-row-title">{{ sessionHeadline(session) }}</div>
-              <code class="session-id">{{ shortId(session.id) }}</code>
-              <mdui-chip :variant="session.is_current ? 'filled' : 'outlined'">
-                {{ session.is_current ? '当前设备' : '历史会话' }}
-              </mdui-chip>
+      <div v-else-if="pagedSessions.length > 0" class="user-panel-list-shell">
+        <div class="user-panel-list-header">
+          <div>
+            <div class="user-panel-list-title">设备与登录记录</div>
+            <div class="user-panel-list-copy">当前设备会优先展示，其余会话保留原有撤销与清理行为。</div>
+          </div>
+        </div>
+
+        <div class="user-panel-row-list">
+          <article v-for="session in pagedSessions" :key="session.id" class="user-panel-row">
+            <div class="user-panel-row-main">
+              <div class="user-panel-row-title-row">
+                <div class="user-panel-row-title">{{ sessionHeadline(session) }}</div>
+                <code class="session-id">{{ shortId(session.id) }}</code>
+                <mdui-chip :variant="session.is_current ? 'filled' : 'outlined'">
+                  {{ session.is_current ? '当前设备' : '历史会话' }}
+                </mdui-chip>
+              </div>
+
+              <div class="user-panel-meta">
+                <span class="user-panel-meta-item">IP {{ session.ip_address ?? '-' }}</span>
+                <span class="user-panel-meta-item">登录于 {{ formatDate(session.created_at) }}</span>
+                <span class="user-panel-meta-item">最后活跃 {{ formatDate(session.last_active_at) }}</span>
+                <span class="user-panel-meta-item">将于 {{ formatDate(session.expires_at) }} 自动登出</span>
+              </div>
             </div>
 
-            <div class="user-panel-meta">
-              <span class="user-panel-meta-item">IP {{ session.ip_address ?? '-' }}</span>
-              <span class="user-panel-meta-item">登录于 {{ formatDate(session.created_at) }}</span>
-              <span class="user-panel-meta-item">最后活跃 {{ formatDate(session.last_active_at) }}</span>
-              <span class="user-panel-meta-item">将于 {{ formatDate(session.expires_at) }} 自动登出</span>
+            <div class="user-panel-row-actions">
+              <mdui-button
+                variant="text"
+                :disabled="isRevokingId === session.id"
+                :loading="isRevokingId === session.id"
+                @click="revoke(session.id, session.is_current)"
+              >
+                {{ session.is_current ? '登出' : '撤销会话' }}
+              </mdui-button>
             </div>
-          </div>
-
-          <div class="user-panel-row-actions">
-            <mdui-button
-              variant="text"
-              :disabled="isRevokingId === session.id"
-              :loading="isRevokingId === session.id"
-              @click="revoke(session.id, session.is_current)"
-            >
-              {{ session.is_current ? '登出' : '撤销会话' }}
-            </mdui-button>
-          </div>
-        </article>
+          </article>
+        </div>
       </div>
 
       <div class="user-panel-toolbar session-toolbar">
+        <div class="user-panel-toolbar-caption">可以单独撤销单个设备，也可以保留当前设备并清理其他登录状态。</div>
+        <div class="user-panel-toolbar-spacer"></div>
         <mdui-button
           variant="filled"
           :disabled="!currentUser || !hasOtherSessions || isRevokingOthers"
@@ -94,6 +113,7 @@ import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/chip.js'
+import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 
 import PaginationFooter from '../common/PaginationFooter.vue'

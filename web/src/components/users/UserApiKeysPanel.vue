@@ -34,37 +34,54 @@
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && pagedApiKeys.length === 0" class="user-panel-empty-hint">暂无 API Key。</div>
+      <div v-if="!isLoading && pagedApiKeys.length === 0" class="user-panel-empty-state" role="status">
+        <div class="user-panel-empty-state-icon" aria-hidden="true">
+          <mdui-icon name="key"></mdui-icon>
+        </div>
+        <div>
+          <div class="user-panel-empty-state-title">还没有 API Key</div>
+          <div class="user-panel-empty-state-copy">创建后可用于自动化或脚本访问；列表会保留过期状态、最近使用信息和删除操作。</div>
+        </div>
+      </div>
 
-      <div v-else class="user-panel-row-list">
-        <article v-for="key in pagedApiKeys" :key="key.id" class="user-panel-row">
-          <div class="user-panel-row-main">
-            <div class="user-panel-row-title-row">
-              <div class="user-panel-row-title">{{ key.name }}</div>
-              <mdui-chip v-if="isExpired(key.expires_at)" variant="filled">已过期</mdui-chip>
+      <div v-else-if="pagedApiKeys.length > 0" class="user-panel-list-shell">
+        <div class="user-panel-list-header">
+          <div>
+            <div class="user-panel-list-title">Key 列表</div>
+            <div class="user-panel-list-copy">保留现有创建、复制、删除和清理过期 Key 的全部行为。</div>
+          </div>
+        </div>
+
+        <div class="user-panel-row-list">
+          <article v-for="key in pagedApiKeys" :key="key.id" class="user-panel-row">
+            <div class="user-panel-row-main">
+              <div class="user-panel-row-title-row">
+                <div class="user-panel-row-title">{{ key.name }}</div>
+                <mdui-chip v-if="isExpired(key.expires_at)" variant="filled">已过期</mdui-chip>
+              </div>
+
+              <div class="api-key-preview-text">{{ keyPreview(key.key_preview) }}</div>
+
+              <div class="user-panel-meta">
+                <span class="user-panel-meta-item">创建于 {{ formatDate(key.created_at) }}</span>
+                <span class="user-panel-meta-item">最后使用 {{ key.last_used_at ? formatDate(key.last_used_at) : '尚未使用' }}</span>
+                <span class="user-panel-meta-item">最后使用 IP {{ key.last_used_ip ?? '-' }}</span>
+                <span class="user-panel-meta-item">{{ expiresText(key.expires_at) }}</span>
+              </div>
             </div>
 
-            <div class="api-key-preview-text">{{ keyPreview(key.key_preview) }}</div>
-
-            <div class="user-panel-meta">
-              <span class="user-panel-meta-item">创建于 {{ formatDate(key.created_at) }}</span>
-              <span class="user-panel-meta-item">最后使用 {{ key.last_used_at ? formatDate(key.last_used_at) : '尚未使用' }}</span>
-              <span class="user-panel-meta-item">最后使用 IP {{ key.last_used_ip ?? '-' }}</span>
-              <span class="user-panel-meta-item">{{ expiresText(key.expires_at) }}</span>
+            <div class="user-panel-row-actions">
+              <mdui-button
+                variant="text"
+                :disabled="deletingId === key.id"
+                :loading="deletingId === key.id"
+                @click="remove(key.id, key.name)"
+              >
+                删除
+              </mdui-button>
             </div>
-          </div>
-
-          <div class="user-panel-row-actions">
-            <mdui-button
-              variant="text"
-              :disabled="deletingId === key.id"
-              :loading="deletingId === key.id"
-              @click="remove(key.id, key.name)"
-            >
-              删除
-            </mdui-button>
-          </div>
-        </article>
+          </article>
+        </div>
       </div>
 
       <PaginationFooter
@@ -146,6 +163,7 @@ import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/chip.js'
 import 'mdui/components/dialog.js'
+import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/text-field.js'
 

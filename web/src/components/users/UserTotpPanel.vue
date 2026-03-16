@@ -4,10 +4,11 @@
 
     <div v-else class="user-panel-stack">
       <div class="user-panel-split">
-        <section class="user-panel-section">
+        <section class="user-panel-section user-panel-section--soft">
           <div class="user-panel-section-header">
-            <div>
-              <div class="user-panel-section-title">状态</div>
+            <div class="user-panel-section-heading">
+              <div class="user-panel-section-eyebrow">状态</div>
+              <div class="user-panel-section-title">两步验证状态</div>
               <div class="user-panel-section-copy">
                 {{ status?.enabled ? '当前账号登录时需要输入验证码。' : '启用后登录时需要额外输入验证码。' }}
               </div>
@@ -21,7 +22,8 @@
 
         <section class="user-panel-section user-panel-section--soft">
           <div class="user-panel-section-header">
-            <div>
+            <div class="user-panel-section-heading">
+              <div class="user-panel-section-eyebrow">设置</div>
               <div class="user-panel-section-title">验证器设置</div>
               <div class="user-panel-section-copy">
                 使用
@@ -69,7 +71,8 @@
 
       <section v-if="setupInfo" class="user-panel-section user-panel-section--soft setup-panel">
         <div class="user-panel-section-header">
-          <div>
+          <div class="user-panel-section-heading">
+            <div class="user-panel-section-eyebrow">绑定</div>
             <div class="user-panel-section-title">绑定验证器</div>
             <div class="user-panel-section-copy">扫码或复制设置密钥后，输入当前验证码完成绑定。</div>
           </div>
@@ -251,6 +254,10 @@ onMounted(() => {
   gap: 8px;
 }
 
+.setup-panel {
+  overflow: hidden;
+}
+
 .setup-link {
   color: rgb(var(--mdui-color-primary));
   text-decoration: none;
@@ -262,23 +269,30 @@ onMounted(() => {
 
 .setup-grid {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: max-content minmax(320px, 1fr);
+  gap: 16px;
   align-items: center;
 }
 
 .qr-card {
-  display: grid;
-  place-items: center;
-  padding: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 20px;
+  box-sizing: border-box;
   border-radius: 24px;
   background: #fff;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.7);
+  justify-self: start;
 }
 
 .setup-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  justify-content: center;
+  min-width: 0;
 }
 
 .setup-label {
@@ -306,6 +320,12 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .qr-card {
+    width: fit-content;
+    justify-self: center;
+    padding: 16px;
+  }
+
   .setup-actions {
     flex-direction: column;
     align-items: stretch;
@@ -313,9 +333,19 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
+  .totp-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .qr-card {
+    width: fit-content;
     padding: 12px;
     border-radius: 20px;
+  }
+
+  .setup-secret-row {
+    align-items: stretch;
   }
 }
 </style>

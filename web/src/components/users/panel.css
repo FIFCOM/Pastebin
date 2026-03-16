@@ -1,11 +1,44 @@
-.user-panel-empty-hint {
+.user-panel-empty-hint,
+.user-panel-empty-state {
   padding: 18px 20px;
   border: 1px dashed rgb(var(--mdui-color-outline-variant));
   border-radius: 20px;
   background: rgb(var(--mdui-color-surface-container-low));
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.user-panel-empty-hint {
   font-size: 0.92rem;
   line-height: 1.6;
+}
+
+.user-panel-empty-state {
+  display: grid;
+  gap: 12px;
+  place-items: start;
+}
+
+.user-panel-empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: rgb(var(--mdui-color-surface-container-high));
   color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.user-panel-empty-state-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.user-panel-empty-state-copy {
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .user-panel-stack {
@@ -36,6 +69,18 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.user-panel-section-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.user-panel-section-eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .user-panel-section-title {
@@ -89,6 +134,32 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.user-panel-list-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.user-panel-list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-panel-list-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.user-panel-list-copy {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .user-panel-row {
@@ -154,6 +225,12 @@
   align-items: center;
 }
 
+.user-panel-toolbar-caption {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
 .user-panel-toolbar-spacer {
   flex: 1 1 auto;
 }
@@ -199,6 +276,7 @@
 
 @media (max-width: 640px) {
   .user-panel-section,
+  .user-panel-empty-state,
   .user-panel-empty-hint,
   .user-panel-row,
   .user-panel-stat {

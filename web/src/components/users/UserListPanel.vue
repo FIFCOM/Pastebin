@@ -15,24 +15,27 @@
 
     <div v-else class="user-panel-stack">
       <div class="user-panel-section user-panel-section--soft">
-        <div class="filters-grid">
-          <div class="search-row">
-            <mdui-text-field
-              v-model="searchInput"
-              class="search-input"
-              label="搜索用户名或邮箱"
-              variant="outlined"
-              clearable
-              :disabled="isLoading"
-              @keydown.enter.prevent="applyFilters"
-            ></mdui-text-field>
-
-            <mdui-button-icon class="search-trigger" title="搜索" :disabled="isLoading" @click="applyFilters">
-              <mdui-icon name="search"></mdui-icon>
-            </mdui-button-icon>
+        <div class="user-panel-section-header user-list-toolbar-header">
+          <div class="user-panel-section-heading">
+            <div class="user-panel-section-eyebrow">筛选</div>
+            <div class="user-panel-section-title">查找和整理用户</div>
+            <div class="user-panel-section-copy">按账号、角色、状态和分页大小过滤当前用户列表。</div>
           </div>
+        </div>
+
+        <div class="filters-grid">
+          <mdui-text-field
+            v-model="searchInput"
+            class="search-input"
+            label="搜索用户名或邮箱"
+            variant="outlined"
+            clearable
+            :disabled="isLoading"
+            @keydown.enter.prevent="applyFilters"
+          ></mdui-text-field>
 
           <mdui-select
+            class="filter-select"
             label="角色"
             variant="outlined"
             :value="roleFilter"
@@ -44,6 +47,7 @@
           </mdui-select>
 
           <mdui-select
+            class="filter-select"
             label="状态"
             variant="outlined"
             :value="statusFilter"
@@ -55,6 +59,7 @@
           </mdui-select>
 
           <mdui-select
+            class="filter-select"
             label="每页"
             variant="outlined"
             :value="String(size)"
@@ -65,47 +70,77 @@
             <mdui-menu-item value="50">50</mdui-menu-item>
             <mdui-menu-item value="100">100</mdui-menu-item>
           </mdui-select>
+
+          <mdui-button
+            class="search-trigger"
+            variant="filled"
+            :disabled="isLoading"
+            @click="applyFilters"
+          >
+            搜索
+          </mdui-button>
         </div>
       </div>
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div v-if="!isLoading && users.length === 0" class="user-panel-empty-hint">暂无匹配用户。</div>
+      <div v-if="!isLoading && users.length === 0" class="user-panel-empty-state" role="status">
+        <div class="user-panel-empty-state-icon" aria-hidden="true">
+          <mdui-icon name="group_search"></mdui-icon>
+        </div>
+        <div>
+          <div class="user-panel-empty-state-title">
+            {{ hasActiveFilters ? '没有符合条件的用户' : '还没有可展示的用户' }}
+          </div>
+          <div class="user-panel-empty-state-copy">
+            {{ hasActiveFilters ? '尝试放宽筛选条件或清除搜索关键字后重新查询。' : '创建首个用户后，这里会显示账号状态、角色与安全信息。' }}
+          </div>
+        </div>
+      </div>
 
-      <div v-else class="user-panel-row-list">
-        <article v-for="user in users" :key="user.id" class="user-panel-row">
-          <div class="user-panel-row-main">
-            <div class="user-panel-row-title-row">
-              <div class="user-panel-row-title">{{ user.username }}</div>
-              <mdui-chip :variant="user.role === 'admin' ? 'filled' : 'outlined'">
-                {{ user.role === 'admin' ? 'Admin' : 'User' }}
-              </mdui-chip>
-              <mdui-chip :variant="user.is_active ? 'tonal' : 'outlined'">
-                {{ user.is_active ? '正常' : '已封禁' }}
-              </mdui-chip>
+      <div v-else-if="users.length > 0" class="user-panel-list-shell">
+        <div class="user-panel-list-header">
+          <div>
+            <div class="user-panel-list-title">共 {{ total }} 位用户</div>
+            <div class="user-panel-list-copy">列表保留现有分页、筛选和管理操作。</div>
+          </div>
+        </div>
+
+        <div class="user-panel-row-list">
+          <article v-for="user in users" :key="user.id" class="user-panel-row">
+            <div class="user-panel-row-main">
+              <div class="user-panel-row-title-row">
+                <div class="user-panel-row-title">{{ user.username }}</div>
+                <mdui-chip :variant="user.role === 'admin' ? 'filled' : 'outlined'">
+                  {{ user.role === 'admin' ? 'Admin' : 'User' }}
+                </mdui-chip>
+                <mdui-chip :variant="user.is_active ? 'tonal' : 'outlined'">
+                  {{ user.is_active ? '正常' : '已封禁' }}
+                </mdui-chip>
+              </div>
+
+              <div class="user-panel-row-description">{{ user.email ?? '未设置邮箱' }}</div>
+
+              <div class="user-panel-meta">
+                <span class="user-panel-meta-item">创建 {{ formatDateTime(user.created_at) }}</span>
+                <span class="user-panel-meta-item">{{ user.totp_enabled ? 'TOTP 已启用' : 'TOTP 未启用' }}</span>
+                <span class="user-panel-meta-item">用户 ID #{{ user.id }}</span>
+              </div>
             </div>
 
-            <div class="user-panel-row-description">{{ user.email ?? '未设置邮箱' }}</div>
-
-            <div class="user-panel-meta">
-              <span class="user-panel-meta-item">创建 {{ formatDateTime(user.created_at) }}</span>
-              <span class="user-panel-meta-item">{{ user.totp_enabled ? 'TOTP 已启用' : 'TOTP 未启用' }}</span>
-              <span class="user-panel-meta-item">用户 ID #{{ user.id }}</span>
+            <div class="user-panel-row-actions">
+              <mdui-button variant="text" @click="openEditDialog(user)">编辑</mdui-button>
+              <mdui-button
+                variant="text"
+                :disabled="deletingId === user.id"
+                :loading="deletingId === user.id"
+                @click="removeUser(user)"
+              >
+                删除
+              </mdui-button>
             </div>
-          </div>
-
-          <div class="user-panel-row-actions">
-            <mdui-button variant="text" @click="openEditDialog(user)">编辑</mdui-button>
-            <mdui-button
-              variant="text"
-              :disabled="deletingId === user.id"
-              :loading="deletingId === user.id"
-              @click="removeUser(user)"
-            >
-              删除
-            </mdui-button>
-          </div>
-        </article>
+          </article>
+        </div>
       </div>
 
       <PaginationFooter
@@ -269,7 +304,6 @@ import { computed, ref, watch } from 'vue'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/button-icon.js'
 import 'mdui/components/chip.js'
 import 'mdui/components/dialog.js'
 import 'mdui/components/icon.js'
@@ -304,6 +338,9 @@ const statusFilter = ref<'all' | 'active' | 'disabled'>('all')
 
 const canAccess = computed(() => currentUser.value?.role === 'admin')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
+const hasActiveFilters = computed(
+  () => appliedSearch.value.length > 0 || roleFilter.value !== 'all' || statusFilter.value !== 'all'
+)
 
 function handlePageChange(nextPage: number) {
   page.value = nextPage
@@ -384,6 +421,7 @@ function handleRoleFilterChange(event: Event) {
   const next = String((event.target as { value?: unknown }).value ?? 'all')
   if (next === 'all' || next === 'admin' || next === 'user') {
     roleFilter.value = next
+    appliedSearch.value = searchInput.value.trim()
     resetToFirstPageAndLoad()
   }
 }
@@ -392,6 +430,7 @@ function handleStatusFilterChange(event: Event) {
   const next = String((event.target as { value?: unknown }).value ?? 'all')
   if (next === 'all' || next === 'active' || next === 'disabled') {
     statusFilter.value = next
+    appliedSearch.value = searchInput.value.trim()
     resetToFirstPageAndLoad()
   }
 }
@@ -399,6 +438,7 @@ function handleStatusFilterChange(event: Event) {
 function handleSizeChange(event: Event) {
   const next = Number((event.target as { value?: unknown }).value)
   if (!Number.isFinite(next) || next <= 0) return
+  appliedSearch.value = searchInput.value.trim()
   size.value = next
   page.value = 1
 }
@@ -602,26 +642,31 @@ async function removeUser(user: UserResponse) {
 
 <style scoped>
 .filters-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(140px, 0.6fr));
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.user-list-toolbar-header {
+  margin-bottom: 0;
 }
 
 .search-input {
-  flex: 1 1 auto;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.filter-select {
+  flex: 1 1 160px;
   min-width: 0;
 }
 
 .search-trigger {
-  flex-shrink: 0;
-  border-radius: 999px;
+  flex: 0 0 auto;
+  min-width: 108px;
+  margin-inline-start: auto;
 }
 
 .dialog-form {
@@ -638,8 +683,14 @@ async function removeUser(user: UserResponse) {
 }
 
 @media (max-width: 960px) {
-  .filters-grid {
-    grid-template-columns: 1fr;
+  .search-input,
+  .filter-select,
+  .search-trigger {
+    flex-basis: 100%;
+  }
+
+  .search-trigger {
+    margin-inline-start: 0;
   }
 }
 </style>

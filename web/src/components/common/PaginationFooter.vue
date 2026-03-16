@@ -6,6 +6,8 @@
       <mdui-button-icon
         class="circle-action"
         title="上一页"
+        aria-label="上一页"
+        :aria-disabled="loading || page <= 1 ? 'true' : 'false'"
         :disabled="loading || page <= 1"
         @click="requestPage(page - 1)"
       >
@@ -15,6 +17,8 @@
       <mdui-button-icon
         class="circle-action"
         title="下一页"
+        aria-label="下一页"
+        :aria-disabled="loading || page >= totalPages ? 'true' : 'false'"
         :disabled="loading || page >= totalPages"
         @click="requestPage(page + 1)"
       >
@@ -133,7 +137,10 @@ function handleJumpPage() {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 0 2px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.65);
+  background: rgb(var(--mdui-color-surface-container-low));
 }
 
 .pagination-summary {
@@ -154,5 +161,19 @@ function handleJumpPage() {
 
 .circle-action {
   border-radius: 999px;
+}
+
+@media (max-width: 640px) {
+  .pagination-wrapper {
+    padding: 12px 14px;
+  }
+
+  .pagination-controls {
+    width: 100%;
+  }
+
+  .jump-field {
+    flex: 1 1 120px;
+  }
 }
 </style>

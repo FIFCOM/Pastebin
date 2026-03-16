@@ -7,14 +7,26 @@
         <div class="profile-avatar" :aria-label="`用户 ${currentUser.username}`">{{ avatarText }}</div>
 
         <div class="profile-summary">
+          <div class="profile-overline">账户信息</div>
+
           <div class="profile-field-row">
             <div class="profile-name">{{ currentUser.username }}</div>
-            <mdui-button-icon icon="edit" @click="openUsernameDialog"></mdui-button-icon>
+            <mdui-button-icon
+              icon="edit"
+              aria-label="修改用户名"
+              title="修改用户名"
+              @click="openUsernameDialog"
+            ></mdui-button-icon>
           </div>
 
           <div class="profile-field-row profile-field-row--email">
             <div class="profile-email">{{ currentUser.email ?? '未设置邮箱' }}</div>
-            <mdui-button-icon icon="edit" @click="openEmailDialog"></mdui-button-icon>
+            <mdui-button-icon
+              icon="edit"
+              aria-label="修改邮箱"
+              title="修改邮箱"
+              @click="openEmailDialog"
+            ></mdui-button-icon>
           </div>
         </div>
       </section>
@@ -38,8 +50,10 @@
 
       <section class="user-panel-section">
         <div class="user-panel-section-header">
-          <div>
+          <div class="user-panel-section-heading">
+            <div class="user-panel-section-eyebrow">安全</div>
             <div class="user-panel-section-title">修改密码</div>
+            <div class="user-panel-section-copy">更新当前登录密码；保存后不会影响现有页面的数据流和账户信息展示。</div>
           </div>
         </div>
 
@@ -375,7 +389,15 @@ async function savePassword() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.profile-overline {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .profile-field-row {
