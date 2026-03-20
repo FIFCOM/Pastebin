@@ -9,6 +9,8 @@ from fastapi import (
     HTTPException,
     Path,
     Query,
+    WebSocket,
+    WebSocketDisconnect,
     status,
 )
 from sqlalchemy.orm import Session
@@ -27,6 +29,7 @@ from app.schemas.collab_room import (
     RoomPastesResponse,
 )
 from app.schemas.common import MessageResponse
+from app.services.collab_room_realtime_service import CollabRoomRealtimeService
 from app.services.collab_room_service import CollabRoomService
 
 # 创建路由器
@@ -171,7 +174,12 @@ async def get_room_members(
     member_token = _get_member_token_from_header(authorization)
 
     try:
-        return CollabRoomService.get_room_members(db, member_token, room_id)
+        return CollabRoomService.get_room_members(
+            db,
+            member_token,
+            room_id,
+            active_member_ids=CollabRoomRealtimeService.get_active_member_ids(room_id),
+        )
     except ValueError as e:
         if "令牌" in str(e) or "不在此房间中" in str(e):
             raise HTTPException(
@@ -202,7 +210,13 @@ async def share_paste_to_room(
     member_token = _get_member_token_from_header(authorization)
 
     try:
-        CollabRoomService.share_paste_to_room(db, member_token, room_id, share_data)
+        shared_paste = CollabRoomService.share_paste_to_room(
+            db,
+            member_token,
+            room_id,
+            share_data,
+        )
+        await CollabRoomRealtimeService.broadcast_shared_paste(room_id, shared_paste)
         return MessageResponse(message="Paste分享成功")
     except ValueError as e:
         if "令牌" in str(e) or "不在此房间中" in str(e):
@@ -264,7 +278,15 @@ async def leave_room(
     member_token = _get_member_token_from_header(authorization)
 
     try:
-        CollabRoomService.leave_room(db, member_token, room_id)
+        leave_result = CollabRoomService.leave_room(db, member_token, room_id)
+        if leave_result.room_deleted:
+            await CollabRoomRealtimeService.close_room(room_id)
+        else:
+            await CollabRoomRealtimeService.disconnect_member(
+                room_id,
+                leave_result.member_id,
+                leave_result.display_name,
+            )
         return MessageResponse(message="已离开房间")
     except ValueError as e:
         if "令牌" in str(e) or "不在此房间中" in str(e):
@@ -275,3 +297,53 @@ async def leave_room(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             ) from None
+
+
+@router.websocket("/rooms/{room_id}/ws")
+async def room_websocket(websocket: WebSocket, room_id: str):
+    connection = await CollabRoomRealtimeService.authenticate_connection(
+        websocket,
+        room_id,
+    )
+    if connection is None:
+        return
+
+    try:
+        while True:
+            try:
+                payload = await websocket.receive_json()
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                await websocket.send_json(
+                    {"type": "error", "message": "消息必须是合法的JSON对象"}
+                )
+                await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
+                break
+
+            if not isinstance(payload, dict):
+                await websocket.send_json(
+                    {"type": "error", "message": "消息必须是JSON对象"}
+                )
+                await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
+                break
+            payload_dict: dict[str, object] = payload
+
+            try:
+                await CollabRoomRealtimeService.handle_client_message(
+                    connection, payload_dict
+                )
+            except ValueError as exc:
+                await websocket.send_json({"type": "error", "message": str(exc)})
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                break
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                await websocket.send_json(
+                    {"type": "error", "message": "处理消息时发生服务器错误"}
+                )
+                await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+                break
+    finally:
+        await CollabRoomRealtimeService.disconnect(websocket)

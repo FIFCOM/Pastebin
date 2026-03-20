@@ -1,10 +1,10 @@
-"""
-协作房间服务层 - 业务逻辑处理
-"""
+"""协作房间服务层 - 业务逻辑处理"""
 
 import secrets
 import string
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from jose import JWTError, jwt
 from pydantic import ValidationError
@@ -34,19 +34,36 @@ from app.schemas.collab_room import (
     RoomMembersResponse,
     RoomPastesResponse,
     SharedPasteInfo,
+    calculate_is_online,
     build_join_url,
     build_ws_url,
-    calculate_is_online,
 )
 from config.config import settings
+
+
+@dataclass(frozen=True)
+class AuthenticatedRoomMember:
+    payload: MemberTokenPayload
+    member: Member
+    room: CollabRoom
+    membership: RoomMember
+
+
+@dataclass(frozen=True)
+class RoomLeaveResult:
+    room_id: str
+    member_id: str
+    display_name: str
+    room_deleted: bool
+    new_owner_member_id: str | None
 
 
 class CollabRoomService:
     """协作房间服务类"""
 
     # JWT密钥（应该从配置中获取）
-    JWT_SECRET = settings.member_token_secret_key
-    JWT_ALGORITHM = "HS256"
+    JWT_SECRET: str = settings.member_token_secret_key
+    JWT_ALGORITHM: str = "HS256"
 
     @staticmethod
     def _generate_display_name_for_guest() -> str:
@@ -73,11 +90,15 @@ class CollabRoomService:
         """创建成员JWT令牌"""
         # 设置24小时过期
         exp = int((datetime.now(UTC) + timedelta(hours=24)).timestamp())
+        member_id = str(getattr(member, "id"))
+        display_name = str(getattr(member, "display_name"))
+        raw_user_id = getattr(member, "user_id", None)
+        user_id = int(raw_user_id) if isinstance(raw_user_id, int) else None
 
         payload = MemberTokenPayload(
-            member_id=str(member.id),  # type: ignore
-            display_name=str(member.display_name),  # type: ignore
-            user_id=member.user_id,  # type: ignore
+            member_id=member_id,
+            display_name=display_name,
+            user_id=user_id,
             exp=exp,
         )
 
@@ -101,14 +122,115 @@ class CollabRoomService:
             raise ValueError(f"无效的成员令牌: {e}") from None
 
     @staticmethod
+    def validate_member_token(token: str) -> MemberTokenPayload:
+        return CollabRoomService._verify_member_token(token)
+
+    @staticmethod
+    def _get_member_by_token(
+        db: Session, member_token: str
+    ) -> tuple[MemberTokenPayload, Member]:
+        token_payload = CollabRoomService._verify_member_token(member_token)
+        member = db.query(Member).filter(Member.id == token_payload.member_id).first()
+        if not member:
+            raise ValueError("成员不存在")
+        return token_payload, member
+
+    @staticmethod
+    def _get_room(db: Session, room_id: str) -> CollabRoom:
+        room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
+        if not room:
+            raise ValueError("房间不存在")
+        return room
+
+    @staticmethod
+    def _get_ordered_room_members(db: Session, room_id: str):
+        return (
+            db.query(RoomMember, Member)
+            .join(Member, RoomMember.member_id == Member.id)
+            .filter(RoomMember.room_id == room_id)
+            .order_by(RoomMember.joined_at.asc(), RoomMember.id.asc())
+        )
+
+    @staticmethod
+    def _get_next_owner_membership(
+        db: Session, room_id: str, *, excluded_member_ids: set[str]
+    ) -> RoomMember | None:
+        query = db.query(RoomMember).filter(RoomMember.room_id == room_id)
+        if excluded_member_ids:
+            query = query.filter(~RoomMember.member_id.in_(excluded_member_ids))
+        return query.order_by(RoomMember.joined_at.asc(), RoomMember.id.asc()).first()
+
+    @staticmethod
+    def get_room_member_context(
+        db: Session, member_token: str, room_id: str
+    ) -> AuthenticatedRoomMember:
+        token_payload, member = CollabRoomService._get_member_by_token(db, member_token)
+        room = CollabRoomService._get_room(db, room_id)
+        membership = (
+            db.query(RoomMember)
+            .filter(
+                and_(
+                    RoomMember.room_id == room_id,
+                    RoomMember.member_id == token_payload.member_id,
+                )
+            )
+            .first()
+        )
+        if not membership:
+            raise ValueError("您不在此房间中")
+        return AuthenticatedRoomMember(
+            payload=token_payload,
+            member=member,
+            room=room,
+            membership=membership,
+        )
+
+    @staticmethod
+    def touch_room_presence(
+        db: Session, room_id: str, member_id: str
+    ) -> datetime | None:
+        membership = (
+            db.query(RoomMember)
+            .filter(
+                and_(
+                    RoomMember.room_id == room_id,
+                    RoomMember.member_id == member_id,
+                )
+            )
+            .first()
+        )
+        if not membership:
+            return None
+
+        now = datetime.now(UTC)
+        setattr(membership, "last_seen", now)
+        db.commit()
+        return now
+
+    @staticmethod
+    def has_active_room_membership(db: Session, room_id: str, member_id: str) -> bool:
+        now = datetime.now(UTC)
+        membership = (
+            db.query(RoomMember)
+            .join(Member, RoomMember.member_id == Member.id)
+            .filter(
+                and_(
+                    RoomMember.room_id == room_id,
+                    RoomMember.member_id == member_id,
+                    Member.expire_at >= now,
+                )
+            )
+            .first()
+        )
+        return membership is not None
+
+    @staticmethod
     def _sync_room_member_count(db: Session, room_id: str) -> int:
         """将 collab_rooms.member_count 同步为 room_members 的真实数量，并返回最新值。"""
-        count = (
-            db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
-        )
+        count = db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
         room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
         if room:
-            room.member_count = count  # type: ignore
+            setattr(room, "member_count", int(count))
         return int(count)
 
     @staticmethod
@@ -260,7 +382,11 @@ class CollabRoomService:
             room_id=str(room.id),  # type: ignore
             room_name=str(room.room_name),  # type: ignore
             member_count=int(member_count),
-            max_members=int(room.max_members or 10),  # type: ignore
+            max_members=int(
+                getattr(room, "max_members", 10)
+                if getattr(room, "max_members", 10) is not None
+                else 10
+            ),
         )
 
     @staticmethod
@@ -279,13 +405,7 @@ class CollabRoomService:
         Returns:
             加入房间响应
         """
-        # 验证成员令牌
-        token_payload = CollabRoomService._verify_member_token(member_token)
-
-        # 获取成员记录
-        member = db.query(Member).filter(Member.id == token_payload.member_id).first()
-        if not member:
-            raise ValueError("成员不存在")
+        _, member = CollabRoomService._get_member_by_token(db, member_token)
 
         # 获取房间
         room = (
@@ -314,15 +434,23 @@ class CollabRoomService:
         )
 
         if existing_membership:
-            existing_membership.last_seen = datetime.now(UTC)  # type: ignore
+            setattr(existing_membership, "last_seen", datetime.now(UTC))
             db.commit()
         else:
-            # 以真实数量判断是否已满，避免 member_count 漂移/并发竞态
-            max_count = int(room.max_members or 10)  # type: ignore
-            current_count = (
-                db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
+            reserved_slots = (
+                db.query(CollabRoom)
+                .filter(
+                    and_(
+                        CollabRoom.id == room_id,
+                        CollabRoom.member_count < CollabRoom.max_members,
+                    )
+                )
+                .update(
+                    {CollabRoom.member_count: CollabRoom.member_count + 1},
+                    synchronize_session=False,
+                )
             )
-            if current_count >= max_count:
+            if reserved_slots == 0:
                 raise ValueError("房间已满")
 
             room_member = RoomMember(
@@ -332,7 +460,7 @@ class CollabRoomService:
             db.add(room_member)
 
             try:
-                db.flush()
+                db.commit()
             except IntegrityError:
                 db.rollback()
                 # 可能并发重复加入：当作已在房间中
@@ -348,30 +476,11 @@ class CollabRoomService:
                 )
                 if not existing_membership:
                     raise
-                existing_membership.last_seen = datetime.now(UTC)  # type: ignore
-                db.commit()
-            else:
-                # 二次校验容量（并发下避免超员）；超员则撤销本次加入
-                new_count = (
-                    db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
-                )
-                if new_count > max_count:
-                    db.delete(room_member)
-                    db.commit()
-                    CollabRoomService._sync_room_member_count(db, room_id)
-                    db.commit()
-                    raise ValueError("房间已满")
-
-                CollabRoomService._sync_room_member_count(db, room_id)
+                setattr(existing_membership, "last_seen", datetime.now(UTC))
                 db.commit()
 
         # 获取房间成员列表
-        room_members = (
-            db.query(RoomMember, Member)
-            .join(Member, RoomMember.member_id == Member.id)
-            .filter(RoomMember.room_id == room_id)
-            .all()
-        )
+        room_members = CollabRoomService._get_ordered_room_members(db, room_id).all()
 
         member_infos = [
             MemberInfo(
@@ -390,7 +499,10 @@ class CollabRoomService:
 
     @staticmethod
     def get_room_members(
-        db: Session, member_token: str, room_id: str
+        db: Session,
+        member_token: str,
+        room_id: str,
+        active_member_ids: set[str] | None = None,
     ) -> RoomMembersResponse:
         """
         获取房间成员列表
@@ -403,40 +515,19 @@ class CollabRoomService:
         Returns:
             房间成员列表响应
         """
-        # 验证成员令牌
-        token_payload = CollabRoomService._verify_member_token(member_token)
-
-        # 验证成员是否在房间中
-        membership = (
-            db.query(RoomMember)
-            .filter(
-                and_(
-                    RoomMember.room_id == room_id,
-                    RoomMember.member_id == token_payload.member_id,
-                )
-            )
-            .first()
-        )
-
-        if not membership:
-            raise ValueError("您不在此房间中")
-
-        # 获取房间成员列表
-        room_members = (
-            db.query(RoomMember, Member)
-            .join(Member, RoomMember.member_id == Member.id)
-            .filter(RoomMember.room_id == room_id)
-            .all()
-        )
+        CollabRoomService.get_room_member_context(db, member_token, room_id)
+        room_members = CollabRoomService._get_ordered_room_members(db, room_id).all()
+        active_ids = active_member_ids or set()
 
         member_infos = []
         for room_member_record, member_record in room_members:
             last_seen = room_member_record.last_seen  # type: ignore
-            is_online = calculate_is_online(last_seen)
+            member_id = str(member_record.id)  # type: ignore
+            is_online = member_id in active_ids or calculate_is_online(last_seen)
 
             member_infos.append(
                 OnlineMemberInfo(
-                    member_id=str(member_record.id),  # type: ignore
+                    member_id=member_id,
                     display_name=str(member_record.display_name),  # type: ignore
                     last_seen=last_seen,
                     is_online=is_online,
@@ -449,7 +540,7 @@ class CollabRoomService:
     @staticmethod
     def share_paste_to_room(
         db: Session, member_token: str, room_id: str, share_data: PasteShareRequest
-    ) -> None:
+    ) -> SharedPasteInfo:
         """
         分享Paste到房间
 
@@ -459,23 +550,7 @@ class CollabRoomService:
             room_id: 房间ID
             share_data: 分享数据
         """
-        # 验证成员令牌
-        token_payload = CollabRoomService._verify_member_token(member_token)
-
-        # 验证成员是否在房间中
-        membership = (
-            db.query(RoomMember)
-            .filter(
-                and_(
-                    RoomMember.room_id == room_id,
-                    RoomMember.member_id == token_payload.member_id,
-                )
-            )
-            .first()
-        )
-
-        if not membership:
-            raise ValueError("您不在此房间中")
+        context = CollabRoomService.get_room_member_context(db, member_token, room_id)
 
         # 验证Paste是否存在
         paste = db.query(Paste).filter(Paste.id == share_data.paste_id).first()
@@ -485,11 +560,13 @@ class CollabRoomService:
             raise ValueError("草稿状态的Paste不可分享")
 
         # 防止绕过 Paste 的 access_key 保护：设置了访问密钥的 Paste 不允许通过房间分享
-        if paste.access_key_hash:  # type: ignore
+        access_key_hash = getattr(paste, "access_key_hash", None)
+        if access_key_hash is not None:
             raise ValueError("该Paste设置了访问密钥，不能通过协作房间分享")
 
         # 过期 Paste 不允许分享
-        if is_expired(paste.expire_at):  # type: ignore[arg-type]
+        paste_expire_at = cast(datetime | None, getattr(paste, "expire_at", None))
+        if is_expired(paste_expire_at):
             raise ValueError("Paste已过期，不能分享")
 
         # 如果指定了目标成员，验证目标成员是否在房间中
@@ -512,13 +589,30 @@ class CollabRoomService:
         room_paste = RoomPaste(
             room_id=room_id,
             paste_id=share_data.paste_id,
-            shared_by_member_id=token_payload.member_id,
+            shared_by_member_id=context.payload.member_id,
             target_member_id=share_data.target_member_id,
             encrypted_paste_key=share_data.encrypted_paste_key,
         )
 
         db.add(room_paste)
         db.commit()
+        db.refresh(room_paste)
+        target_member_id = room_paste.target_member_id
+        paste_title = getattr(paste, "title", None)
+        shared_at = cast(datetime, getattr(room_paste, "shared_at"))
+
+        return SharedPasteInfo(
+            paste_id=str(room_paste.paste_id),  # type: ignore
+            title=str(paste_title) if paste_title is not None else None,
+            encrypted_paste_key=str(room_paste.encrypted_paste_key),  # type: ignore
+            shared_by=str(room_paste.shared_by_member_id),  # type: ignore
+            target_member=str(target_member_id)
+            if target_member_id is not None
+            else None,
+            shared_at=shared_at,
+            expire_at=paste_expire_at,
+            is_expired=False,
+        )
 
     @staticmethod
     def get_room_pastes(
@@ -536,23 +630,7 @@ class CollabRoomService:
         Returns:
             房间Paste列表响应
         """
-        # 验证成员令牌
-        token_payload = CollabRoomService._verify_member_token(member_token)
-
-        # 验证成员是否在房间中
-        membership = (
-            db.query(RoomMember)
-            .filter(
-                and_(
-                    RoomMember.room_id == room_id,
-                    RoomMember.member_id == token_payload.member_id,
-                )
-            )
-            .first()
-        )
-
-        if not membership:
-            raise ValueError("您不在此房间中")
+        context = CollabRoomService.get_room_member_context(db, member_token, room_id)
 
         # 构建查询条件
         query = (
@@ -564,18 +642,20 @@ class CollabRoomService:
         if paste_type == "received":
             query = query.filter(
                 or_(
-                    RoomPaste.target_member_id == token_payload.member_id,
+                    RoomPaste.target_member_id == context.payload.member_id,
                     RoomPaste.target_member_id.is_(None),
                 )
             )
         elif paste_type == "sent":
-            query = query.filter(RoomPaste.shared_by_member_id == token_payload.member_id)
+            query = query.filter(
+                RoomPaste.shared_by_member_id == context.payload.member_id
+            )
         elif paste_type == "all":
             # “all” 仅表示与当前成员相关（收到的 + 自己发出的），不包含他人之间的定向分享
             query = query.filter(
                 or_(
-                    RoomPaste.shared_by_member_id == token_payload.member_id,
-                    RoomPaste.target_member_id == token_payload.member_id,
+                    RoomPaste.shared_by_member_id == context.payload.member_id,
+                    RoomPaste.target_member_id == context.payload.member_id,
                     RoomPaste.target_member_id.is_(None),
                 )
             )
@@ -584,23 +664,30 @@ class CollabRoomService:
 
         paste_infos = []
         for room_paste_record, paste_record in room_pastes:
+            expire_at = cast(datetime | None, getattr(paste_record, "expire_at", None))
+            paste_is_expired = is_expired(expire_at)
+            target_member_id = room_paste_record.target_member_id
+            paste_title = getattr(paste_record, "title", None)
+            shared_at = cast(datetime, getattr(room_paste_record, "shared_at"))
             paste_infos.append(
                 SharedPasteInfo(
                     paste_id=str(room_paste_record.paste_id),  # type: ignore
-                    title=str(paste_record.title) if paste_record.title else None,  # type: ignore
+                    title=str(paste_title) if paste_title is not None else None,
                     encrypted_paste_key=str(room_paste_record.encrypted_paste_key),  # type: ignore
                     shared_by=str(room_paste_record.shared_by_member_id),  # type: ignore
-                    target_member=str(room_paste_record.target_member_id)
-                    if room_paste_record.target_member_id
-                    else None,  # type: ignore
-                    shared_at=room_paste_record.shared_at,  # type: ignore
+                    target_member=(
+                        str(target_member_id) if target_member_id is not None else None
+                    ),
+                    shared_at=shared_at,
+                    expire_at=expire_at,
+                    is_expired=paste_is_expired,
                 )
             )
 
         return RoomPastesResponse(pastes=paste_infos)
 
     @staticmethod
-    def leave_room(db: Session, member_token: str, room_id: str) -> None:
+    def leave_room(db: Session, member_token: str, room_id: str) -> RoomLeaveResult:
         """
         离开房间
 
@@ -609,29 +696,41 @@ class CollabRoomService:
             member_token: 成员令牌
             room_id: 房间ID
         """
-        # 验证成员令牌
-        token_payload = CollabRoomService._verify_member_token(member_token)
+        context = CollabRoomService.get_room_member_context(db, member_token, room_id)
+        room = context.room
+        member = context.member
+        membership = context.membership
+        member_id = str(member.id)  # type: ignore
+        room_owner_id = str(room.creator_member_id)  # type: ignore
+        next_owner = None
 
-        # 获取成员关系
-        membership = (
-            db.query(RoomMember)
-            .filter(
-                and_(
-                    RoomMember.room_id == room_id,
-                    RoomMember.member_id == token_payload.member_id,
-                )
+        if room_owner_id == member_id:
+            next_owner = CollabRoomService._get_next_owner_membership(
+                db,
+                room_id,
+                excluded_member_ids={member_id},
             )
-            .first()
-        )
+            if next_owner:
+                setattr(room, "creator_member_id", str(next_owner.member_id))
 
-        if not membership:
-            raise ValueError("您不在此房间中")
-
-        # 删除成员关系
         db.delete(membership)
+        db.flush()
 
-        CollabRoomService._sync_room_member_count(db, room_id)
+        remaining_members = CollabRoomService._sync_room_member_count(db, room_id)
+        room_deleted = remaining_members == 0
+        if room_deleted:
+            db.delete(room)
+
         db.commit()
+        return RoomLeaveResult(
+            room_id=room_id,
+            member_id=member_id,
+            display_name=str(member.display_name),  # type: ignore
+            room_deleted=room_deleted,
+            new_owner_member_id=(
+                str(next_owner.member_id) if next_owner and not room_deleted else None
+            ),
+        )
 
     @staticmethod
     def update_member_last_seen(db: Session, member_token: str, room_id: str) -> None:
@@ -643,21 +742,5 @@ class CollabRoomService:
             member_token: 成员令牌
             room_id: 房间ID
         """
-        # 验证成员令牌
         token_payload = CollabRoomService._verify_member_token(member_token)
-
-        # 获取成员关系
-        membership = (
-            db.query(RoomMember)
-            .filter(
-                and_(
-                    RoomMember.room_id == room_id,
-                    RoomMember.member_id == token_payload.member_id,
-                )
-            )
-            .first()
-        )
-
-        if membership:
-            membership.last_seen = datetime.now(UTC)  # type: ignore
-            db.commit()
+        CollabRoomService.touch_room_presence(db, room_id, token_payload.member_id)

@@ -286,15 +286,43 @@ npm run dev
 - `POST /api/rooms` - 创建房间（`Bearer {member_token}`）
 - `GET /api/join/{pin_code}` - 通过PIN码获取房间信息
 - `POST /api/rooms/{room_id}/join` - 加入房间（`Bearer {member_token}`）
+- `GET /api/rooms/{room_id}/ws` - WebSocket实时通道（连接后首条消息发送 `{"type":"auth","token":"..."}`）
 - `GET /api/rooms/{room_id}/members` - 成员列表（`Bearer {member_token}`）
 - `POST /api/rooms/{room_id}/pastes` - 分享Paste（`Bearer {member_token}`）
-- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`Bearer {member_token}`）
+- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`Bearer {member_token}`，返回 `is_expired` / `expire_at`）
 - `DELETE /api/rooms/{room_id}/leave` - 离开房间（`Bearer {member_token}`）
 
 ### 内部任务（需要内部令牌）
 
 - `POST /api/internal/cleanup` - 执行清理任务（`Bearer {INTERNAL_TOKEN}`）
 - `GET /api/internal/cleanup/status` - 清理服务状态（`Bearer {INTERNAL_TOKEN}`）
+
+## 定时清理
+
+项目内置了一个可直接用于定时任务的 cleanup CLI：
+
+```bash
+uv run python -m app.cleanup_cli --list-tasks
+uv run python -m app.cleanup_cli
+uv run python -m app.cleanup_cli expired_drafts expired_pastes expired_members
+```
+
+- 不传任务名时，会依次执行全部过期清理任务
+- 返回码 `0` 表示全部成功，返回码 `1` 表示至少有一个任务失败
+- 推荐在 cron 中使用绝对路径，并把输出重定向到日志文件
+
+示例 cron：
+
+```cron
+*/15 * * * * /home/your-user/.local/bin/uv run python -m app.cleanup_cli >> /var/log/material-bin-cleanup.log 2>&1
+15 2 * * * /home/your-user/.local/bin/uv run python -m app.cleanup_cli expired_members expired_pastes >> /var/log/material-bin-cleanup.log 2>&1
+```
+
+如果你的环境没有把 `uv` 放进 cron 可见的 `PATH`，请改成虚拟环境里的 Python 绝对路径：
+
+```cron
+*/15 * * * * /srv/material-bin/.venv/bin/python -m app.cleanup_cli >> /var/log/material-bin-cleanup.log 2>&1
+```
 
 ### 其他
 

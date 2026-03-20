@@ -23,9 +23,13 @@ from .collab_room import (
     RoomPastesResponse,
     SharedPasteInfo,
     WSAuthMessage,
+    WSAuthOkMessage,
     WSChatMessage,
+    WSErrorMessage,
     WSMemberJoinedMessage,
     WSMemberLeftMessage,
+    WSPingMessage,
+    WSPongMessage,
     WSPasteSharedMessage,
 )
 from .common import (
@@ -67,10 +71,14 @@ __all__ = [
     "MemberTokenPayload",
     # WebSocket消息
     "WSAuthMessage",
+    "WSAuthOkMessage",
     "WSChatMessage",
+    "WSErrorMessage",
     "WSPasteSharedMessage",
     "WSMemberJoinedMessage",
     "WSMemberLeftMessage",
+    "WSPingMessage",
+    "WSPongMessage",
     # 用户相关
     "UserRegisterRequest",
     "UserLoginRequest",

@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -125,6 +126,8 @@ class SharedPasteInfo(BaseModel):
         None, description="目标接收者成员ID，null表示群发"
     )
     shared_at: datetime = Field(..., description="分享时间")
+    expire_at: datetime | None = Field(default=None, description="Paste过期时间")
+    is_expired: bool = Field(default=False, description="Paste当前是否已过期")
 
     class Config:
         from_attributes = True
@@ -144,8 +147,16 @@ class RoomPastesResponse(BaseModel):
 class WSAuthMessage(BaseModel):
     """WebSocket认证消息"""
 
-    type: str = Field("auth", description="消息类型")
+    type: Literal["auth"] = Field("auth", description="消息类型")
     token: str = Field(..., description="成员令牌")
+
+
+class WSAuthOkMessage(BaseModel):
+    type: str = Field("auth_ok", description="消息类型")
+    room_id: str = Field(..., description="房间ID")
+    member_id: str = Field(..., description="成员ID")
+    display_name: str = Field(..., description="显示名称")
+    timestamp: datetime = Field(..., description="认证成功时间戳")
 
 
 class WSChatMessage(BaseModel):
@@ -185,6 +196,20 @@ class WSMemberLeftMessage(BaseModel):
     member_id: str = Field(..., description="成员ID")
     display_name: str = Field(..., description="显示名称")
     timestamp: datetime = Field(..., description="离开时间戳")
+
+
+class WSErrorMessage(BaseModel):
+    type: str = Field("error", description="消息类型")
+    message: str = Field(..., description="错误信息")
+
+
+class WSPingMessage(BaseModel):
+    type: str = Field("ping", description="消息类型")
+
+
+class WSPongMessage(BaseModel):
+    type: str = Field("pong", description="消息类型")
+    timestamp: datetime = Field(..., description="服务器响应时间")
 
 
 # ===============================

@@ -72,7 +72,9 @@ async def execute_cleanup_tasks(
             )
 
         # 执行清理任务
-        result = CleanupService.execute_cleanup_tasks(db, cleanup_request.tasks)
+        result = await CleanupService.execute_cleanup_tasks_async(
+            db, cleanup_request.tasks
+        )
 
         return result
 
@@ -85,7 +87,9 @@ async def execute_cleanup_tasks(
 
 
 @router.get("/cleanup/status")
-async def get_cleanup_status(_: None = Depends(verify_internal_token)) -> dict:
+async def get_cleanup_status(
+    _: None = Depends(verify_internal_token),
+) -> dict[str, object]:
     """
     获取清理任务状态信息
 

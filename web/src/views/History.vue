@@ -5,13 +5,6 @@
     </div>
 
     <section class="history-surface history-filters" aria-label="历史记录筛选和操作">
-      <div class="history-surface-header">
-        <div>
-          <div class="history-surface-eyebrow">筛选</div>
-          <div class="history-surface-title">搜索与视图选项</div>
-        </div>
-      </div>
-
       <div class="filter-bar">
         <mdui-text-field
           v-model="searchInput"
@@ -47,8 +40,7 @@
     <section class="history-surface history-results" :aria-busy="historyLoading ? 'true' : 'false'">
       <div class="history-surface-header history-results-header">
         <div>
-          <div class="history-surface-eyebrow">结果</div>
-          <div class="history-surface-title">{{ resultsHeadline }}</div>
+          <div class="result-header-title">{{ resultsHeadline }}</div>
         </div>
       </div>
 
@@ -564,15 +556,7 @@ watch(
   padding: 20px 20px 18px;
 }
 
-.history-surface-eyebrow {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
-.history-surface-title {
+.result-header-title {
   margin-top: 4px;
   font-size: 1.08rem;
   font-weight: 600;

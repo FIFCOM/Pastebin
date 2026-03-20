@@ -3,6 +3,7 @@
 """
 
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -11,7 +12,18 @@ from app.models.collab_room import CollabRoom, Member, RoomMember
 from app.models.paste import File, FileUploadSession, Paste
 from app.models.user import UsedRefreshToken, UserSession
 from app.schemas.cleanup import CleanupResponse, CleanupTaskResult
+from app.services.collab_room_realtime_service import (
+    CleanupDisconnectTarget,
+    CollabRoomRealtimeService,
+)
+from app.services.collab_room_service import CollabRoomService
 from config.config import settings
+
+
+@dataclass(frozen=True)
+class ExpiredMemberCleanupActions:
+    closed_room_ids: list[str]
+    disconnected_members: list[CleanupDisconnectTarget]
 
 
 class CleanupService:
@@ -130,6 +142,52 @@ class CleanupService:
 
     @staticmethod
     def cleanup_expired_members(db: Session) -> CleanupTaskResult:
+        result, actions = CleanupService._cleanup_expired_members(db)
+        if not result.success:
+            return result
+
+        try:
+            CollabRoomRealtimeService.run_cleanup_disconnects(
+                closed_room_ids=actions.closed_room_ids,
+                disconnected_members=actions.disconnected_members,
+            )
+        except Exception as e:
+            return CleanupTaskResult(
+                task_name="expired_members",
+                success=False,
+                deleted_count=result.deleted_count,
+                message="过期成员已清理，但实时断连失败",
+                error=str(e),
+            )
+
+        return result
+
+    @staticmethod
+    async def cleanup_expired_members_async(db: Session) -> CleanupTaskResult:
+        result, actions = CleanupService._cleanup_expired_members(db)
+        if not result.success:
+            return result
+
+        try:
+            await CollabRoomRealtimeService.dispatch_cleanup_disconnects(
+                closed_room_ids=actions.closed_room_ids,
+                disconnected_members=actions.disconnected_members,
+            )
+        except Exception as e:
+            return CleanupTaskResult(
+                task_name="expired_members",
+                success=False,
+                deleted_count=result.deleted_count,
+                message="过期成员已清理，但实时断连失败",
+                error=str(e),
+            )
+
+        return result
+
+    @staticmethod
+    def _cleanup_expired_members(
+        db: Session,
+    ) -> tuple[CleanupTaskResult, ExpiredMemberCleanupActions]:
         """
         清理过期的临时成员
 
@@ -143,23 +201,55 @@ class CleanupService:
             # 查找过期的成员
             now = datetime.now(UTC)
             expired_members = db.query(Member).filter(Member.expire_at < now).all()
+            expired_member_ids = {str(member.id) for member in expired_members}
 
             deleted_count = 0
             affected_room_ids: set[str] = set()
+            closed_room_ids: set[str] = set()
+            disconnected_members: dict[tuple[str, str], CleanupDisconnectTarget] = {}
             for member in expired_members:
                 try:
+                    member_id = str(member.id)  # type: ignore
+                    display_name = str(member.display_name)  # type: ignore
+
+                    owned_rooms = (
+                        db.query(CollabRoom)
+                        .filter(CollabRoom.creator_member_id == member_id)
+                        .all()
+                    )
+                    for room in owned_rooms:
+                        successor = CollabRoomService._get_next_owner_membership(
+                            db,
+                            str(room.id),  # type: ignore
+                            excluded_member_ids=expired_member_ids,
+                        )
+                        if successor is None:
+                            closed_room_ids.add(str(room.id))  # type: ignore
+                            db.delete(room)
+                            continue
+
+                        setattr(room, "creator_member_id", str(successor.member_id))
+                        affected_room_ids.add(str(room.id))  # type: ignore
+
                     # 记录该成员参与的房间，用于后续同步 member_count
                     room_ids = (
                         db.query(RoomMember.room_id)
-                        .filter(RoomMember.member_id == str(member.id))  # type: ignore
+                        .filter(RoomMember.member_id == member_id)
                         .all()
                     )
-                    affected_room_ids.update([str(rid) for (rid,) in room_ids])
+                    member_room_ids = [str(rid) for (rid,) in room_ids]
+                    affected_room_ids.update(member_room_ids)
+                    for room_id in member_room_ids:
+                        if room_id in closed_room_ids:
+                            continue
+                        disconnected_members[(room_id, member_id)] = (
+                            CleanupDisconnectTarget(
+                                room_id=room_id,
+                                member_id=member_id,
+                                display_name=display_name,
+                            )
+                        )
 
-                    # Member删除会级联删除：
-                    # - 创建的房间 (CollabRoom)
-                    # - 房间成员关系 (RoomMember)
-                    # - 分享的paste记录 (RoomPaste)
                     db.delete(member)
                     deleted_count += 1
 
@@ -172,29 +262,94 @@ class CleanupService:
                 room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
                 if not room:
                     continue
-                room.member_count = (
-                    db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
-                )  # type: ignore
+                setattr(
+                    room,
+                    "member_count",
+                    db.query(RoomMember).filter(RoomMember.room_id == room_id).count(),
+                )
 
             db.commit()
-
-            return CleanupTaskResult(
-                task_name="expired_members",
-                success=True,
-                deleted_count=deleted_count,
-                message=f"成功清理 {deleted_count} 个过期成员及其关联数据",
-                error=None,
+            return (
+                CleanupTaskResult(
+                    task_name="expired_members",
+                    success=True,
+                    deleted_count=deleted_count,
+                    message=f"成功清理 {deleted_count} 个过期成员及其关联数据",
+                    error=None,
+                ),
+                ExpiredMemberCleanupActions(
+                    closed_room_ids=sorted(closed_room_ids),
+                    disconnected_members=sorted(
+                        disconnected_members.values(),
+                        key=lambda target: (target.room_id, target.member_id),
+                    ),
+                ),
             )
 
         except Exception as e:
             db.rollback()
-            return CleanupTaskResult(
-                task_name="expired_members",
-                success=False,
-                deleted_count=0,
-                message="清理过期成员失败",
-                error=str(e),
+            return (
+                CleanupTaskResult(
+                    task_name="expired_members",
+                    success=False,
+                    deleted_count=0,
+                    message="清理过期成员失败",
+                    error=str(e),
+                ),
+                ExpiredMemberCleanupActions(
+                    closed_room_ids=[],
+                    disconnected_members=[],
+                ),
             )
+
+    @staticmethod
+    async def execute_cleanup_tasks_async(
+        db: Session, task_names: list[str]
+    ) -> CleanupResponse:
+        task_results = []
+        total_deleted = 0
+        overall_success = True
+
+        for task_name in task_names:
+            if task_name == "expired_members":
+                result = await CleanupService.cleanup_expired_members_async(db)
+            else:
+                task_handlers = {
+                    "expired_drafts": CleanupService.cleanup_expired_drafts,
+                    "expired_pastes": CleanupService.cleanup_expired_pastes,
+                    "expired_uploads": CleanupService.cleanup_expired_uploads,
+                    "expired_user_sessions": CleanupService.cleanup_expired_user_sessions,
+                    "expired_used_refresh_tokens": CleanupService.cleanup_expired_used_refresh_tokens,
+                }
+                if task_name not in task_handlers:
+                    result = CleanupTaskResult(
+                        task_name=task_name,
+                        success=False,
+                        deleted_count=0,
+                        message="未知的清理任务",
+                        error=f"不支持的任务类型: {task_name}",
+                    )
+                else:
+                    result = task_handlers[task_name](db)
+
+            task_results.append(result)
+            if result.success:
+                total_deleted += result.deleted_count
+            else:
+                overall_success = False
+
+        if overall_success:
+            message = f"所有清理任务执行成功，共删除 {total_deleted} 条记录"
+        else:
+            success_count = sum(1 for r in task_results if r.success)
+            message = f"{success_count}/{len(task_results)} 个任务执行成功，共删除 {total_deleted} 条记录"
+
+        return CleanupResponse(
+            success=overall_success,
+            total_deleted=total_deleted,
+            task_results=task_results,
+            message=message,
+        )
 
     @staticmethod
     def cleanup_expired_uploads(db: Session) -> CleanupTaskResult:
@@ -288,7 +443,9 @@ class CleanupService:
     def cleanup_expired_used_refresh_tokens(db: Session) -> CleanupTaskResult:
         """清理过期 refresh token 使用记录（避免 UsedRefreshToken 表无限增长）"""
         try:
-            cutoff = datetime.now(UTC) - timedelta(days=settings.refresh_token_expire_days)
+            cutoff = datetime.now(UTC) - timedelta(
+                days=settings.refresh_token_expire_days
+            )
             q = db.query(UsedRefreshToken).filter(UsedRefreshToken.used_at < cutoff)
             deleted_count = q.count()
             q.delete(synchronize_session=False)
@@ -321,15 +478,14 @@ class CleanupService:
         """
         # 获取paste的内容文件路径
         paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        if paste and paste.content_path:  # type: ignore
+        content_path = getattr(paste, "content_path", None) if paste else None
+        if content_path:
             try:
-                content_file_path = os.path.join(
-                    settings.data_dir, str(paste.content_path)
-                )
+                content_file_path = os.path.join(settings.data_dir, str(content_path))
                 if os.path.exists(content_file_path):
                     os.remove(content_file_path)
             except Exception as e:
-                print(f"删除内容文件 {paste.content_path} 时出错: {e}")
+                print(f"删除内容文件 {content_path} 时出错: {e}")
 
         # 获取并删除关联的文件
         files = db.query(File).filter(File.paste_id == paste_id).all()
