@@ -9,6 +9,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/PasteEditor.vue')
   },
   {
+    path: '/join/:pin',
+    name: 'JoinLanding',
+    component: () => import('../views/PasteEditor.vue')
+  },
+  {
     path: '/p/:paste_id/download/:file_id',
     name: 'FileDownload',
     component: () => import('../views/FileDownload.vue')
@@ -32,16 +37,6 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/collab',
     redirect: '/'
-  },
-  {
-    path: '/join/:pin',
-    name: 'CollabJoin',
-    component: () => import('../views/CollabJoin.vue')
-  },
-  {
-    path: '/rooms/:roomId',
-    name: 'CollabRoom',
-    component: () => import('../views/CollabRoom.vue')
   },
   {
     path: '/install',

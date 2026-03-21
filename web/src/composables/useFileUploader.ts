@@ -59,7 +59,7 @@ async function computeDedupeFingerprint(
       const hex = await sha256HexOfFile(file)
       return `sha256:${hex}`
     } catch {
-      // fallback below
+      // 继续走下面的元信息去重分支
     }
   }
 
@@ -299,7 +299,7 @@ export function useFileUploader(params: {
       let total_chunks = 0
       const uploadedChunks = new Set<number>()
 
-      // 断点续传：优先复用旧 uploadId
+      // 断点续传：优先复用已有 uploadId
       if (options?.resumeUploadId) {
         try {
           const status = await getFileUploadStatus(
@@ -326,7 +326,7 @@ export function useFileUploader(params: {
             allowIncrease: true
           })
         } catch (e) {
-          console.warn('Resume status failed, fallback to init:', e)
+          console.warn('Resume status failed, re-init upload session:', e)
         }
       }
 

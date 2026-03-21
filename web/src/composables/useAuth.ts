@@ -59,7 +59,7 @@ async function initAuth(): Promise<void> {
         currentUser.value = await fetchCurrentUser()
         return
       } catch {
-        // ignore: fallback to refresh cookie
+        // ignore: 改为尝试通过 refresh cookie 恢复会话
       }
     }
 

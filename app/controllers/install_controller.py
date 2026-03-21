@@ -71,6 +71,7 @@ ADVANCED_ENV_KEYS = {
     "VERSION",
     "UPLOAD_EXPIRE_SECONDS",
     "MAX_CONCURRENT_UPLOADS",
+    "COLLAB_ROOM_MAX_MEMBERS",
 }
 PLACEHOLDER_SECRET_VALUES = {
     "SECRET_KEY": "your-secret-key-change-this-in-production",

@@ -473,7 +473,7 @@ class PasteService:
             # 原子移动到最终路径
             assembled_tmp.replace(final_path)
 
-            # 写入manifest（避免DB迁移；下载/解密时可用）
+            # 写入manifest，供下载与解密时使用
             manifest = {
                 "version": 1,
                 "paste_id": paste_id,

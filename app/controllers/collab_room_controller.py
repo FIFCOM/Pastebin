@@ -76,6 +76,34 @@ async def get_member_token(
         ) from None
 
 
+@router.post("/rooms/member-token/refresh", response_model=MemberTokenResponse)
+async def refresh_member_token(
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    """
+    刷新当前房间成员身份显示名。
+
+    - 使用 `X-Member-Token` 传入现有 member_token
+    - 若当前已登录，则同步为当前用户名
+    - 返回新的 member_token 与 display_name
+    """
+    if not x_member_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少X-Member-Token头",
+        )
+
+    try:
+        user_id = current_user.id if current_user else None
+        return CollabRoomService.refresh_member_identity(db, x_member_token, user_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
 @router.post("/rooms", response_model=RoomCreateResponse)
 async def create_room(
     room_data: RoomCreateRequest,
@@ -87,10 +115,7 @@ async def create_room(
 
     需要在Authorization头中提供member_token: Bearer {member_token}
 
-    当前创建临时公共房间时不接受自定义房间参数：
-
-    - 房间名称固定为“临时公共房间”
-    - 最大成员数由后端配置控制
+    当前不接受任何自定义房间参数，最大成员数由后端配置控制。
     """
     member_token = _get_member_token_from_header(authorization)
 
@@ -207,6 +232,7 @@ async def share_paste_to_room(
 
     - **paste_id**: Paste ID
     - **encrypted_paste_key**: 用room_key加密的paste密钥
+    - **encrypted_admin_key**: 可选，用room_key加密的admin_key；提供后接收者可进入编辑
     - **target_member_id**: 目标接收者ID，不提供则发送给所有人
     """
     member_token = _get_member_token_from_header(authorization)

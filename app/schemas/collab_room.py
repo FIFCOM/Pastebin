@@ -25,9 +25,20 @@ class RoomJoinRequest(BaseModel):
     @classmethod
     def validate_pin_code(cls, v):
         """验证PIN码格式"""
-        if not v.isalnum():
-            raise ValueError("PIN码必须是6位字母数字组合")
-        return v.upper()  # 统一转为大写
+        replacement_map = {
+            "O": "0",
+            "I": "1",
+            "L": "1",
+        }
+        allowed = set("ABCDEFGHJKMNPQRSTUVWXYZ0123456789")
+        normalized = "".join(
+            replacement_map.get(ch, ch)
+            for ch in v.strip().upper()
+            if replacement_map.get(ch, ch) in allowed
+        )
+        if len(normalized) != 6:
+            raise ValueError("PIN码必须是6位不易混淆的字母数字组合")
+        return normalized
 
 
 class PasteShareRequest(BaseModel):
@@ -36,6 +47,11 @@ class PasteShareRequest(BaseModel):
     paste_id: str = Field(..., max_length=32, description="Paste ID")
     encrypted_paste_key: str = Field(
         ..., max_length=4096, description="用room_key加密的paste密钥（Base64）"
+    )
+    encrypted_admin_key: str | None = Field(
+        None,
+        max_length=4096,
+        description="可选：用room_key加密的admin_key（Base64），提供后接收者可进入编辑",
     )
     target_member_id: str | None = Field(
         None, description="目标接收者ID，不提供则发送给所有人"
@@ -69,7 +85,6 @@ class RoomCreateResponse(BaseModel):
     """创建房间响应"""
 
     room_id: str = Field(..., description="房间ID")
-    room_name: str = Field(..., description="房间名称")
     pin_code: str = Field(..., description="6位PIN码")
     join_url: str = Field(..., description="加入链接")
     max_members: int = Field(..., description="最大成员数")
@@ -79,7 +94,6 @@ class RoomInfoResponse(BaseModel):
     """房间信息响应（通过PIN码获取）"""
 
     room_id: str = Field(..., description="房间ID")
-    room_name: str = Field(..., description="房间名称")
     member_count: int = Field(..., description="当前成员数")
     max_members: int = Field(..., description="最大成员数")
 
@@ -120,6 +134,9 @@ class SharedPasteInfo(BaseModel):
     paste_id: str = Field(..., description="Paste ID")
     title: str | None = Field(default=None, description="Paste标题")
     encrypted_paste_key: str = Field(..., description="加密的Paste密钥")
+    encrypted_admin_key: str | None = Field(
+        default=None, description="加密的管理密钥，存在时表示可编辑"
+    )
     shared_by: str = Field(..., description="分享者成员ID")
     target_member: str | None = Field(
         None, description="目标接收者成员ID，null表示群发"

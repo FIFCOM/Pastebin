@@ -15,7 +15,7 @@
     <div class="header-spacer"></div>
 
     <!-- 功能图标按钮 -->
-    <mdui-button-icon aria-label="打开协作房间" @click="openCollabDialog">
+    <mdui-button-icon aria-label="打开加入房间界面" @click="handleOpenJoinDialog">
       <mdui-icon-groups />
     </mdui-button-icon>
     <mdui-button-icon aria-label="查看历史记录" @click="goHistory">
@@ -82,7 +82,7 @@ import { useAppSidebarState } from '../composables/useAppSidebarState'
 import { useCollabDialogState } from '../composables/useCollabDialogState'
 const { isLoggedIn, currentUser, logout } = useAuth()
 const { toggleAppSidebar } = useAppSidebarState()
-const { openCollabDialog } = useCollabDialogState()
+const { openJoinDialog } = useCollabDialogState()
 
 const router = useRouter()
 const route = useRoute()
@@ -121,6 +121,10 @@ const goUserManagement = () => {
 
 const goHistory = () => {
   router.push('/history')
+}
+
+const handleOpenJoinDialog = () => {
+  openJoinDialog()
 }
 
 const handleMenuClick = () => {

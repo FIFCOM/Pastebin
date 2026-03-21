@@ -64,7 +64,8 @@ class CollabRoomService:
     # JWT密钥（应该从配置中获取）
     JWT_SECRET: str = settings.member_token_secret_key
     JWT_ALGORITHM: str = "HS256"
-    DEFAULT_ROOM_NAME: str = "临时公共房间"
+    PIN_CODE_LENGTH = 6
+    PIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ0123456789"
 
     @staticmethod
     def _generate_display_name_for_guest() -> str:
@@ -78,8 +79,42 @@ class CollabRoomService:
     @staticmethod
     def _generate_pin_code() -> str:
         """生成6位PIN码"""
-        chars = string.ascii_uppercase + string.digits
-        return "".join(secrets.choice(chars) for _ in range(6))
+        chars = CollabRoomService.PIN_CODE_ALPHABET
+        return "".join(
+            secrets.choice(chars) for _ in range(CollabRoomService.PIN_CODE_LENGTH)
+        )
+
+    @staticmethod
+    def _normalize_pin_code(pin_code: str) -> str:
+        replacement_map = {
+            "O": "0",
+            "I": "1",
+            "L": "1",
+        }
+        allowed = set(CollabRoomService.PIN_CODE_ALPHABET)
+        normalized = "".join(
+            replacement_map.get(ch, ch)
+            for ch in pin_code.strip().upper()
+            if replacement_map.get(ch, ch) in allowed
+        )[: CollabRoomService.PIN_CODE_LENGTH]
+        return normalized
+
+    @staticmethod
+    def _get_room_by_pin_code(
+        db: Session, pin_code: str, room_id: str | None = None
+    ) -> CollabRoom | None:
+        normalized = CollabRoomService._normalize_pin_code(pin_code)
+        if len(normalized) != CollabRoomService.PIN_CODE_LENGTH:
+            return None
+
+        exact_query = db.query(CollabRoom)
+        if room_id:
+            exact_query = exact_query.filter(CollabRoom.id == room_id)
+
+        exact_room = exact_query.filter(CollabRoom.pin_code == normalized).first()
+        if exact_room:
+            return exact_room
+        return None
 
     @staticmethod
     def _generate_room_key() -> str:
@@ -289,6 +324,42 @@ class CollabRoomService:
         )
 
     @staticmethod
+    def refresh_member_identity(
+        db: Session, member_token: str, user_id: int | None = None
+    ) -> MemberTokenResponse:
+        """
+        刷新成员身份显示名，并返回新的成员令牌。
+
+        - 保持同一个 member_id，不破坏已加入房间的成员关系
+        - 已登录时将显示名同步为当前用户名
+        - 同时延长成员过期时间 24 小时
+        """
+        _, member = CollabRoomService._get_member_by_token(db, member_token)
+
+        next_display_name = str(getattr(member, "display_name"))
+        next_user_id = getattr(member, "user_id", None)
+
+        if user_id is not None:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise ValueError("用户不存在")
+            next_display_name = str(user.username)  # type: ignore[arg-type]
+            next_user_id = user_id
+
+        setattr(member, "display_name", next_display_name)
+        setattr(member, "user_id", next_user_id)
+        setattr(member, "expire_at", datetime.now(UTC) + timedelta(hours=24))
+
+        db.commit()
+        db.refresh(member)
+
+        token = CollabRoomService._create_member_token(member)
+        return MemberTokenResponse(
+            member_token=token,
+            display_name=next_display_name,
+        )
+
+    @staticmethod
     def create_room(
         db: Session, member_token: str, room_data: RoomCreateRequest
     ) -> RoomCreateResponse:
@@ -320,7 +391,6 @@ class CollabRoomService:
 
             room = CollabRoom(
                 creator_member_id=str(member.id),  # type: ignore
-                room_name=CollabRoomService.DEFAULT_ROOM_NAME,
                 pin_code=pin_code,
                 room_key=room_key,
                 max_members=settings.collab_room_max_members,
@@ -351,7 +421,6 @@ class CollabRoomService:
             db.refresh(room)
             return RoomCreateResponse(
                 room_id=str(room.id),  # type: ignore
-                room_name=str(room.room_name),  # type: ignore
                 pin_code=pin_code,
                 join_url=build_join_url(pin_code),
                 max_members=int(room.max_members),  # type: ignore[arg-type]
@@ -371,9 +440,7 @@ class CollabRoomService:
         Returns:
             房间信息响应
         """
-        room = (
-            db.query(CollabRoom).filter(CollabRoom.pin_code == pin_code.upper()).first()
-        )
+        room = CollabRoomService._get_room_by_pin_code(db, pin_code)
         if not room:
             raise ValueError("房间不存在")
 
@@ -383,7 +450,6 @@ class CollabRoomService:
         )
         return RoomInfoResponse(
             room_id=str(room.id),  # type: ignore
-            room_name=str(room.room_name),  # type: ignore
             member_count=int(member_count),
             max_members=int(
                 getattr(room, "max_members", 10)
@@ -411,16 +477,7 @@ class CollabRoomService:
         _, member = CollabRoomService._get_member_by_token(db, member_token)
 
         # 获取房间
-        room = (
-            db.query(CollabRoom)
-            .filter(
-                and_(
-                    CollabRoom.id == room_id,
-                    CollabRoom.pin_code == join_data.pin_code.upper(),
-                )
-            )
-            .first()
-        )
+        room = CollabRoomService._get_room_by_pin_code(db, join_data.pin_code, room_id)
         if not room:
             raise ValueError("房间不存在或PIN码错误")
 
@@ -595,6 +652,7 @@ class CollabRoomService:
             shared_by_member_id=context.payload.member_id,
             target_member_id=share_data.target_member_id,
             encrypted_paste_key=share_data.encrypted_paste_key,
+            encrypted_admin_key=share_data.encrypted_admin_key,
         )
 
         db.add(room_paste)
@@ -608,6 +666,11 @@ class CollabRoomService:
             paste_id=str(room_paste.paste_id),  # type: ignore
             title=str(paste_title) if paste_title is not None else None,
             encrypted_paste_key=str(room_paste.encrypted_paste_key),  # type: ignore
+            encrypted_admin_key=(
+                str(room_paste.encrypted_admin_key)
+                if room_paste.encrypted_admin_key is not None
+                else None
+            ),
             shared_by=str(room_paste.shared_by_member_id),  # type: ignore
             target_member=str(target_member_id)
             if target_member_id is not None
@@ -677,6 +740,11 @@ class CollabRoomService:
                     paste_id=str(room_paste_record.paste_id),  # type: ignore
                     title=str(paste_title) if paste_title is not None else None,
                     encrypted_paste_key=str(room_paste_record.encrypted_paste_key),  # type: ignore
+                    encrypted_admin_key=(
+                        str(room_paste_record.encrypted_admin_key)
+                        if room_paste_record.encrypted_admin_key is not None
+                        else None
+                    ),
                     shared_by=str(room_paste_record.shared_by_member_id),  # type: ignore
                     target_member=(
                         str(target_member_id) if target_member_id is not None else None

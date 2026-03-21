@@ -1,15 +1,15 @@
 <template>
   <div class="app-shell">
-      <mdui-layout class="app-layout" full-height>
-        <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
-        <AppSidebar v-if="!isInstallRoute"></AppSidebar>
-        <mdui-layout-main class="app-main">
-          <div class="app-main-shell">
-            <router-view />
-          </div>
-        </mdui-layout-main>
-      </mdui-layout>
-      <CollabRoomDialog v-if="!isInstallRoute"></CollabRoomDialog>
+    <mdui-layout class="app-layout" full-height>
+      <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
+      <AppSidebar v-if="!isInstallRoute"></AppSidebar>
+      <mdui-layout-main class="app-main">
+        <div class="app-main-shell">
+          <router-view />
+        </div>
+      </mdui-layout-main>
+    </mdui-layout>
+    <CollabJoinDialog v-if="!isInstallRoute"></CollabJoinDialog>
     <GlobalFooter v-if="!isInstallRoute"></GlobalFooter>
   </div>
 </template>
@@ -21,7 +21,7 @@ import 'mdui'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
-import CollabRoomDialog from './components/collab/CollabRoomDialog.vue'
+import CollabJoinDialog from './components/collab/CollabJoinDialog.vue'
 import GlobalHeader from './components/GlobalHeader.vue'
 import GlobalFooter from './components/GlobalFooter.vue'
 import { useAppSidebarState } from './composables/useAppSidebarState'

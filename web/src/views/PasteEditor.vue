@@ -71,17 +71,24 @@
 
           <!-- 操作按钮 -->
           <div class="editor-actions">
-            <mdui-button
-              v-if="activeRoom"
-              class="room-status-button"
-              variant="tonal"
-              @click="openCollabDialog"
-            >
-              <mdui-icon slot="icon" name="groups"></mdui-icon>
-              {{ activeRoomButtonLabel }}
-            </mdui-button>
+            <div v-if="activeRoom" class="collab-entry">
+              <mdui-button
+                class="room-status-button"
+                variant="tonal"
+                :class="{ 'share-prompt-button': shouldPromptShare }"
+                @click="handleOpenCollabEntry"
+              >
+                <mdui-icon slot="icon" name="groups"></mdui-icon>
+                {{ collabButtonLabel }}
+              </mdui-button>
+            </div>
             <div class="submit-wrapper" :class="{ disabled: isSubmitDisabled }" @click="handleSubmitClick">
-              <mdui-button variant="filled" :disabled="isSubmitDisabled" :loading="isSubmitting">
+              <mdui-button
+                :key="submitButtonStateKey"
+                variant="filled"
+                :disabled="isSubmitDisabled"
+                :loading="isSubmitting"
+              >
                 <mdui-icon slot="icon" name="send"></mdui-icon>
                 {{ isEditingExisting ? '保存修改' : '提交' }}
               </mdui-button>
@@ -102,15 +109,28 @@
             :expire-time="expireTime"
             :access-key="accessKey"
             :max-views="maxViews"
+            :show-collab-action="!!activeRoom"
+            :collab-action-label="publishCollabButtonLabel"
+            :collab-action-highlighted="shouldPromptShare"
             @update:expire-time="expireTime = $event"
             @update:access-key="accessKey = $event"
             @update:max-views="maxViews = $event"
             @edit="handleEditExisting"
             @new="handleCreateNew"
+            @collab="handleOpenCollabEntry"
           />
         </div>
       </div>
     </div>
+
+    <CollabWorkspaceDialog
+      :current-paste-id="currentPasteId"
+      :current-admin-key="currentAdminKey"
+      :current-paste-title="title.trim()"
+      :current-paste-url="pasteUrl"
+      :encryption-key="encryptionKey"
+      @shared-current-paste="handleCurrentPasteShared"
+    />
   </div>
 </template>
 
@@ -121,11 +141,13 @@ import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
+import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import PlainEditor from '../components/editors/Plain.vue'
 import MarkdownEditor from '../components/editors/Markdown.vue'
 import FileUploader from '../components/upload/FileUploader.vue'
 import PublishPanel from '../components/editors/PublishPanel.vue'
+import CollabWorkspaceDialog from '../components/collab/CollabWorkspaceDialog.vue'
 import { isImageFileName } from '../composables/useFile'
 import {
   generateRandomId,
@@ -146,13 +168,28 @@ import {
 } from '../services/paste'
 import { useAuth } from '../composables/useAuth'
 import { useCollabDialogState } from '../composables/useCollabDialogState'
+import { buildUnreadPasteKey, useCollabUnreadPastes } from '../composables/useCollabUnreadPastes'
+import { useRoomPresenceSync } from '../composables/useRoomPresenceSync'
 import { useRoomSession } from '../composables/useRoomSession'
 import { useHistory } from '../composables/useHistory'
 
 const { currentUser } = useAuth()
 const { addToHistory } = useHistory()
-const { openCollabDialog } = useCollabDialogState()
+const { openJoinDialog, openWorkspaceDialog, isWorkspaceDialogOpen } = useCollabDialogState()
 const { activeRoom } = useRoomSession()
+const { markUnreadPaste } = useCollabUnreadPastes()
+const isIncomingSharePromptOpen = ref(false)
+const lastIncomingSharePromptKey = ref('')
+
+useRoomPresenceSync({
+  onPasteShared: (event) => {
+    const eventKey = `${event.paste_id}-${event.timestamp}`
+    if (lastIncomingSharePromptKey.value === eventKey) return
+    lastIncomingSharePromptKey.value = eventKey
+    markUnreadPaste(activeRoom.value?.roomId, buildUnreadPasteKey(event.paste_id, event.timestamp))
+    void promptOpenWorkspaceForIncomingShare()
+  }
+})
 const route = useRoute()
 const router = useRouter()
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
@@ -167,6 +204,7 @@ const titleInputRef = ref<any>(null)
 const isSubmitting = ref(false)
 const showPublishPanel = ref(false)
 const isEditingExisting = ref(false)
+const shouldPromptShare = ref(false)
 
 // Paste信息
 const currentPasteId = ref('')
@@ -201,12 +239,21 @@ const pasteUrl = computed(() => {
   return url
 })
 
-const activeRoomButtonLabel = computed(() => {
-  if (!activeRoom.value) return ''
+const roomHasGuests = computed(() => (activeRoom.value?.memberCount ?? 0) > 1)
+
+const collabButtonLabel = computed(() => {
+  if (!activeRoom.value) return '加入协作'
   const roomIdLabel = activeRoom.value.pinCode || activeRoom.value.roomId
   const joinedCount = activeRoom.value.memberCount ?? '—'
   const maxMembersText = activeRoom.value.maxMembers ?? '—'
-  return `房间${roomIdLabel} ${joinedCount}/${maxMembersText}`
+  if (shouldPromptShare.value && currentPasteId.value && encryptionKey.value) return '发送当前 Paste'
+  return `房间${roomIdLabel} (${joinedCount}/${maxMembersText})`
+})
+
+const publishCollabButtonLabel = computed(() => {
+  if (!activeRoom.value) return '共享'
+  if (shouldPromptShare.value && currentPasteId.value && encryptionKey.value) return '去共享'
+  return '共享'
 })
 
 // 文件上传
@@ -228,11 +275,53 @@ const isSubmitDisabled = computed(
     isUploaderUploading.value ||
     isBootstrappingEdit.value
 )
+const submitButtonStateKey = computed(
+  () =>
+    `${isSubmitDisabled.value ? 1 : 0}:${isSubmitting.value ? 1 : 0}:${isEditingExisting.value ? 1 : 0}:${currentPasteId.value}`
+)
+
+async function promptOpenWorkspaceForIncomingShare(): Promise<void> {
+  if (isIncomingSharePromptOpen.value || isWorkspaceDialogOpen.value) return
+
+  isIncomingSharePromptOpen.value = true
+  try {
+    await confirm({
+      headline: '收到新的共享',
+      description: '房间里有人发来了新的 Paste，是否现在打开查看？',
+      confirmText: '查看',
+      cancelText: '稍后',
+      closeOnEsc: true,
+      closeOnOverlayClick: true
+    })
+
+    openWorkspaceDialog('overview')
+  } catch {
+    return
+  } finally {
+    isIncomingSharePromptOpen.value = false
+  }
+}
 
 function firstQueryValue(value: unknown): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
   return ''
+}
+
+function currentInvitePinFromRoute(): string {
+  const rawPin = firstQueryValue(route.params.pin).trim().toUpperCase()
+  const replacementMap: Record<string, string> = {
+    O: '0',
+    I: '1',
+    L: '1'
+  }
+  const allowedChars = new Set('ABCDEFGHJKMNPQRSTUVWXYZ0123456789'.split(''))
+  return rawPin
+    .split('')
+    .map((ch) => replacementMap[ch] ?? ch)
+    .filter((ch) => allowedChars.has(ch))
+    .join('')
+    .slice(0, 6)
 }
 
 interface EditBootstrapContext {
@@ -370,6 +459,18 @@ const handleSubmitClick = async () => {
     return
   }
   snackbar({ message: '内容不能为空', closeable: true })
+}
+
+function handleOpenCollabEntry(): void {
+  if (!activeRoom.value) {
+    return
+  }
+
+  openWorkspaceDialog(shouldPromptShare.value ? 'share' : 'overview')
+}
+
+function handleCurrentPasteShared(): void {
+  shouldPromptShare.value = false
 }
 
 const toggleUploader = () => {
@@ -547,6 +648,7 @@ const handleSubmit = async () => {
     showUploader.value = false
     showPublishPanel.value = true
     isEditingExisting.value = false
+    shouldPromptShare.value = roomHasGuests.value && Boolean(currentPasteId.value && encryptionKey.value)
     snackbar({ message: '已保存' })
     // 保存到历史记录（游客写本地，已登录写服务端）
     void addToHistory(
@@ -574,6 +676,7 @@ const handleCreateNew = () => {
   showPublishPanel.value = false
   showUploader.value = false
   isEditingExisting.value = false
+  shouldPromptShare.value = false
   resetForm()
 }
 
@@ -581,6 +684,7 @@ const handleEditExisting = () => {
   showPublishPanel.value = false
   showUploader.value = false
   isEditingExisting.value = true
+  shouldPromptShare.value = false
 }
 
 // 重置表单
@@ -597,6 +701,7 @@ const resetForm = () => {
   expireTime.value = '30d'
   maxViews.value = -1
   accessKey.value = ''
+  shouldPromptShare.value = false
 }
 
 // 生命周期钩子
@@ -609,8 +714,30 @@ onMounted(() => {
     // 如果没有保存的偏好，默认使用 txt
     contentType.value = 'txt'
   }
+})
 
-  void tryBootstrapEditContextFromRoute()
+watch(
+  () => route.params.pin,
+  () => {
+    if (route.name !== 'JoinLanding') return
+    openJoinDialog(currentInvitePinFromRoute())
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [firstQueryValue(route.query.edit), firstQueryValue(route.query.paste_id)] as const,
+  ([editFlag, pasteId]) => {
+    if (editFlag !== '1' && !pasteId.trim()) return
+    void tryBootstrapEditContextFromRoute()
+  },
+  { immediate: true }
+)
+
+watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
+  if (!room || !hasGuests) {
+    shouldPromptShare.value = false
+  }
 })
 </script>
 
@@ -655,8 +782,18 @@ onMounted(() => {
   gap: 12px;
 }
 
-.room-status-button {
+.collab-entry {
+  display: grid;
+  gap: 6px;
   margin-right: auto;
+}
+
+.room-status-button {
+  justify-self: start;
+}
+
+.share-prompt-button {
+  animation: collabPulse 1.5s ease-in-out infinite;
 }
 
 .submit-wrapper {
@@ -717,5 +854,31 @@ onMounted(() => {
 
 .publish-panel-wrapper.expanded > .publish-panel-inner {
   pointer-events: auto;
+}
+
+@keyframes collabPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgb(var(--mdui-color-primary) / 0);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 6px rgb(var(--mdui-color-primary) / 0.08);
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-actions {
+    flex-wrap: nowrap;
+  }
+
+  .collab-entry {
+    margin-right: auto;
+  }
+
+  .submit-wrapper :deep(mdui-button) {
+    width: auto;
+  }
 }
 </style>

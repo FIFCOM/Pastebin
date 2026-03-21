@@ -5,7 +5,6 @@
 from app.core.database import Base, engine
 from config.config import settings
 
-
 def create_tables():
     """创建所有数据库表"""
     print("正在创建数据库表...")

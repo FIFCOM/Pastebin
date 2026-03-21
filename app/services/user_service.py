@@ -154,8 +154,7 @@ class UserService:
         用户认证
 
         说明：
-        - login_data.username 字段可以填写「用户名」或「邮箱」
-        - 为了兼容当前注册流程（只能输入邮箱），这里同时按 username 和 email 匹配
+        - 当前登录使用邮箱认证
 
         Args:
             db: 数据库会话

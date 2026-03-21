@@ -172,7 +172,7 @@ apiHttp.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     } catch (err) {
       if (isAuthDenied(err)) {
         clearAccessToken()
-        // refresh 已被拒绝，不再携带旧 token 发请求
+        // refresh 已被拒绝，不再携带当前 token 发请求
         headers.delete('Authorization')
         config.headers = headers
         throw err

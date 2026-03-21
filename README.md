@@ -200,7 +200,7 @@ npm run dev
 - `next_index`：建议继续上传的下一个分片索引（若已齐全则等于 `total_chunks`）
 
 前端实现（Web）：
-- 上传失败后点击“重试”会优先复用旧 `upload_id` 调用 status，跳过已上传分片继续上传；若会话过期/不匹配则回退到重新 `init`
+- 上传失败后点击“重试”会优先复用已有 `upload_id` 调用 status，跳过已上传分片继续上传；若会话过期/不匹配则重新 `init`
 - 多文件同时上传默认并发为 `10`，超出会排队（可在 `web/src/services/config.ts` 的 `DEFAULT_UPLOAD_CONCURRENCY` 调整）
 
 #### 3) 完成上传（complete）

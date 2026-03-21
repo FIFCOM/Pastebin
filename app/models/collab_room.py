@@ -77,7 +77,6 @@ class CollabRoom(Base):
         nullable=False,
         index=True,
     )  # 级联删除
-    room_name = Column(String(255), nullable=False)
     pin_code = Column(String(6), unique=True, nullable=False, index=True)  # 6位字母数字
     room_key = Column(Text, nullable=False)  # 房间密钥，用于加密消息
 
@@ -104,7 +103,7 @@ class CollabRoom(Base):
     )
 
     def __repr__(self):
-        return f"<CollabRoom(id={self.id}, room_name={self.room_name}, pin_code={self.pin_code})>"
+        return f"<CollabRoom(id={self.id}, pin_code={self.pin_code})>"
 
 
 class RoomMember(Base):
@@ -182,6 +181,7 @@ class RoomPaste(Base):
     )  # 目标接收者，null表示发送给所有人
 
     encrypted_paste_key = Column(Text, nullable=False)  # 用room_key加密的paste密钥
+    encrypted_admin_key = Column(Text, nullable=True)  # 用room_key加密的admin_key
 
     shared_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 

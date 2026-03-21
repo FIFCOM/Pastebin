@@ -100,8 +100,21 @@
     </div>
 
     <div class="panel-actions">
-      <mdui-button variant="text" @click="$emit('edit')">编辑</mdui-button>
-      <mdui-button variant="tonal" @click="$emit('new')">新建</mdui-button>
+      <div class="panel-actions-start">
+        <mdui-button variant="text" @click="$emit('edit')">编辑</mdui-button>
+        <mdui-button
+          v-if="showCollabAction"
+          class="panel-collab-button"
+          variant="tonal"
+          :class="{ 'share-prompt-button': collabActionHighlighted }"
+          @click="$emit('collab')"
+        >
+          <mdui-icon slot="icon" name="groups"></mdui-icon>
+          {{ collabActionLabel }}
+        </mdui-button>
+      </div>
+
+      <mdui-button class="panel-action-new" variant="tonal" @click="$emit('new')">新建</mdui-button>
     </div>
   </div>
 </template>
@@ -131,6 +144,9 @@ const props = defineProps<{
   expireTime: ExpireTime
   accessKey: string
   maxViews: number
+  showCollabAction?: boolean
+  collabActionLabel?: string
+  collabActionHighlighted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -139,6 +155,7 @@ const emit = defineEmits<{
   (e: 'update:maxViews', value: number): void
   (e: 'edit'): void
   (e: 'new'): void
+  (e: 'collab'): void
 }>()
 
 const localExpireTime = ref<ExpireTime>(props.expireTime)
@@ -498,8 +515,41 @@ syncMaxViewsModeFromValue()
 .panel-actions {
   margin-top: 16px;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.panel-actions-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.panel-action-new {
+  margin-left: auto;
+}
+
+.panel-collab-button {
+  --container-color: rgb(var(--mdui-color-secondary-container));
+  --label-text-color: rgb(var(--mdui-color-on-secondary-container));
+}
+
+.share-prompt-button {
+  animation: collabPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes collabPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgb(var(--mdui-color-primary) / 0);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 6px rgb(var(--mdui-color-primary) / 0.08);
+  }
 }
 
 .full-width {

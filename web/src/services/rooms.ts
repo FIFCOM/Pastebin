@@ -12,7 +12,6 @@ export interface CreateRoomRequest {}
 
 export interface CreateRoomResponse {
   room_id: string
-  room_name: string
   pin_code: string
   join_url: string
   max_members: number
@@ -20,7 +19,6 @@ export interface CreateRoomResponse {
 
 export interface RoomInfoResponse {
   room_id: string
-  room_name: string
   member_count: number
   max_members: number
 }
@@ -53,6 +51,7 @@ export interface SharedPasteRecord {
   paste_id: string
   title: string | null
   encrypted_paste_key: string
+  encrypted_admin_key: string | null
   shared_by: string
   target_member: string | null
   shared_at: string
@@ -67,6 +66,7 @@ export interface RoomPastesResponse {
 export interface SharePasteRequest {
   paste_id: string
   encrypted_paste_key: string
+  encrypted_admin_key?: string
   target_member_id?: string
 }
 
@@ -129,6 +129,15 @@ export function resolveRoomWsUrl(wsUrl: string): string {
 
 export async function createMemberToken(): Promise<MemberTokenResponse> {
   const response = await apiHttp.post<MemberTokenResponse>('/rooms/member-token')
+  return response.data
+}
+
+export async function refreshMemberToken(memberToken: string): Promise<MemberTokenResponse> {
+  const response = await apiHttp.post<MemberTokenResponse>('/rooms/member-token/refresh', null, {
+    headers: {
+      'X-Member-Token': memberToken
+    }
+  })
   return response.data
 }
 
