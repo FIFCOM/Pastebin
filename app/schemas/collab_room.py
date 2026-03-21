@@ -13,10 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class RoomCreateRequest(BaseModel):
-    """创建协作房间请求"""
-
-    room_name: str = Field(..., max_length=255, description="房间名称")
-    max_members: int = Field(10, ge=2, le=100, description="最大成员数量，范围2-100")
+    """创建协作房间请求（当前无需自定义参数）"""
 
 
 class RoomJoinRequest(BaseModel):
@@ -72,8 +69,10 @@ class RoomCreateResponse(BaseModel):
     """创建房间响应"""
 
     room_id: str = Field(..., description="房间ID")
+    room_name: str = Field(..., description="房间名称")
     pin_code: str = Field(..., description="6位PIN码")
     join_url: str = Field(..., description="加入链接")
+    max_members: int = Field(..., description="最大成员数")
 
 
 class RoomInfoResponse(BaseModel):

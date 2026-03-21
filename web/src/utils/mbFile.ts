@@ -1,3 +1,5 @@
+import { buildAppPath } from './appUrl'
+
 export const MB_INTERNAL_FILE_PATH_RE =
   /^\/api\/pastes\/([A-Za-z0-9_-]+)\/files\/([0-9a-fA-F-]{36})$/
 
@@ -39,6 +41,5 @@ export function buildMbDownloadPageHref(
     if (!v) return ''
     return v.startsWith('#') ? v : `#${v}`
   })()
-  return `/p/${pasteId}/download/${fileId}${hash}`
+  return `${buildAppPath(`/p/${pasteId}/download/${fileId}`)}${hash}`
 }
-

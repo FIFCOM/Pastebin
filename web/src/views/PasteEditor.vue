@@ -71,6 +71,15 @@
 
           <!-- 操作按钮 -->
           <div class="editor-actions">
+            <mdui-button
+              v-if="activeRoom"
+              class="room-status-button"
+              variant="tonal"
+              @click="openCollabDialog"
+            >
+              <mdui-icon slot="icon" name="groups"></mdui-icon>
+              {{ activeRoomButtonLabel }}
+            </mdui-button>
             <div class="submit-wrapper" :class="{ disabled: isSubmitDisabled }" @click="handleSubmitClick">
               <mdui-button variant="filled" :disabled="isSubmitDisabled" :loading="isSubmitting">
                 <mdui-icon slot="icon" name="send"></mdui-icon>
@@ -126,6 +135,7 @@ import {
   keyToUrlSafeStr,
   urlSafeStrToKey
 } from '../utils/crypto'
+import { buildAbsoluteAppUrl } from '../utils/appUrl'
 import {
   createPaste,
   getPaste,
@@ -135,10 +145,14 @@ import {
   updatePaste
 } from '../services/paste'
 import { useAuth } from '../composables/useAuth'
+import { useCollabDialogState } from '../composables/useCollabDialogState'
+import { useRoomSession } from '../composables/useRoomSession'
 import { useHistory } from '../composables/useHistory'
 
 const { currentUser } = useAuth()
 const { addToHistory } = useHistory()
+const { openCollabDialog } = useCollabDialogState()
+const { activeRoom } = useRoomSession()
 const route = useRoute()
 const router = useRouter()
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
@@ -180,12 +194,19 @@ const canSubmit = computed(() => {
 
 const pasteUrl = computed(() => {
   if (!currentPasteId.value) return ''
-  const baseUrl = window.location.origin
-  let url = `${baseUrl}/p/${currentPasteId.value}`
+  let url = buildAbsoluteAppUrl(`/p/${currentPasteId.value}`)
   if (encryptionKey.value) {
     url += `#${encryptionKey.value}`
   }
   return url
+})
+
+const activeRoomButtonLabel = computed(() => {
+  if (!activeRoom.value) return ''
+  const roomIdLabel = activeRoom.value.pinCode || activeRoom.value.roomId
+  const joinedCount = activeRoom.value.memberCount ?? '—'
+  const maxMembersText = activeRoom.value.maxMembers ?? '—'
+  return `房间${roomIdLabel} ${joinedCount}/${maxMembersText}`
 })
 
 // 文件上传
@@ -629,8 +650,13 @@ onMounted(() => {
 
 .editor-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.room-status-button {
+  margin-right: auto;
 }
 
 .submit-wrapper {

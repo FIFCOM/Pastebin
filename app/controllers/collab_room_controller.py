@@ -87,8 +87,10 @@ async def create_room(
 
     需要在Authorization头中提供member_token: Bearer {member_token}
 
-    - **room_name**: 房间名称
-    - **max_members**: 最大成员数量（2-100）
+    当前创建临时公共房间时不接受自定义房间参数：
+
+    - 房间名称固定为“临时公共房间”
+    - 最大成员数由后端配置控制
     """
     member_token = _get_member_token_from_header(authorization)
 

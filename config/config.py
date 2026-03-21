@@ -90,6 +90,9 @@ class Settings:
     # 内部服务配置
     internal_token: str
 
+    # 协作房间配置
+    collab_room_max_members: int
+
 
 def load_config() -> Settings:
     """
@@ -140,6 +143,10 @@ def load_config() -> Settings:
         # 内部服务配置
         internal_token=os.getenv(
             "INTERNAL_TOKEN", "change-this-internal-token-in-production"
+        ),
+        # 协作房间配置
+        collab_room_max_members=min(
+            100, max(2, _int_env("COLLAB_ROOM_MAX_MEMBERS", 20))
         ),
     )
 

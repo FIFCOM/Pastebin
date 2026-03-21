@@ -30,6 +30,20 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/History.vue'),
   },
   {
+    path: '/collab',
+    redirect: '/'
+  },
+  {
+    path: '/join/:pin',
+    name: 'CollabJoin',
+    component: () => import('../views/CollabJoin.vue')
+  },
+  {
+    path: '/rooms/:roomId',
+    name: 'CollabRoom',
+    component: () => import('../views/CollabRoom.vue')
+  },
+  {
     path: '/install',
     name: 'Install',
     component: () => import('../views/Install.vue')

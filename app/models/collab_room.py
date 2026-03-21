@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from config.config import settings
 
 
 class Member(Base):
@@ -80,7 +81,9 @@ class CollabRoom(Base):
     pin_code = Column(String(6), unique=True, nullable=False, index=True)  # 6位字母数字
     room_key = Column(Text, nullable=False)  # 房间密钥，用于加密消息
 
-    max_members = Column(Integer, default=10, nullable=False)  # 2~100
+    max_members = Column(
+        Integer, default=settings.collab_room_max_members, nullable=False
+    )  # 当前默认固定值由配置控制
     member_count = Column(Integer, default=1, nullable=False)  # 当前成员数
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 

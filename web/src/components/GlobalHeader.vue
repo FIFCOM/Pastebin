@@ -4,6 +4,7 @@
       <div class="brand-group">
         <mdui-button-icon
           class="menu-button"
+          aria-label="打开侧边栏"
           @click="handleMenuClick"
         >
           <mdui-icon-menu />
@@ -14,13 +15,13 @@
     <div class="header-spacer"></div>
 
     <!-- 功能图标按钮 -->
-    <mdui-button-icon>
+    <mdui-button-icon aria-label="打开协作房间" @click="openCollabDialog">
       <mdui-icon-groups />
     </mdui-button-icon>
-    <mdui-button-icon @click="goHistory">
+    <mdui-button-icon aria-label="查看历史记录" @click="goHistory">
       <mdui-icon-history />
     </mdui-button-icon>
-    <mdui-button-icon>
+    <mdui-button-icon aria-label="分享功能（暂未开放）">
       <mdui-icon-share />
     </mdui-button-icon>
 
@@ -78,8 +79,10 @@ import 'mdui/components/button-icon.js'
 
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
+import { useCollabDialogState } from '../composables/useCollabDialogState'
 const { isLoggedIn, currentUser, logout } = useAuth()
 const { toggleAppSidebar } = useAppSidebarState()
+const { openCollabDialog } = useCollabDialogState()
 
 const router = useRouter()
 const route = useRoute()

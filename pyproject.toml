@@ -21,6 +21,7 @@ dependencies = [
     "sqlalchemy>=2.0.43",
     "uvicorn>=0.37.0",
     "watchfiles>=1.1.1",
+    "websockets>=16.0",
 ]
 
 # dependency 需要通过uv命令来更新和安装

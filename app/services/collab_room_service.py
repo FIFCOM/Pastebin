@@ -64,6 +64,7 @@ class CollabRoomService:
     # JWT密钥（应该从配置中获取）
     JWT_SECRET: str = settings.member_token_secret_key
     JWT_ALGORITHM: str = "HS256"
+    DEFAULT_ROOM_NAME: str = "临时公共房间"
 
     @staticmethod
     def _generate_display_name_for_guest() -> str:
@@ -319,10 +320,10 @@ class CollabRoomService:
 
             room = CollabRoom(
                 creator_member_id=str(member.id),  # type: ignore
-                room_name=room_data.room_name,
+                room_name=CollabRoomService.DEFAULT_ROOM_NAME,
                 pin_code=pin_code,
                 room_key=room_key,
-                max_members=room_data.max_members,
+                max_members=settings.collab_room_max_members,
                 member_count=1,
             )
             db.add(room)
@@ -350,8 +351,10 @@ class CollabRoomService:
             db.refresh(room)
             return RoomCreateResponse(
                 room_id=str(room.id),  # type: ignore
+                room_name=str(room.room_name),  # type: ignore
                 pin_code=pin_code,
                 join_url=build_join_url(pin_code),
+                max_members=int(room.max_members),  # type: ignore[arg-type]
             )
 
         raise ValueError(f"无法生成唯一的PIN码: {last_error}")

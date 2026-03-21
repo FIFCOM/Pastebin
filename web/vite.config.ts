@@ -9,10 +9,10 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_BACKEND || 'http://localhost:8000'
   
   return {
-    base: './',
+    base: env.VITE_BASE_PATH || '/',
     server: {
       proxy: {
-        '/api': {target, changeOrigin: true},
+        '/api': {target, changeOrigin: true, ws: true},
       }
     },
     resolve: {
