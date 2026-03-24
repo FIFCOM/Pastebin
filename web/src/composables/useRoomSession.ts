@@ -1,4 +1,5 @@
 import { computed, ref, watch } from 'vue'
+import axios from 'axios'
 import {
   buildAbsoluteJoinUrl,
   createMemberToken,
@@ -332,7 +333,20 @@ async function leaveActiveRoom(): Promise<void> {
     return
   }
 
-  await leaveRoom(memberIdentity.value.memberToken, currentRoom.roomId)
+  try {
+    await leaveRoom(memberIdentity.value.memberToken, currentRoom.roomId)
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+      clearRoomState()
+      return
+    }
+
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      clearActiveRoom()
+      return
+    }
+    throw error
+  }
   clearActiveRoom()
 }
 

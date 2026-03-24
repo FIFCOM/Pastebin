@@ -192,6 +192,7 @@ coverage.xml
 # Local development
 .local/
 local/
+.claude/
 
 # Jupyter
 .jupyter/

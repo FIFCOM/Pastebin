@@ -1,4 +1,5 @@
-import { computed, ref } from 'vue'
+import { computed, effectScope, ref, watch } from 'vue'
+import { useRoomSession } from './useRoomSession'
 
 export type RoomRealtimeStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'closed'
 
@@ -50,12 +51,13 @@ export type RoomRealtimeEvent =
   | RoomPongEvent
   | RoomErrorEvent
 
-interface ConnectPayload {
+interface ConnectionTarget {
   roomId: string
   wsUrl: string
   memberToken: string
-  onEvent?: (event: RoomRealtimeEvent) => void
 }
+
+type RoomRealtimeListener = (event: RoomRealtimeEvent) => void
 
 const status = ref<RoomRealtimeStatus>('idle')
 const statusMessage = ref('未连接')
@@ -64,17 +66,27 @@ const selfMemberId = ref<string | null>(null)
 const selfDisplayName = ref<string | null>(null)
 const lastPongAt = ref<string | null>(null)
 
+const listeners = new Set<RoomRealtimeListener>()
+
 let socket: WebSocket | null = null
 let keepaliveTimer: number | null = null
-let currentConnectPayload: ConnectPayload | null = null
-let currentEventHandler: ((event: RoomRealtimeEvent) => void) | undefined
+let reconnectTimer: number | null = null
+let currentTarget: ConnectionTarget | null = null
 let closedByClient = false
+let hasBoundSessionWatcher = false
 
 function clearKeepalive(): void {
   if (keepaliveTimer !== null && typeof window !== 'undefined') {
     window.clearInterval(keepaliveTimer)
   }
   keepaliveTimer = null
+}
+
+function clearReconnectTimer(): void {
+  if (reconnectTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(reconnectTimer)
+  }
+  reconnectTimer = null
 }
 
 function startKeepalive(): void {
@@ -87,19 +99,45 @@ function startKeepalive(): void {
   }, 25000)
 }
 
-function cleanupSocket(): void {
-  if (socket) {
-    socket.onopen = null
-    socket.onmessage = null
-    socket.onerror = null
-    socket.onclose = null
+function detachSocket(targetSocket: WebSocket | null): void {
+  if (!targetSocket) return
+  targetSocket.onopen = null
+  targetSocket.onmessage = null
+  targetSocket.onerror = null
+  targetSocket.onclose = null
+}
+
+function disposeSocket(targetSocket: WebSocket | null = socket): void {
+  if (!targetSocket) return
+
+  const isActiveSocket = socket === targetSocket
+  detachSocket(targetSocket)
+
+  if (isActiveSocket) {
+    socket = null
+    clearKeepalive()
   }
-  socket = null
-  clearKeepalive()
+
+  if (targetSocket.readyState === WebSocket.CONNECTING || targetSocket.readyState === WebSocket.OPEN) {
+    targetSocket.close()
+  }
+}
+
+function resetConnectionState(nextStatus: RoomRealtimeStatus = 'idle', nextMessage: string = '未连接'): void {
+  disposeSocket()
+  clearReconnectTimer()
+  currentRoomId.value = null
+  selfMemberId.value = null
+  selfDisplayName.value = null
+  lastPongAt.value = null
+  status.value = nextStatus
+  statusMessage.value = nextMessage
 }
 
 function emit(event: RoomRealtimeEvent): void {
-  currentEventHandler?.(event)
+  listeners.forEach((listener) => {
+    listener(event)
+  })
 }
 
 function handleRealtimeEvent(event: RoomRealtimeEvent): void {
@@ -119,28 +157,59 @@ function handleRealtimeEvent(event: RoomRealtimeEvent): void {
   emit(event)
 }
 
-async function connect(payload: ConnectPayload): Promise<void> {
-  currentConnectPayload = payload
-  currentEventHandler = payload.onEvent
+function scheduleReconnect(): void {
+  if (typeof window === 'undefined' || reconnectTimer !== null || !currentTarget) return
+
+  const targetSnapshot = currentTarget
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null
+    if (!currentTarget) return
+    if (
+      currentTarget.roomId !== targetSnapshot.roomId ||
+      currentTarget.wsUrl !== targetSnapshot.wsUrl ||
+      currentTarget.memberToken !== targetSnapshot.memberToken
+    ) {
+      return
+    }
+    connectToTarget(targetSnapshot)
+  }, 3000)
+}
+
+function connectToTarget(target: ConnectionTarget): void {
+  const hasLiveSocket =
+    socket !== null &&
+    currentRoomId.value === target.roomId &&
+    currentTarget?.wsUrl === target.wsUrl &&
+    currentTarget.memberToken === target.memberToken &&
+    socket.readyState <= WebSocket.OPEN
+
+  currentTarget = target
   closedByClient = false
 
-  disconnect(false)
+  if (hasLiveSocket) {
+    return
+  }
+
+  clearReconnectTimer()
+  disposeSocket()
 
   status.value = 'connecting'
   statusMessage.value = '正在连接房间…'
-  currentRoomId.value = payload.roomId
+  currentRoomId.value = target.roomId
   selfMemberId.value = null
   selfDisplayName.value = null
   lastPongAt.value = null
 
-  socket = new WebSocket(payload.wsUrl)
+  const nextSocket = new WebSocket(target.wsUrl)
+  socket = nextSocket
 
-  socket.onopen = () => {
-    if (!socket) return
-    socket.send(JSON.stringify({ type: 'auth', token: payload.memberToken }))
+  nextSocket.onopen = () => {
+    if (socket !== nextSocket) return
+    nextSocket.send(JSON.stringify({ type: 'auth', token: target.memberToken }))
   }
 
-  socket.onmessage = (messageEvent: MessageEvent<string>) => {
+  nextSocket.onmessage = (messageEvent: MessageEvent<string>) => {
+    if (socket !== nextSocket) return
     try {
       const parsed = JSON.parse(messageEvent.data) as RoomRealtimeEvent
       if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
@@ -153,44 +222,74 @@ async function connect(payload: ConnectPayload): Promise<void> {
     }
   }
 
-  socket.onerror = () => {
+  nextSocket.onerror = () => {
+    if (socket !== nextSocket) return
     if (status.value === 'connecting') {
       status.value = 'error'
       statusMessage.value = '实时连接失败'
     }
   }
 
-  socket.onclose = (event: CloseEvent) => {
-    cleanupSocket()
+  nextSocket.onclose = (event: CloseEvent) => {
+    if (socket !== nextSocket) return
+
+    if (socket === nextSocket) {
+      disposeSocket(nextSocket)
+    }
+
     if (closedByClient) {
-      status.value = 'closed'
-      statusMessage.value = '已断开实时连接'
+      status.value = currentTarget ? 'closed' : 'idle'
+      statusMessage.value = currentTarget ? '已断开实时连接' : '未连接'
       return
     }
 
     status.value = 'error'
     statusMessage.value = event.reason || '实时连接已断开'
+    scheduleReconnect()
   }
 }
 
-function disconnect(markClosed: boolean = true): void {
-  closedByClient = markClosed
-  if (socket) {
-    socket.close()
+function syncConnectionTarget(): void {
+  const { activeRoom, memberIdentity } = useRoomSession()
+  const room = activeRoom.value
+  const identity = memberIdentity.value
+
+  if (!room || !identity || !room.wsUrl) {
+    currentTarget = null
+    closedByClient = true
+    resetConnectionState()
+    return
   }
-  cleanupSocket()
-  if (markClosed) {
-    status.value = 'closed'
-    statusMessage.value = '已断开实时连接'
-  }
+
+  connectToTarget({
+    roomId: room.roomId,
+    wsUrl: room.wsUrl,
+    memberToken: identity.memberToken
+  })
 }
 
-async function reconnect(): Promise<void> {
-  if (!currentConnectPayload) return
-  await connect(currentConnectPayload)
+function bindSessionLifecycle(): void {
+  if (hasBoundSessionWatcher) return
+  hasBoundSessionWatcher = true
+
+  effectScope(true).run(() => {
+    const { activeRoom, memberIdentity } = useRoomSession()
+    watch([activeRoom, memberIdentity], () => {
+      syncConnectionTarget()
+    }, { immediate: true })
+  })
+}
+
+function subscribe(listener: RoomRealtimeListener): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function useRoomRealtime() {
+  bindSessionLifecycle()
+
   const isConnected = computed(() => status.value === 'connected')
 
   return {
@@ -201,8 +300,6 @@ export function useRoomRealtime() {
     selfDisplayName,
     lastPongAt,
     isConnected,
-    connect,
-    disconnect,
-    reconnect
+    subscribe
   }
 }

@@ -6,7 +6,8 @@
     close-on-overlay-click
     @closed="handleDialogClosed"
   >
-    <div class="dialog-shell">
+    <div ref="dialogShellRef" class="dialog-shell">
+      <div ref="dialogShellInnerRef" class="dialog-shell-inner">
       <section class="room-sheet">
         <header class="sheet-header">
           <h2>房间 {{ activeRoomSession?.pinCode || '—' }}</h2>
@@ -223,6 +224,7 @@
         <mdui-button class="leave-button" variant="filled" :loading="isLeaving" @click="handleLeaveRoom">离开</mdui-button>
         <mdui-button variant="text" :disabled="isLeaving" @click="closeWorkspaceDialog">关闭</mdui-button>
       </footer>
+      </div>
     </div>
   </mdui-dialog>
 
@@ -330,6 +332,8 @@ const emit = defineEmits<{
 }>()
 
 const dialogRef = ref<DialogElement | null>(null)
+const dialogShellRef = ref<HTMLElement | null>(null)
+const dialogShellInnerRef = ref<HTMLElement | null>(null)
 const historyDialogRef = ref<DialogElement | null>(null)
 const members = ref<RoomMember[]>([])
 const pastes = ref<SharedPasteRecord[]>([])
@@ -356,9 +360,11 @@ const manualShareError = ref('')
 const { currentUser } = useAuth()
 const { isWorkspaceDialogOpen, workspaceDialogIntent, closeWorkspaceDialog } = useCollabDialogState()
 const { activeRoom, memberIdentity, roomKeyBytes, syncRoomInfo, leaveActiveRoom, clearActiveRoom } = useRoomSession()
-const { selfMemberId, connect, disconnect } = useRoomRealtime()
+const { selfMemberId, subscribe } = useRoomRealtime()
 const { hasUnreadPastes, useRoomUnreadKeys, clearUnreadPastes, clearRoomUnreadState, markUnreadPaste } = useCollabUnreadPastes()
 const router = useRouter()
+
+let disposeRealtimeSubscription: (() => void) | null = null
 
 const activeRoomSession = computed(() => activeRoom.value)
 const activeRoomId = computed(() => activeRoomSession.value?.roomId ?? '')
@@ -655,7 +661,6 @@ function resolveMissingRoom(options: { notify?: boolean } = {}): void {
 
   isResolvingMissingRoom.value = true
   clearActiveRoom()
-  disconnect()
   closeWorkspaceDialog()
   members.value = []
   pastes.value = []
@@ -863,17 +868,14 @@ function handleRealtimeEvent(event: RoomRealtimeEvent): void {
   }
 }
 
-async function connectRealtime(): Promise<void> {
-  const session = activeRoomSession.value
-  const identity = memberIdentity.value
-  if (!session || !identity) return
+function startRealtimeSubscription(): void {
+  if (disposeRealtimeSubscription) return
+  disposeRealtimeSubscription = subscribe(handleRealtimeEvent)
+}
 
-  await connect({
-    roomId: session.roomId,
-    wsUrl: session.wsUrl,
-    memberToken: identity.memberToken,
-    onEvent: handleRealtimeEvent
-  })
+function stopRealtimeSubscription(): void {
+  disposeRealtimeSubscription?.()
+  disposeRealtimeSubscription = null
 }
 
 function syncOpenState(): void {
@@ -901,8 +903,7 @@ async function bootstrapWorkspace(): Promise<void> {
     await Promise.all([
       refreshRoomInfo(),
       refreshMembers({ silent: true }),
-      refreshPastes({ silent: true }),
-      connectRealtime()
+      refreshPastes({ silent: true })
     ])
     rememberVisibleUnreadPastes()
   } catch (error) {
@@ -1072,7 +1073,6 @@ function handleDialogClosed(): void {
   commitViewedUnreadPastes()
   closeWorkspaceDialog()
   closeHistoryPicker()
-  disconnect()
 }
 
 watch(
@@ -1083,12 +1083,13 @@ watch(
     }
 
     if (open) {
+      startRealtimeSubscription()
       void bootstrapWorkspace()
       return
     }
 
     commitViewedUnreadPastes()
-    disconnect()
+    stopRealtimeSubscription()
   },
   { immediate: true }
 )
@@ -1108,7 +1109,6 @@ watch(
   (session) => {
     if (!session && isWorkspaceDialogOpen.value) {
       closeWorkspaceDialog()
-      disconnect()
     }
   }
 )
@@ -1133,10 +1133,56 @@ watch(
   }
 )
 
+let shellObserver: ResizeObserver | null = null
+let prevShellHeight = 0
+let shellTransitionTimer = 0
+
+function setupShellResizeObserver(): void {
+  cleanupShellResizeObserver()
+  const shell = dialogShellRef.value
+  const inner = dialogShellInnerRef.value
+  if (!shell || !inner) return
+
+  prevShellHeight = inner.offsetHeight
+  shellObserver = new ResizeObserver(() => {
+    const newHeight = inner.offsetHeight
+    if (prevShellHeight && prevShellHeight !== newHeight) {
+      clearTimeout(shellTransitionTimer)
+      shell.style.height = `${prevShellHeight}px`
+      shell.offsetHeight // force reflow
+      shell.style.height = `${newHeight}px`
+      shellTransitionTimer = window.setTimeout(() => {
+        shell.style.height = ''
+      }, 350)
+    }
+    prevShellHeight = newHeight
+  })
+  shellObserver.observe(inner)
+}
+
+function cleanupShellResizeObserver(): void {
+  shellObserver?.disconnect()
+  shellObserver = null
+  prevShellHeight = 0
+  clearTimeout(shellTransitionTimer)
+  if (dialogShellRef.value) {
+    dialogShellRef.value.style.height = ''
+  }
+}
+
+watch(isWorkspaceDialogOpen, (open) => {
+  if (open) {
+    requestAnimationFrame(() => setupShellResizeObserver())
+  } else {
+    cleanupShellResizeObserver()
+  }
+})
+
 onBeforeUnmount(() => {
+  cleanupShellResizeObserver()
   commitViewedUnreadPastes()
   closeHistoryPicker()
-  disconnect()
+  stopRealtimeSubscription()
 })
 </script>
 
@@ -1160,6 +1206,11 @@ onBeforeUnmount(() => {
 }
 
 .dialog-shell {
+  overflow: hidden;
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dialog-shell-inner {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   max-height: min(88vh, 760px);
@@ -1459,6 +1510,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   padding: 18px 22px 0;
+  max-height: clamp(260px, 56vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .history-picker-list {
