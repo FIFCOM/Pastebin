@@ -2,8 +2,10 @@
 数据库初始化
 """
 
+import app.models  # noqa: F401
 from app.core.database import Base, engine
 from config.config import settings
+
 
 def create_tables():
     """创建所有数据库表"""

@@ -48,6 +48,9 @@ class InstallGateMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         request_path = request.url.path
+        if not request_path.startswith("/api"):
+            return await call_next(request)
+
         if _is_install_gate_whitelisted(request_path):
             return await call_next(request)
 

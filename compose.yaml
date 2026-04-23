@@ -1,0 +1,56 @@
+services:
+  materialbin:
+    build:
+      context: .
+    container_name: materialbin
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      DEBUG: "${DEBUG:-false}"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DB_DRIVER: "${DB_DRIVER:-sqlite}"
+      SQLITE_PATH: "${SQLITE_PATH:-/app/data/material_bin.db}"
+      DATA_DIR: "${DATA_DIR:-/app/data}"
+      SECRET_KEY: "${SECRET_KEY:-your-secret-key-change-this-in-production}"
+      MEMBER_TOKEN_SECRET_KEY: "${MEMBER_TOKEN_SECRET_KEY:-change-this-member-token-secret-key-in-production}"
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:-change-this-internal-token-in-production}"
+    volumes:
+      - materialbin_data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  materialbin-cleanup:
+    build:
+      context: .
+    container_name: materialbin-cleanup
+    restart: unless-stopped
+    depends_on:
+      materialbin:
+        condition: service_started
+    environment:
+      DEBUG: "${DEBUG:-false}"
+      DB_DRIVER: "${DB_DRIVER:-sqlite}"
+      SQLITE_PATH: "${SQLITE_PATH:-/app/data/material_bin.db}"
+      DATA_DIR: "${DATA_DIR:-/app/data}"
+      SECRET_KEY: "${SECRET_KEY:-your-secret-key-change-this-in-production}"
+      MEMBER_TOKEN_SECRET_KEY: "${MEMBER_TOKEN_SECRET_KEY:-change-this-member-token-secret-key-in-production}"
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:-change-this-internal-token-in-production}"
+      CLEANUP_INTERVAL_SECONDS: "${CLEANUP_INTERVAL_SECONDS:-900}"
+      CLEANUP_RUN_ON_START: "${CLEANUP_RUN_ON_START:-true}"
+      CLEANUP_TASKS: "${CLEANUP_TASKS:-}"
+    volumes:
+      - materialbin_data:/app/data
+    entrypoint: ["/app/docker/cleanup-runner.sh"]
+
+volumes:
+  materialbin_data:

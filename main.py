@@ -3,10 +3,12 @@ Material Bin 用户认证 API 主应用
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.controllers import (
     api_key_router,
@@ -24,6 +26,10 @@ from app.core.error_handlers import register_exception_handlers
 from app.core.middleware import InstallGateMiddleware
 from app.services.install_state_service import ENV_FILE
 from config.config import settings, validate_config
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+FRONTEND_DIST_DIR = PROJECT_ROOT / "web" / "dist"
+FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 
 
 @asynccontextmanager
@@ -59,9 +65,9 @@ app = FastAPI(
     description="基于FastAPI的用户认证模块，支持加密存储和会话管理",
     debug=settings.debug,
     lifespan=lifespan,
-    docs_url="/api/openapi/docs",
-    redoc_url="/api/openapi/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/openapi/docs" if settings.debug else None,
+    redoc_url="/api/openapi/redoc" if settings.debug else None,
+    openapi_url="/api/openapi.json" if settings.debug else None,
 )
 
 
@@ -99,16 +105,50 @@ app.include_router(cleanup_router)
 register_exception_handlers(app, debug=settings.debug)
 
 
+def _resolve_frontend_asset(full_path: str) -> Path | None:
+    """解析前端构建产物中的静态资源路径，避免目录穿越。"""
+    if not FRONTEND_INDEX_FILE.exists() or not full_path:
+        return None
+
+    asset_path = (FRONTEND_DIST_DIR / full_path).resolve()
+    if asset_path != FRONTEND_DIST_DIR and FRONTEND_DIST_DIR not in asset_path.parents:
+        return None
+    if asset_path.is_file():
+        return asset_path
+    return None
+
+
 # 根路径
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
     """根路径欢迎信息"""
+    if FRONTEND_INDEX_FILE.exists():
+        return FileResponse(FRONTEND_INDEX_FILE)
     return {
         "message": "Welcome to Material Bin User Auth API",
         "version": settings.version,
         "docs": "/api/openapi/docs",
         "health": "/api/health",
     }
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend(full_path: str):
+    """在生产部署时托管前端静态文件与 SPA 路由。"""
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    asset_path = _resolve_frontend_asset(full_path)
+    if asset_path is not None:
+        return FileResponse(asset_path)
+
+    if not FRONTEND_INDEX_FILE.exists():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if Path(full_path).suffix:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    return FileResponse(FRONTEND_INDEX_FILE)
 
 
 def run_server():

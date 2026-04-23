@@ -25,13 +25,18 @@
 │   ├── schemas/          # Pydantic模型
 │   └── core/            # 核心配置和工具
 ├── config/              # 配置管理
+├── docker/              # 容器启动脚本
 ├── web/                 # Web前端（Vue 3 + Vite）
 │   ├── src/             # 页面、组件、路由、请求封装等
 │   ├── public/          # 静态资源
 │   └── vite.config.ts   # 开发代理等配置
 ├── main.py             # 应用入口
+├── Dockerfile          # 单镜像构建（后端 + 前端静态产物）
+├── compose.yaml        # 默认 SQLite 部署
+├── compose.mysql.yaml  # MySQL 覆盖配置
 ├── pyproject.toml      # 项目配置
-└── .env.example       # 环境变量示例
+├── .env.example        # 应用环境变量示例
+└── .env.docker.example # Docker Compose 环境变量示例
 ```
 
 ## 快速开始
@@ -96,6 +101,129 @@ npm run dev
 - `/docs`、`/docs/:section`：API 文档页面（内容由后端 `/api/docs*` 返回 Markdown 原文）
 - `/login`、`/register`：登录/注册
 
+## Docker 部署
+
+项目现在支持用单个应用镜像部署，镜像会：
+
+- 在构建阶段编译 `web/` 前端产物
+- 在运行阶段由 FastAPI 直接托管 `web/dist`
+- 启动前自动创建数据库表
+- 默认使用 SQLite 持久化卷
+- 可选接入独立 MySQL 容器
+- 默认同时启动一个自动定时清理容器
+
+### 1. 默认部署：SQLite
+
+```bash
+cp .env.docker.example .env.docker
+
+docker compose --env-file .env.docker up -d --build
+```
+
+访问地址：
+
+- 应用首页：http://localhost:8000/
+- 健康检查：http://localhost:8000/api/health
+
+默认情况下：
+
+- `DB_DRIVER=sqlite`
+- SQLite 文件位于容器内 `/app/data/material_bin.db`
+- 上传文件与 SQLite 数据都落在 compose 卷 `materialbin_data`
+- `materialbin-cleanup` 会每 `900` 秒自动执行一次 cleanup CLI
+
+### 2. 可选部署：MySQL
+
+```bash
+cp .env.docker.example .env.docker
+
+# 编辑 .env.docker，至少确认以下变量：
+# DB_DRIVER=mysql
+# MYSQL_DATABASE=material_bin
+# MYSQL_USER=material_bin
+# MYSQL_PASSWORD=material_bin
+# MYSQL_ROOT_PASSWORD=materialbin-root-password
+
+docker compose --env-file .env.docker -f compose.yaml -f compose.mysql.yaml up -d --build
+```
+
+此时：
+
+- 应用容器会把 `DB_DRIVER` 切到 `mysql`
+- `compose.mysql.yaml` 会额外启动 `mysql:8.4`
+- 应用会自动等待 MySQL 健康后再初始化数据库表
+- 自动清理容器会复用同一组 MySQL 连接配置
+
+### 3. 容器环境变量说明
+
+容器启动时支持两种数据库配置方式：
+
+- 推荐方式：设置 `DB_DRIVER=sqlite|mysql`，再配合 `SQLITE_PATH` 或 `MYSQL_*`
+- 直连方式：直接设置 `DATABASE_URL`，会覆盖 `DB_DRIVER` 的自动拼接逻辑
+
+SQLite 默认值：
+
+```env
+DB_DRIVER=sqlite
+SQLITE_PATH=/app/data/material_bin.db
+DATA_DIR=/app/data
+```
+
+MySQL 默认拼接规则：
+
+```env
+DB_DRIVER=mysql
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_DATABASE=material_bin
+MYSQL_USER=material_bin
+MYSQL_PASSWORD=material_bin
+```
+
+对应生成：
+
+```env
+DATABASE_URL=mysql+pymysql://material_bin:material_bin@mysql:3306/material_bin
+```
+
+如果用户名或密码里包含 `@`、`:`、`/` 等特殊字符，建议直接显式设置 `DATABASE_URL`，避免 URL 编码问题。
+
+自动清理相关环境变量：
+
+```env
+CLEANUP_INTERVAL_SECONDS=900
+CLEANUP_RUN_ON_START=true
+# 可选，留空表示执行全部清理任务；多个任务用空格分隔
+# CLEANUP_TASKS=expired_drafts expired_pastes expired_members
+```
+
+### 4. 首次启动后的安装
+
+容器会自动生成运行所需的 `.env` 标记文件并建表，但管理员账户仍需按项目原有安装流程完成：
+
+1. 打开首页或 `/install`
+2. 按向导确认配置
+3. 创建第一个管理员账号
+
+### 5. 常用命令
+
+```bash
+# 查看日志
+docker compose logs -f materialbin
+
+# 查看自动清理日志
+docker compose logs -f materialbin-cleanup
+
+# 停止服务
+docker compose down
+
+# SQLite 模式下连同数据卷一起删除
+docker compose down -v
+
+# MySQL 模式下删除所有相关卷
+docker compose -f compose.yaml -f compose.mysql.yaml down -v
+```
+
 ## API端点
 
 ### 安装态错误契约（HTTP 428）
@@ -122,179 +250,6 @@ npm run dev
 - `/api/docs` 与 `/api/docs/*`
 - `/api/openapi.json`
 - `/api/openapi/docs`、`/api/openapi/redoc`
-
-### 用户认证
-
-- `POST /api/users/register` - 用户注册
-- `POST /api/users/login` - 用户登录
-
-### 用户管理
-
-- `GET /api/users/me` - 获取当前用户信息
-- `GET /api/users/{user_id}` - 获取用户信息
-- `PUT /api/users/{user_id}` - 更新用户信息
-- `DELETE /api/users/{user_id}` - 删除用户
-- `GET /api/users` - 获取用户列表
-- `POST /api/users` - 创建用户（管理功能）
-
-### 会话管理（用户）
-
-- `GET /api/users/{user_id}/sessions` - 获取用户会话
-- `DELETE /api/users/sessions/{session_id}` - 撤销会话
-- `POST /api/users/cleanup-sessions` - 清理过期会话
-
-### Paste
-
-- `POST /api/pastes` - 创建Paste（草稿）
-- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `X-Paste-Admin-Key: {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
-- `POST /api/pastes/{paste_id}/publish` - 发布（需要 `X-Paste-Admin-Key: {admin_key}`）
-- `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`；文件列表请从 `/content` 获取）
-- `GET /api/pastes/{paste_id}/content` - 获取内容与文件列表（可选 `access_key` / `encryption_key`）
-- `POST /api/pastes/{paste_id}/files/init` - 初始化分片上传（JSON；返回 `upload_id/chunk_size/total_chunks`）
-- `GET /api/pastes/{paste_id}/files/{upload_id}/status` - 获取分片上传状态（断点续传；返回已上传分片索引等）
-- `PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}` - 上传分片（二进制 `application/octet-stream`）
-- `POST /api/pastes/{paste_id}/files/{upload_id}/complete` - 完成分片上传（创建最终文件记录）
-- `POST /api/pastes/{paste_id}/files/{upload_id}/abort` - 取消并清理分片上传
-- `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`；支持 `Range: bytes=...`）
-- `GET /api/pastes/{paste_id}/files/{file_id}/manifest` - 获取分片文件manifest（用于前端/Service Worker流式解密）
-- `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `X-Paste-Admin-Key: {admin_key}`）
-
-## 文件上传加解密流程
-
-### 共同约定
-
-- 算法：`AES-GCM`
-- 密钥长度：与后端 `ENCRYPTION_KEY_LENGTH` 一致（默认 `16` 字节 = AES-128；可配置 `24/32`）
-- 密文格式：`encrypted_data = IV(12B) + ciphertext_and_tag`（tag 为 `16B`）
-- 加密模式（`encryption_mode`）
-  - `client`：客户端加密；服务端不持有解密密钥
-  - `server`：服务端加密；草稿阶段服务端保存 `PasteKey`，发布后客户端持有 `encryption_key` 并在写入时通过 `X-Encryption-Key` 提供
-
-### 接口：二进制分片上传（支持大文件）
-
-#### 1) 初始化上传会话
-
-`POST /api/pastes/{paste_id}/files/init`
-
-服务端返回：
-- `upload_id`：上传会话ID（也是最终 `file_id`）
-- `chunk_size`：按“明文”计算的分片大小（最后一片可能更小）
-- `total_chunks`：总分片数
-- `aad_prefix / aad_required / iv_scheme`：加密协议参数（前后端必须一致）
-
-#### 2) 上传每个分片（PUT 二进制）
-
-`PUT /api/pastes/{paste_id}/files/{upload_id}/chunk/{index}`（`Content-Type: application/octet-stream`）
-
-后端期望长度：
-- `expected_plain = index < total_chunks-1 ? chunk_size : file_size - chunk_size*(total_chunks-1)`
-- `server` 模式：上传明文分片，长度必须为 `expected_plain`
-- `client` 模式：上传加密分片，长度必须为 `expected_plain + 12 + 16`
-  - 前端可用 `web/src/utils/crypto.ts:327` 的 `encryptFileChunk()` 来保证 IV/AAD/长度一致
-
-并发/覆盖：
-- 同一个分片如果已存在会被拒绝写入（避免并发覆盖导致数据损坏）；失败时临时文件会被清理
-
-#### 2.5) 查询上传状态（断点续传）
-
-`GET /api/pastes/{paste_id}/files/{upload_id}/status`
-
-返回：
-- `uploaded_chunks[]`：已上传分片索引列表（升序）
-- `next_index`：建议继续上传的下一个分片索引（若已齐全则等于 `total_chunks`）
-
-前端实现（Web）：
-- 上传失败后点击“重试”会优先复用已有 `upload_id` 调用 status，跳过已上传分片继续上传；若会话过期/不匹配则重新 `init`
-- 多文件同时上传默认并发为 `10`，超出会排队（可在 `web/src/services/config.ts` 的 `DEFAULT_UPLOAD_CONCURRENCY` 调整）
-
-#### 3) 完成上传（complete）
-
-`POST /api/pastes/{paste_id}/files/{upload_id}/complete`
-
-可选校验：
-- `checksum_sha256`：整文件明文 SHA256（仅 `server` 模式可由服务端重算校验）
-- `chunk_hashes_sha256[]`：每片 SHA256（`server` 模式对“明文分片”，`client` 模式对“加密分片”）
-
-落盘：
-- 会写入 `data/files/{paste_id}/{file_id}.manifest.json`，用于下载时按分片边界进行流式解密与 AAD 校验
-- 前端/Service Worker 可通过 `/api/pastes/{paste_id}/files/{file_id}/manifest` 获取该 manifest 做客户端流式解密
-
-#### 4) 下载解密（chunked 文件）
-
-`GET /api/pastes/{paste_id}/files/{file_id}?encryption_key=...`
-
-若存在 manifest，服务端会按分片边界读取并使用 AAD 进行流式解密（`aad_required=true` 时不会降级为无 AAD 解密）。
-
-断点续传 / 视频播放器：
-- 接口支持 HTTP Range（`Range: bytes=start-end`），返回 `206 Partial Content` 与 `Content-Range`。
-- 当提供正确 `encryption_key` 且文件为分片（manifest存在）时，Range 基于“解密后的明文字节流”；否则 Range 基于“存储的加密字节流”（适合断点续传，但不直接满足明文视频播放）。
-
-### 前端文件判重（仅 UI 级）
-
-当前后端不会做“重复上传”拦截；为了减少误操作与带宽浪费，前端在**同一页面会话**内做了一层判重：如果检测到重复，会**直接跳过该文件，不发起上传**，并通过 `snackbar` 提示。
-
-实现位置：`web/src/components/upload/FileUploader.vue`（`processFiles()` / `computeDedupeFingerprint()`）。
-
-#### 判重范围
-
-判重仅在当前浏览器页面/Tab 的内存状态中生效，覆盖三类列表：
-- 上传中（`uploadingFiles`）
-- 上传失败（`failedFiles`）
-- 已上传（`uploadedFiles`）
-
-同时也会对“同一次选择/拖拽/粘贴”这一批文件内部做去重。
-
-#### 指纹算法（fingerprint）
-
-判重依赖“指纹字符串”一致（而非文件名一致）。指纹的选择逻辑：
-
-- **优先使用内容哈希**：`sha256:<hex>`
-  - 条件：`0 < file.size <= 20MB` 且（来源是粘贴 `source=paste` **或**文件看起来是图片）
-  - “看起来是图片”的判断：`file.type` 以 `image/` 开头，或扩展名属于 `png/jpg/jpeg/gif/webp/bmp/svg/ico/tiff/avif`
-  - 目的：让“Ctrl+V 粘贴的图片”和“拖拽/选择的同一张图片”可以跨来源判重
-
-- **粘贴的兜底指纹**：`paste:<name>::<size>::<type>`
-  - 原因：剪贴板生成的 `File.lastModified` 经常变化，用它会导致同内容反复粘贴不命中
-
-- **选择/拖拽的元信息指纹**：`file:<name>::<size>::<lastModified>`
-  - 适用于非图片或超过 20MB 的文件（避免对大文件做全量 hash 带来内存/耗时问题）
-
-#### 行为细节
-
-- `processFiles()` 会先构建已存在指纹集合，然后为待上传文件逐个计算指纹：
-  - 若“本批次已见过”或“会话内已存在”，该文件加入 `skippedFiles` 并跳过
-  - 否则加入 `dedupedFiles` 并继续上传
-- `startUpload()` 会把指纹跟随上传状态保存到 `uploading/failed/uploaded`，保证后续不同来源的文件也能命中判重
-
-#### 已知限制
-
-- 这是**体验级**判重：不会阻止后端接受重复内容（如果你绕过前端/换浏览器/刷新页面，仍可重复上传）。
-- 非图片且 >20MB 的文件默认不算内容哈希，可能出现“内容相同但指纹不同”的漏判（例如复制文件导致 `lastModified` 不同）。
-
-### 用户 History 管理
-
-- `GET /api/user/history` - 获取用户Paste列表（需要登录）
-- `POST /api/user/history/{paste_id}` - 保存Paste到用户（需要登录）
-- `PUT /api/user/history/{paste_id}/star` - 收藏/取消收藏（需要登录）
-- `DELETE /api/user/history/{paste_id}` - 从用户账户移除（需要登录）
-
-### API Key 管理
-
-- `GET /api/user/apikeys` - 列表（需要登录）
-- `POST /api/user/apikeys` - 创建（需要登录）
-- `DELETE /api/user/apikeys/{key_id}` - 删除（需要登录）
-
-### 协作房间
-
-- `POST /api/rooms/member-token` - 获取成员令牌（可匿名）
-- `POST /api/rooms` - 创建房间（`X-Member-Token: {member_token}`）
-- `GET /api/join/{pin_code}` - 通过PIN码获取房间信息
-- `POST /api/rooms/{room_id}/join` - 加入房间（`X-Member-Token: {member_token}`）
-- `GET /api/rooms/{room_id}/ws` - WebSocket实时通道（连接后首条消息发送 `{"type":"auth","token":"..."}`）
-- `GET /api/rooms/{room_id}/members` - 成员列表（`X-Member-Token: {member_token}`）
-- `POST /api/rooms/{room_id}/pastes` - 分享Paste（`X-Member-Token: {member_token}`）
-- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`X-Member-Token: {member_token}`，返回 `is_expired` / `expire_at`）
-- `DELETE /api/rooms/{room_id}/leave` - 离开房间（`X-Member-Token: {member_token}`）
 
 ### 内部任务（需要内部令牌）
 
@@ -380,6 +335,8 @@ uv run python -m app.cleanup_cli expired_drafts expired_pastes expired_members
 ```
 DATABASE_URL=mysql+pymysql://username:password@localhost:3306/material_bin
 ```
+
+Docker 部署时也可以不直接写 `DATABASE_URL`，而是使用 `DB_DRIVER=mysql` 配合 `MYSQL_HOST / MYSQL_PORT / MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD` 自动生成。
 
 ## 开发
 

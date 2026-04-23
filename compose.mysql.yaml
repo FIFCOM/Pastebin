@@ -1,0 +1,52 @@
+services:
+  materialbin:
+    environment:
+      DB_DRIVER: "mysql"
+      MYSQL_HOST: "${MYSQL_HOST:-mysql}"
+      MYSQL_PORT: "${MYSQL_PORT:-3306}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-material_bin}"
+      MYSQL_USER: "${MYSQL_USER:-material_bin}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-material_bin}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  materialbin-cleanup:
+    environment:
+      DB_DRIVER: "mysql"
+      MYSQL_HOST: "${MYSQL_HOST:-mysql}"
+      MYSQL_PORT: "${MYSQL_PORT:-3306}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-material_bin}"
+      MYSQL_USER: "${MYSQL_USER:-material_bin}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-material_bin}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    container_name: materialbin-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-material_bin}"
+      MYSQL_USER: "${MYSQL_USER:-material_bin}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-material_bin}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-materialbin-root-password}"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - materialbin_mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  materialbin_mysql_data:
