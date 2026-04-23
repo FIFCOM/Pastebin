@@ -103,28 +103,29 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         testid: 'api-docs-sidebar-entry'
       }
     ]
-  },
-  {
-    value: 'about',
-    label: '关于',
-    icon: 'info',
-    items: [
-      {
-        key: 'privacy-policy',
-        label: '隐私政策',
-        icon: 'policy',
-        description: '占位入口，暂不实现跳转',
-        disabled: true
-      },
-      {
-        key: 'about-material-bin',
-        label: '关于Material Bin',
-        icon: 'info',
-        description: '占位入口，暂不实现跳转',
-        disabled: true
-      }
-    ]
   }
+  // Temporarily hide placeholder entries in the homepage sidebar.
+  // {
+  //   value: 'about',
+  //   label: '关于',
+  //   icon: 'info',
+  //   items: [
+  //     {
+  //       key: 'privacy-policy',
+  //       label: '隐私政策',
+  //       icon: 'policy',
+  //       description: '占位入口，暂不实现跳转',
+  //       disabled: true
+  //     },
+  //     {
+  //       key: 'about-material-bin',
+  //       label: '关于Material Bin',
+  //       icon: 'info',
+  //       description: '占位入口，暂不实现跳转',
+  //       disabled: true
+  //     }
+  //   ]
+  // }
 ]
 
 const route = useRoute()

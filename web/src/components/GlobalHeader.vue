@@ -21,9 +21,9 @@
     <mdui-button-icon aria-label="查看历史记录" @click="goHistory">
       <mdui-icon-history />
     </mdui-button-icon>
-    <mdui-button-icon aria-label="分享功能（暂未开放）">
+    <!-- <mdui-button-icon aria-label="分享功能（暂未开放）">
       <mdui-icon-share />
-    </mdui-button-icon>
+    </mdui-button-icon> -->
 
     <!-- 未登录：显示登录按钮 -->
     <template v-if="!isLoggedIn">
