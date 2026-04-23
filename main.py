@@ -13,6 +13,7 @@ from app.controllers import (
     cleanup_router,
     collab_room_router,
     config_router,
+    docs_router,
     health_router,
     install_router,
     paste_router,
@@ -58,6 +59,9 @@ app = FastAPI(
     description="基于FastAPI的用户认证模块，支持加密存储和会话管理",
     debug=settings.debug,
     lifespan=lifespan,
+    docs_url="/api/openapi/docs",
+    redoc_url="/api/openapi/redoc",
+    openapi_url="/api/openapi.json",
 )
 
 
@@ -67,7 +71,9 @@ app.add_middleware(InstallGateMiddleware)
 app.add_middleware(
     CORSMiddleware,
     # Cookie 续期（refresh token）需要 allow_credentials=True 且不能使用 allow_origins=["*"]
-    allow_origins=[] if settings.debug else ["http://localhost:3000"],  # 生产环境需要限制
+    allow_origins=[]
+    if settings.debug
+    else ["http://localhost:3000"],  # 生产环境需要限制
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
     if settings.debug
     else None,
@@ -80,6 +86,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(health_router)
 app.include_router(config_router)
+app.include_router(docs_router)
 app.include_router(install_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
@@ -99,7 +106,7 @@ async def root():
     return {
         "message": "Welcome to Material Bin User Auth API",
         "version": settings.version,
-        "docs": "/docs",
+        "docs": "/api/openapi/docs",
         "health": "/api/health",
     }
 

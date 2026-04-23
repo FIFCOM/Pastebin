@@ -65,8 +65,10 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ### 4. 访问API文档
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- 前端文档页（Web）：http://localhost:5173/docs
+- Swagger UI: http://localhost:8000/api/openapi/docs
+- ReDoc: http://localhost:8000/api/openapi/redoc
+- Markdown 原文接口：`GET /api/docs`、`GET /api/docs/{slug}`
 - 健康检查: http://localhost:8000/api/health
 
 ### 5. 启动 Web（`web/`）
@@ -91,6 +93,7 @@ npm run dev
 前端页面路由：
 - `/`：Paste 编辑/发布
 - `/p/:paste_id`：Paste 查看（需要在 URL hash 携带密钥：`/p/:id#encryption_key`）
+- `/docs`、`/docs/:section`：API 文档页面（内容由后端 `/api/docs*` 返回 Markdown 原文）
 - `/login`、`/register`：登录/注册
 
 ## API端点
@@ -116,8 +119,9 @@ npm run dev
 安装白名单路径（不会被安装门禁拦截）：
 - `/api/install` 与 `/api/install/*`
 - `/api/health` 与 `/api/health/`
-- `/openapi.json`
-- `/docs`、`/redoc`
+- `/api/docs` 与 `/api/docs/*`
+- `/api/openapi.json`
+- `/api/openapi/docs`、`/api/openapi/redoc`
 
 ### 用户认证
 

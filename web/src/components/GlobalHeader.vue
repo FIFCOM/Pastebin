@@ -1,5 +1,5 @@
 <template>
-  <mdui-top-app-bar>
+  <mdui-top-app-bar ref="topAppBarRef">
     <mdui-top-app-bar-title>
       <div class="brand-group">
         <mdui-button-icon
@@ -69,6 +69,7 @@ import '@mdui/icons/groups.js'
 import '@mdui/icons/history.js'
 import '@mdui/icons/share.js'
 
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/dropdown.js'
@@ -80,12 +81,48 @@ import 'mdui/components/button-icon.js'
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
 import { useCollabDialogState } from '../composables/useCollabDialogState'
+
 const { isLoggedIn, currentUser, logout } = useAuth()
 const { toggleAppSidebar } = useAppSidebarState()
 const { openJoinDialog } = useCollabDialogState()
 
 const router = useRouter()
 const route = useRoute()
+const topAppBarRef = ref<HTMLElement | null>(null)
+
+let headerOffsetAnimationFrame = 0
+let headerResizeObserver: ResizeObserver | null = null
+
+function getVisibleHeaderHeight(): number {
+  if (typeof window === 'undefined' || !topAppBarRef.value) {
+    return 0
+  }
+
+  const rect = topAppBarRef.value.getBoundingClientRect()
+  const visibleTop = Math.max(rect.top, 0)
+  const visibleBottom = Math.min(rect.bottom, window.innerHeight)
+
+  return Math.max(0, Math.min(rect.height, visibleBottom - visibleTop))
+}
+
+function syncHeaderOffset(): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  document.documentElement.style.setProperty('--app-header-offset', `${getVisibleHeaderHeight()}px`)
+}
+
+function scheduleHeaderOffsetSync(): void {
+  if (typeof window === 'undefined' || headerOffsetAnimationFrame) {
+    return
+  }
+
+  headerOffsetAnimationFrame = window.requestAnimationFrame(() => {
+    headerOffsetAnimationFrame = 0
+    syncHeaderOffset()
+  })
+}
 
 const handleLoginClick = () => {
   // 已在登录页时不再重复跳转，避免 redirect 参数不断叠加
@@ -134,6 +171,41 @@ const handleMenuClick = () => {
 const goHome = () => {
   router.push('/')
 }
+
+onMounted(() => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  scheduleHeaderOffsetSync()
+  document.addEventListener('scroll', scheduleHeaderOffsetSync, { capture: true, passive: true })
+  window.addEventListener('resize', scheduleHeaderOffsetSync)
+
+  if (topAppBarRef.value) {
+    headerResizeObserver = new ResizeObserver(() => {
+      scheduleHeaderOffsetSync()
+    })
+    headerResizeObserver.observe(topAppBarRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  document.removeEventListener('scroll', scheduleHeaderOffsetSync, true)
+  window.removeEventListener('resize', scheduleHeaderOffsetSync)
+
+  if (headerOffsetAnimationFrame) {
+    window.cancelAnimationFrame(headerOffsetAnimationFrame)
+    headerOffsetAnimationFrame = 0
+  }
+
+  headerResizeObserver?.disconnect()
+  headerResizeObserver = null
+  document.documentElement.style.removeProperty('--app-header-offset')
+})
 </script>
 
 <style scoped>

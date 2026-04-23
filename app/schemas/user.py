@@ -110,22 +110,14 @@ class LoginResponse(BaseModel):
     """登录响应"""
 
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
-
-
-class RefreshTokenRequest(BaseModel):
-    """refresh token 请求（用于非浏览器/无Cookie场景）"""
-
-    refresh_token: str | None = Field(default=None, description="refresh token")
 
 
 class RefreshTokenResponse(BaseModel):
     """refresh token 续期响应"""
 
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
 
 

@@ -80,6 +80,11 @@ def _resolve_access_session(token: str, db: Session) -> tuple[UserResponse, str]
     return user, session_id
 
 
+def _require_access_token(token: str) -> None:
+    if token.startswith("pk_"):
+        raise _auth_error("当前接口仅支持 access_token 认证")
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -111,6 +116,25 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_by_access_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """仅允许通过 access_token 获取当前用户。"""
+    token = credentials.credentials
+    _require_access_token(token)
+
+    user, session_id = _resolve_access_session(token, db)
+    UserService.touch_session_activity(
+        db,
+        session_id,
+        ip_address=extract_client_ip(request),
+        user_agent=extract_user_agent(request),
+    )
+    return user
+
+
 async def get_current_user_and_session(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -118,8 +142,7 @@ async def get_current_user_and_session(
 ) -> tuple[UserResponse, str]:
     """获取当前用户以及当前 access token 对应的 session_id。"""
     token = credentials.credentials
-    if token.startswith("pk_"):
-        raise _auth_error("当前接口不支持 API Key 认证")
+    _require_access_token(token)
 
     user, session_id = _resolve_access_session(token, db)
     UserService.touch_session_activity(

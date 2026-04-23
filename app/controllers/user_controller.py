@@ -17,12 +17,14 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, get_current_user_and_session
+from app.core.dependencies import (
+    get_current_user_and_session,
+    get_current_user_by_access_token,
+)
 from app.core.request_meta import extract_client_ip, extract_user_agent
 from app.schemas.common import MessageResponse
 from app.schemas.user import (
     LoginResponse,
-    RefreshTokenRequest,
     RefreshTokenResponse,
     SessionResponse,
     TotpSetupResponse,
@@ -115,13 +117,13 @@ async def login_user(
     - **password**: SHA256哈希后的密码
     """
     try:
-        login_response = UserService.login_user(
+        login_response, refresh_token = UserService.login_user(
             db,
             login_data,
             user_agent=extract_user_agent(request),
             ip_address=extract_client_ip(request),
         )
-        _set_refresh_token_cookie(response, login_response.refresh_token)
+        _set_refresh_token_cookie(response, refresh_token)
         return login_response
     except ValueError as e:
         raise HTTPException(
@@ -146,13 +148,13 @@ async def login_user_with_totp(
     - **totp_code**: 6位TOTP验证码
     """
     try:
-        login_response = UserService.login_user_with_totp(
+        login_response, refresh_token = UserService.login_user_with_totp(
             db,
             login_data,
             user_agent=extract_user_agent(request),
             ip_address=extract_client_ip(request),
         )
-        _set_refresh_token_cookie(response, login_response.refresh_token)
+        _set_refresh_token_cookie(response, refresh_token)
         return login_response
     except ValueError as e:
         raise HTTPException(
@@ -167,17 +169,14 @@ async def refresh_access_token(
     request: Request,
     response: Response,
     refresh_token: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE_NAME),
-    refresh_data: RefreshTokenRequest | None = None,
     db: Session = Depends(get_db),
 ):
     """
     使用 refresh token 续期 access token（并旋转 refresh token）
 
-    - 优先使用 HttpOnly Cookie: mb_refresh_token
-    - 若 Cookie 不存在，可在 JSON body 提供 refresh_token（适用于移动端等非浏览器场景）
+    - 仅使用 HttpOnly Cookie: mb_refresh_token
     """
-    token = refresh_token or (refresh_data.refresh_token if refresh_data else None)
-    if not token:
+    if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少 refresh token"
         )
@@ -185,14 +184,13 @@ async def refresh_access_token(
     try:
         access_token, new_refresh_token = UserService.refresh_access_token(
             db,
-            token,
+            refresh_token,
             user_agent=extract_user_agent(request),
             ip_address=extract_client_ip(request),
         )
         _set_refresh_token_cookie(response, new_refresh_token)
         return RefreshTokenResponse(
             access_token=access_token,
-            refresh_token=new_refresh_token,
             token_type="bearer",
         )
     except ValueError as e:
@@ -206,18 +204,15 @@ async def refresh_access_token(
 async def logout(
     response: Response,
     refresh_token: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE_NAME),
-    refresh_data: RefreshTokenRequest | None = None,
     db: Session = Depends(get_db),
 ):
     """
     主动登出（撤销当前会话 refresh token）
 
-    - 优先使用 HttpOnly Cookie: mb_refresh_token
-    - 若 Cookie 不存在，可在 JSON body 提供 refresh_token
+    - 仅使用 HttpOnly Cookie: mb_refresh_token
     """
-    token = refresh_token or (refresh_data.refresh_token if refresh_data else None)
-    if token:
-        UserService.logout_by_refresh_token(db, token)
+    if refresh_token:
+        UserService.logout_by_refresh_token(db, refresh_token)
     _clear_refresh_token_cookie(response)
     return MessageResponse(message="已登出")
 
@@ -225,7 +220,7 @@ async def logout(
 @router.post("/logout-all", response_model=MessageResponse)
 async def logout_all(
     response: Response,
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
     db: Session = Depends(get_db),
 ):
     """全部设备登出（撤销用户所有会话）"""
@@ -235,7 +230,9 @@ async def logout_all(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: UserResponse = Depends(get_current_user)):
+async def get_current_user_info(
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+):
     """获取当前用户信息"""
     return current_user
 
@@ -244,7 +241,7 @@ async def get_current_user_info(current_user: UserResponse = Depends(get_current
 async def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """根据ID获取用户信息"""
     if not _is_admin(current_user) and current_user.id != user_id:
@@ -263,7 +260,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     更新用户信息
@@ -287,7 +284,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     删除用户
@@ -319,7 +316,7 @@ async def list_users(
     role: Literal["admin", "user"] | None = Query(None, description="角色筛选"),
     is_active: bool | None = Query(None, description="状态筛选"),
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """获取用户列表（管理员）"""
     _require_admin(current_user)
@@ -337,7 +334,7 @@ async def list_users(
 async def create_user(
     user_data: UserCreateRequest,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     创建用户（管理员）
@@ -400,7 +397,7 @@ async def revoke_other_sessions(
 async def revoke_session(
     session_id: str,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     撤销会话
@@ -419,7 +416,7 @@ async def revoke_session(
 @router.post("/cleanup-sessions", response_model=MessageResponse)
 async def cleanup_expired_sessions(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """清理过期会话（管理员）"""
     _require_admin(current_user)
@@ -433,7 +430,7 @@ async def cleanup_expired_sessions(
 
 @router.get("/me/totp", response_model=TotpStatusResponse)
 async def get_totp_status(
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
     db: Session = Depends(get_db),
 ):
     """
@@ -449,7 +446,7 @@ async def get_totp_status(
 
 @router.post("/me/totp", response_model=TotpSetupResponse)
 async def setup_totp(
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
     db: Session = Depends(get_db),
 ):
     """
@@ -468,7 +465,7 @@ async def setup_totp(
 @router.post("/me/totp/verify", response_model=MessageResponse)
 async def verify_totp(
     totp_data: TotpVerifyRequest,
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
     db: Session = Depends(get_db),
 ):
     """
@@ -491,7 +488,7 @@ async def verify_totp(
 
 @router.delete("/me/totp", response_model=MessageResponse)
 async def disable_totp(
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
     db: Session = Depends(get_db),
 ):
     """

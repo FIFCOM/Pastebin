@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import {
+  DOCS_BASE_PATH,
+  DOCS_OVERVIEW_PATH
+} from '../content/api-docs'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -37,6 +41,15 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/collab',
     redirect: '/'
+  },
+  {
+    path: DOCS_BASE_PATH,
+    redirect: DOCS_OVERVIEW_PATH
+  },
+  {
+    path: `${DOCS_BASE_PATH}/:section`,
+    name: 'ApiDocs',
+    component: () => import('../views/ApiDocsView.vue')
   },
   {
     path: '/install',

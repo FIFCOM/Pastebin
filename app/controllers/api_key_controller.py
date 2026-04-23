@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user_by_access_token
 from app.schemas.api_key import (
     ApiKeyCreateRequest,
     ApiKeyCreateResponse,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/user/apikeys", tags=["API密钥管理"])
 @router.get("", response_model=ApiKeyListResponse)
 async def get_api_keys(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     获取API密钥列表
@@ -39,7 +39,7 @@ async def get_api_keys(
 async def create_api_key(
     api_key_data: ApiKeyCreateRequest,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     创建API密钥
@@ -61,7 +61,7 @@ async def create_api_key(
 async def delete_api_key(
     key_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     """
     删除API密钥
@@ -80,7 +80,7 @@ async def delete_api_key(
 @router.post("/cleanup-expired", response_model=MessageResponse)
 async def cleanup_expired_api_keys(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
 ):
     count = ApiKeyService.cleanup_expired_api_keys(db, current_user.id)
     return MessageResponse(message=f"已清理 {count} 个过期 API Key")

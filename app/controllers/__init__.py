@@ -6,6 +6,7 @@ from .api_key_controller import router as api_key_router
 from .cleanup_controller import router as cleanup_router
 from .collab_room_controller import router as collab_room_router
 from .config_controller import router as config_router
+from .docs_controller import router as docs_router
 from .health_controller import router as health_router
 from .install_controller import router as install_router
 from .paste_controller import router as paste_router
@@ -21,5 +22,6 @@ __all__ = [
     "collab_room_router",
     "cleanup_router",
     "config_router",
+    "docs_router",
     "install_router",
 ]

@@ -9,7 +9,7 @@
   >
     <div class="sidebar-shell">
       <mdui-list class="sidebar-nav">
-        <mdui-collapse ref="sidebarCollapseRef" class="sidebar-collapse" @change="syncExpandedSections">
+        <mdui-collapse ref="sidebarCollapseRef" class="sidebar-collapse" :key="defaultExpandedSectionsKey" :value="expandedSections" @change="syncExpandedSections">
           <mdui-collapse-item
             v-for="section in sidebarSections"
             :key="section.value"
@@ -35,6 +35,7 @@
               <mdui-list-item
                 v-for="item in section.items"
                 :key="item.key"
+                :data-testid="item.testid ?? (section.value.startsWith('docs-') ? `api-docs-sidebar-item-${item.key}` : undefined)"
                 class="sidebar-list-item"
                 rounded
                 alignment="center"
@@ -54,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Collapse } from 'mdui/components/collapse.js'
 import 'mdui/components/collapse.js'
@@ -66,6 +67,7 @@ import 'mdui/components/list-item.js'
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
 import { getUserNavigationGroups, normalizeUserTab, type UserTabValue } from './users/navigation'
+import { API_DOCS_SECTIONS, DOCS_OVERVIEW_PATH, getDocsSectionPath, isDocsPath } from '../content/api-docs'
 
 type SidebarSectionItem = {
   key: string
@@ -74,7 +76,9 @@ type SidebarSectionItem = {
   description?: string
   disabled?: boolean
   active?: boolean
+  path?: string
   tab?: UserTabValue
+  testid?: string
 }
 
 type SidebarSection = {
@@ -94,8 +98,9 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         key: 'api-docs',
         label: 'API文档',
         icon: 'article',
-        description: '占位入口，暂不实现跳转',
-        disabled: true
+        description: 'Material Bin API 使用文档',
+        path: DOCS_OVERVIEW_PATH,
+        testid: 'api-docs-sidebar-entry'
       }
     ]
   },
@@ -129,12 +134,42 @@ const { isAppSidebarOpen, openAppSidebar, closeAppSidebar } = useAppSidebarState
 const sidebarCollapseRef = ref<Collapse | null>(null)
 
 const isUsersRoute = computed(() => route.path === '/users')
+const isDocsRoute = computed(() => isDocsPath(route.path))
 const canAccessUsers = computed(() => currentUser.value?.role === 'admin')
 const userNavigationGroups = computed(() => getUserNavigationGroups(canAccessUsers.value))
 const activeUserTab = computed(() => normalizeUserTab(route.query.tab, canAccessUsers.value))
 const expandedSections = ref<string[]>([])
 
+const docsSectionsByGroup = computed(() => {
+  const map = new Map<string, typeof API_DOCS_SECTIONS>()
+  for (const section of API_DOCS_SECTIONS) {
+    const group = map.get(section.group) || []
+    group.push(section)
+    map.set(section.group, group)
+  }
+  return map
+})
+
 const sidebarSections = computed<SidebarSection[]>(() => {
+  if (isDocsRoute.value) {
+    const result: SidebarSection[] = []
+    for (const [groupLabel, items] of docsSectionsByGroup.value) {
+      result.push({
+        value: `docs-${groupLabel}`,
+        label: groupLabel,
+        icon: 'description',
+        items: items.map((item) => ({
+          key: item.slug,
+          label: item.sidebarLabel,
+          icon: 'article',
+          path: getDocsSectionPath(item.slug),
+          active: item.slug === route.params.section
+        }))
+      })
+    }
+    return result
+  }
+
   if (!isUsersRoute.value) {
     return DEFAULT_SECTIONS
   }
@@ -158,14 +193,8 @@ const defaultExpandedSectionsKey = computed(() => defaultExpandedSections.value.
 
 watch(
   defaultExpandedSectionsKey,
-  async () => {
-    await nextTick()
-
+  () => {
     expandedSections.value = [...defaultExpandedSections.value]
-
-    if (sidebarCollapseRef.value) {
-      sidebarCollapseRef.value.value = [...expandedSections.value]
-    }
   },
   { immediate: true }
 )
@@ -186,16 +215,28 @@ function isSectionExpanded(sectionValue: string): boolean {
 }
 
 function handleSidebarItemClick(item: SidebarSectionItem) {
-  if (item.disabled || !item.tab) return
+  if (item.disabled) return
 
-  const next = normalizeUserTab(item.tab, canAccessUsers.value)
-
-  void router.replace({
-    query: {
-      ...route.query,
-      tab: next
+  if (item.path) {
+    if (item.path !== route.path) {
+      void router.push(item.path)
     }
-  })
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 959px)').matches) {
+      closeAppSidebar()
+    }
+    return
+  }
+
+  if (item.tab) {
+    const next = normalizeUserTab(item.tab, canAccessUsers.value)
+
+    void router.replace({
+      query: {
+        ...route.query,
+        tab: next
+      }
+    })
+  }
 
   if (typeof window !== 'undefined' && window.matchMedia('(max-width: 959px)').matches) {
     closeAppSidebar()
@@ -207,13 +248,26 @@ function handleSidebarItemClick(item: SidebarSectionItem) {
 .sidebar-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 22px;
   box-sizing: border-box;
 }
 
+.app-sidebar {
+  min-height: 0;
+}
+
 .app-sidebar::part(panel) {
   width: min(296px, 84vw);
+  height: 100%;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
   border-right: 1px solid rgb(var(--mdui-color-outline-variant) / 0.68);
   background: rgb(var(--mdui-color-surface-container-low));
 }
@@ -291,11 +345,32 @@ function handleSidebarItemClick(item: SidebarSectionItem) {
 
 @media (min-width: 960px) {
   .app-sidebar {
+    position: fixed !important;
+    top: var(--app-header-offset, 64px) !important;
+    inset-inline-start: 0 !important;
+    bottom: auto !important;
+    align-self: flex-start;
     width: min(296px, 84vw);
+    min-height: calc(100dvh - var(--app-header-offset, 64px));
+    height: calc(100dvh - var(--app-header-offset, 64px));
+    overflow: hidden;
+    transition:
+      transform 200ms cubic-bezier(0.2, 0, 0, 1),
+      top 200ms cubic-bezier(0.2, 0, 0, 1),
+      height 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .app-sidebar:not([open]) {
+    transform: translateX(calc(-100% - 1px));
   }
 
   .app-sidebar::part(panel) {
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
     width: 100%;
+    height: 100%;
+    max-height: none;
   }
 }
 </style>

@@ -17,12 +17,20 @@ from app.services.install_state_service import (
 
 
 def _is_install_gate_whitelisted(path: str) -> bool:
-    if path in {"/api/install", "/api/health", "/api/health/", "/openapi.json"}:
+    if path in {
+        "/api/install",
+        "/api/health",
+        "/api/health/",
+        "/api/docs",
+        "/api/docs/",
+        "/api/openapi.json",
+    }:
         return True
     return (
         path.startswith("/api/install/")
-        or path.startswith("/docs")
-        or path.startswith("/redoc")
+        or path.startswith("/api/docs/")
+        or path.startswith("/api/openapi/docs")
+        or path.startswith("/api/openapi/redoc")
     )
 
 

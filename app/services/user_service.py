@@ -182,7 +182,7 @@ class UserService:
         *,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> LoginResponse:
+    ) -> tuple[LoginResponse, str]:
         """
         用户登录
 
@@ -191,7 +191,7 @@ class UserService:
             login_data: 登录数据
 
         Returns:
-            登录响应（包含token和用户信息）
+            登录响应（access token 和用户信息）以及 refresh token
 
         Raises:
             ValueError: 当用户名或密码错误，或需要TOTP验证时
@@ -225,11 +225,13 @@ class UserService:
             ip_address=ip_address,
         )
 
-        return LoginResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            user=UserResponse.model_validate(user),  # type: ignore
+        return (
+            LoginResponse(
+                access_token=access_token,
+                token_type="bearer",
+                user=UserResponse.model_validate(user),  # type: ignore
+            ),
+            refresh_token,
         )
 
     @staticmethod
@@ -750,7 +752,7 @@ class UserService:
         *,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> LoginResponse:
+    ) -> tuple[LoginResponse, str]:
         """
         用户登录（包含TOTP验证）
 
@@ -759,7 +761,7 @@ class UserService:
             login_data: 登录数据（包含TOTP代码）
 
         Returns:
-            登录响应（包含token和用户信息）
+            登录响应（access token 和用户信息）以及 refresh token
 
         Raises:
             ValueError: 当用户名、密码或TOTP代码错误时
@@ -789,11 +791,13 @@ class UserService:
             ip_address=ip_address,
         )
 
-        return LoginResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            user=UserResponse.model_validate(user),
+        return (
+            LoginResponse(
+                access_token=access_token,
+                token_type="bearer",
+                user=UserResponse.model_validate(user),
+            ),
+            refresh_token,
         )
 
     @staticmethod

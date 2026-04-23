@@ -25,14 +25,25 @@ import CollabJoinDialog from './components/collab/CollabJoinDialog.vue'
 import GlobalHeader from './components/GlobalHeader.vue'
 import GlobalFooter from './components/GlobalFooter.vue'
 import { useAppSidebarState } from './composables/useAppSidebarState'
-import { useAuth } from './composables/useAuth'
+import { isDocsPath } from './content/api-docs'
 
 const route = useRoute()
-const { initAuth } = useAuth()
-const { setAppSidebarOpen, closeAppSidebar } = useAppSidebarState()
+const { isAppSidebarOpen, setAppSidebarOpen, closeAppSidebar } = useAppSidebarState()
 const isInstallRoute = computed(() => route.path === '/install' || route.path.startsWith('/install/'))
 
 let usersSidebarMediaQuery: MediaQueryList | null = null
+let isDocumentScrollLocked = false
+let lockedScrollY = 0
+
+const initialDocumentStyles = {
+  htmlOverflow: '',
+  bodyOverflow: '',
+  bodyPosition: '',
+  bodyTop: '',
+  bodyLeft: '',
+  bodyRight: '',
+  bodyWidth: ''
+}
 
 function shouldOpenUsersSidebarByDefault(): boolean {
   if (typeof window === 'undefined') return false
@@ -45,7 +56,7 @@ function syncAppSidebarForRoute(path: string): void {
     return
   }
 
-  if (path === '/users') {
+  if (path === '/users' || isDocsPath(path)) {
     setAppSidebarOpen(shouldOpenUsersSidebarByDefault())
     return
   }
@@ -54,34 +65,102 @@ function syncAppSidebarForRoute(path: string): void {
 }
 
 function handleUsersSidebarBreakpointChange(event: MediaQueryListEvent): void {
-  if (route.path !== '/users') return
-  setAppSidebarOpen(event.matches)
+  if (route.path === '/users' || isDocsPath(route.path)) {
+    setAppSidebarOpen(event.matches)
+  }
+
+  syncDocumentScrollLock()
+}
+
+function shouldLockDocumentScroll(): boolean {
+  if (typeof window === 'undefined') return false
+
+  return !isInstallRoute.value
+    && isAppSidebarOpen.value
+    && window.matchMedia('(max-width: 959px)').matches
+}
+
+function lockDocumentScroll(): void {
+  if (typeof window === 'undefined' || isDocumentScrollLocked) {
+    return
+  }
+
+  const { documentElement, body } = document
+
+  initialDocumentStyles.htmlOverflow = documentElement.style.overflow
+  initialDocumentStyles.bodyOverflow = body.style.overflow
+  initialDocumentStyles.bodyPosition = body.style.position
+  initialDocumentStyles.bodyTop = body.style.top
+  initialDocumentStyles.bodyLeft = body.style.left
+  initialDocumentStyles.bodyRight = body.style.right
+  initialDocumentStyles.bodyWidth = body.style.width
+
+  lockedScrollY = window.scrollY
+  documentElement.style.overflow = 'hidden'
+  body.style.overflow = 'hidden'
+  body.style.position = 'fixed'
+  body.style.top = `-${lockedScrollY}px`
+  body.style.left = '0'
+  body.style.right = '0'
+  body.style.width = '100%'
+  isDocumentScrollLocked = true
+}
+
+function unlockDocumentScroll(): void {
+  if (typeof window === 'undefined' || !isDocumentScrollLocked) {
+    return
+  }
+
+  const { documentElement, body } = document
+
+  documentElement.style.overflow = initialDocumentStyles.htmlOverflow
+  body.style.overflow = initialDocumentStyles.bodyOverflow
+  body.style.position = initialDocumentStyles.bodyPosition
+  body.style.top = initialDocumentStyles.bodyTop
+  body.style.left = initialDocumentStyles.bodyLeft
+  body.style.right = initialDocumentStyles.bodyRight
+  body.style.width = initialDocumentStyles.bodyWidth
+
+  window.scrollTo(0, lockedScrollY)
+  lockedScrollY = 0
+  isDocumentScrollLocked = false
+}
+
+function syncDocumentScrollLock(): void {
+  if (shouldLockDocumentScroll()) {
+    lockDocumentScroll()
+    return
+  }
+
+  unlockDocumentScroll()
 }
 
 watch(
   () => route.path,
   (path) => {
     syncAppSidebarForRoute(path)
+    syncDocumentScrollLock()
   },
   { immediate: true }
 )
+
+watch(isAppSidebarOpen, () => {
+  syncDocumentScrollLock()
+})
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
     usersSidebarMediaQuery = window.matchMedia('(min-width: 960px)')
     usersSidebarMediaQuery.addEventListener('change', handleUsersSidebarBreakpointChange)
     syncAppSidebarForRoute(route.path)
+    syncDocumentScrollLock()
   }
-
-  if (isInstallRoute.value) return
-  initAuth().catch((e) => {
-    console.error('Failed to initialize auth on app mount', e)
-  })
 })
 
 onBeforeUnmount(() => {
   usersSidebarMediaQuery?.removeEventListener('change', handleUsersSidebarBreakpointChange)
   usersSidebarMediaQuery = null
+  unlockDocumentScroll()
 })
 </script>
 
