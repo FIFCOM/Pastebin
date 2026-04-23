@@ -146,8 +146,8 @@ npm run dev
 ### Paste
 
 - `POST /api/pastes` - 创建Paste（草稿）
-- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `Bearer {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
-- `POST /api/pastes/{paste_id}/publish` - 发布（需要 `Bearer {admin_key}`）
+- `POST /api/pastes/{paste_id}/content` - 上传/更新内容（需要 `X-Paste-Admin-Key: {admin_key}`；若为服务端加密且已发布，需额外提供 `X-Encryption-Key: {encryption_key}`）
+- `POST /api/pastes/{paste_id}/publish` - 发布（需要 `X-Paste-Admin-Key: {admin_key}`）
 - `GET /api/pastes/{paste_id}` - 获取Paste信息（可选 `access_key`；文件列表请从 `/content` 获取）
 - `GET /api/pastes/{paste_id}/content` - 获取内容与文件列表（可选 `access_key` / `encryption_key`）
 - `POST /api/pastes/{paste_id}/files/init` - 初始化分片上传（JSON；返回 `upload_id/chunk_size/total_chunks`）
@@ -157,7 +157,7 @@ npm run dev
 - `POST /api/pastes/{paste_id}/files/{upload_id}/abort` - 取消并清理分片上传
 - `GET /api/pastes/{paste_id}/files/{file_id}` - 下载文件（可选 `access_key` / `encryption_key`；支持 `Range: bytes=...`）
 - `GET /api/pastes/{paste_id}/files/{file_id}/manifest` - 获取分片文件manifest（用于前端/Service Worker流式解密）
-- `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `Bearer {admin_key}`）
+- `DELETE /api/pastes/{paste_id}` - 删除Paste（需要 `X-Paste-Admin-Key: {admin_key}`）
 
 ## 文件上传加解密流程
 
@@ -287,19 +287,19 @@ npm run dev
 ### 协作房间
 
 - `POST /api/rooms/member-token` - 获取成员令牌（可匿名）
-- `POST /api/rooms` - 创建房间（`Bearer {member_token}`）
+- `POST /api/rooms` - 创建房间（`X-Member-Token: {member_token}`）
 - `GET /api/join/{pin_code}` - 通过PIN码获取房间信息
-- `POST /api/rooms/{room_id}/join` - 加入房间（`Bearer {member_token}`）
+- `POST /api/rooms/{room_id}/join` - 加入房间（`X-Member-Token: {member_token}`）
 - `GET /api/rooms/{room_id}/ws` - WebSocket实时通道（连接后首条消息发送 `{"type":"auth","token":"..."}`）
-- `GET /api/rooms/{room_id}/members` - 成员列表（`Bearer {member_token}`）
-- `POST /api/rooms/{room_id}/pastes` - 分享Paste（`Bearer {member_token}`）
-- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`Bearer {member_token}`，返回 `is_expired` / `expire_at`）
-- `DELETE /api/rooms/{room_id}/leave` - 离开房间（`Bearer {member_token}`）
+- `GET /api/rooms/{room_id}/members` - 成员列表（`X-Member-Token: {member_token}`）
+- `POST /api/rooms/{room_id}/pastes` - 分享Paste（`X-Member-Token: {member_token}`）
+- `GET /api/rooms/{room_id}/pastes` - 房间Paste列表（`X-Member-Token: {member_token}`，返回 `is_expired` / `expire_at`）
+- `DELETE /api/rooms/{room_id}/leave` - 离开房间（`X-Member-Token: {member_token}`）
 
 ### 内部任务（需要内部令牌）
 
-- `POST /api/internal/cleanup` - 执行清理任务（`Bearer {INTERNAL_TOKEN}`）
-- `GET /api/internal/cleanup/status` - 清理服务状态（`Bearer {INTERNAL_TOKEN}`）
+- `POST /api/internal/cleanup` - 执行清理任务（`X-Internal-Token: {INTERNAL_TOKEN}`）
+- `GET /api/internal/cleanup/status` - 清理服务状态（`X-Internal-Token: {INTERNAL_TOKEN}`）
 
 ## 定时清理
 

@@ -13,7 +13,7 @@
 文件上传是独立于 Paste 创建的操作，需要在 Paste 创建完成后单独进行。所有上传相关的接口都需要通过请求头传递管理凭据：
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 文件上传的完整流程如下：
@@ -79,7 +79,7 @@ POST /api/pastes/{paste_id}/files/{upload_id}/complete          ← 完成上传
 | 无需凭据 | 已发布且未设置访问密码的 Paste |
 | `?access_key=...` | 已发布且设置了访问密码的 Paste |
 | `?encryption_key=...` | 需要获取解密后的内容或文件 |
-| `Authorization: Bearer {admin_key}` | 管理员身份访问，可读取草稿 |
+| `X-Paste-Admin-Key: {admin_key}` | 管理员身份访问，可读取草稿 |
 
 > **注意区分三种凭据：**
 > - `access_key`：访问密码，控制是否能查看 Paste
@@ -99,7 +99,7 @@ POST /api/pastes/{paste_id}/files/{upload_id}/complete          ← 完成上传
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 Content-Type: application/json
 ```
 
@@ -127,7 +127,7 @@ X-Encryption-Key: {encryption_key}
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 Content-Type: application/json
 ```
 
@@ -178,7 +178,7 @@ X-Encryption-Key: {encryption_key}
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 **返回字段：**
@@ -194,7 +194,7 @@ Authorization: Bearer {admin_key}
 
 ```bash
 curl http://localhost:8000/api/pastes/Ab3kL9xQ/files/550e8400-e29b-41d4-a716-446655440000/status \
-  -H 'Authorization: Bearer your_admin_key'
+  -H 'X-Paste-Admin-Key: your_admin_key'
 ```
 
 ---
@@ -206,7 +206,7 @@ curl http://localhost:8000/api/pastes/Ab3kL9xQ/files/550e8400-e29b-41d4-a716-446
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 Content-Type: application/octet-stream
 ```
 
@@ -220,7 +220,7 @@ Content-Type: application/octet-stream
 ```bash
 curl -X PUT \
   'http://localhost:8000/api/pastes/Ab3kL9xQ/files/550e8400-e29b-41d4-a716-446655440000/chunk/0' \
-  -H 'Authorization: Bearer your_admin_key' \
+  -H 'X-Paste-Admin-Key: your_admin_key' \
   -H 'Content-Type: application/octet-stream' \
   --data-binary @chunk-0.bin
 ```
@@ -268,7 +268,7 @@ AAD 需要匹配服务端返回的 `aad_prefix` 格式。
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 Content-Type: application/json
 ```
 
@@ -318,7 +318,7 @@ X-Encryption-Key: {encryption_key}
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 **适用场景：**
@@ -336,7 +336,7 @@ Authorization: Bearer {admin_key}
 **请求头：**
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 删除后，如果内容中仍然引用了该文件的链接，请记得同步更新。

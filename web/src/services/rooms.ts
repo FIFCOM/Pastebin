@@ -73,7 +73,7 @@ export interface SharePasteRequest {
 function memberAuthHeaders(memberToken: string) {
   return {
     headers: {
-      Authorization: `Bearer ${memberToken}`
+      'X-Member-Token': memberToken
     }
   }
 }

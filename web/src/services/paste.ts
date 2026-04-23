@@ -2,6 +2,12 @@ import { createInstallAwareHttpClient } from './http'
 
 const apiClient = createInstallAwareHttpClient()
 
+function adminKeyHeaders(adminKey: string) {
+  return {
+    'X-Paste-Admin-Key': adminKey
+  }
+}
+
 export interface PasteFile {
   id: string
   size: number
@@ -115,7 +121,7 @@ export async function uploadPasteContent(
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminKey}`
+        ...adminKeyHeaders(adminKey)
       }
     }
   )
@@ -134,7 +140,7 @@ export async function publishPaste(
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminKey}`
+        ...adminKeyHeaders(adminKey)
       }
     }
   )
@@ -152,7 +158,7 @@ export async function updatePaste(
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminKey}`
+        ...adminKeyHeaders(adminKey)
       }
     }
   )
@@ -166,9 +172,7 @@ export async function getPaste(
   const response = await apiClient.get(`/pastes/${pasteId}`, {
     params: accessKey ? { access_key: accessKey } : undefined,
     headers: adminKey
-      ? {
-          Authorization: `Bearer ${adminKey}`
-        }
+      ? adminKeyHeaders(adminKey)
       : undefined
   })
   return response.data
@@ -185,9 +189,7 @@ export async function getPasteContent(
   const response = await apiClient.get(`/pastes/${pasteId}/content`, {
     params: Object.keys(params).length > 0 ? params : undefined,
     headers: adminKey
-      ? {
-          Authorization: `Bearer ${adminKey}`
-        }
+      ? adminKeyHeaders(adminKey)
       : undefined
   })
   return response.data
@@ -203,7 +205,7 @@ export async function initFileUpload(
   const response = await apiClient.post(`/pastes/${pasteId}/files/init`, body, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${adminKey}`,
+      ...adminKeyHeaders(adminKey),
       ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
     },
     signal
@@ -223,7 +225,7 @@ export async function uploadFileChunk(
   await apiClient.put(`/pastes/${pasteId}/files/${uploadId}/chunk/${index}`, chunk, {
     headers: {
       'Content-Type': 'application/octet-stream',
-      Authorization: `Bearer ${adminKey}`
+      ...adminKeyHeaders(adminKey)
     },
     transformRequest: (d) => d,
     onUploadProgress: onProgress ? (e) => onProgress(e.loaded, e.total ?? 0) : undefined,
@@ -242,7 +244,7 @@ export async function completeFileUpload(
   const response = await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/complete`, body, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${adminKey}`,
+      ...adminKeyHeaders(adminKey),
       ...(encryptionKey ? { 'X-Encryption-Key': encryptionKey } : {})
     },
     signal
@@ -258,7 +260,7 @@ export async function getFileUploadStatus(
 ): Promise<FileUploadStatusResponse> {
   const response = await apiClient.get(`/pastes/${pasteId}/files/${uploadId}/status`, {
     headers: {
-      Authorization: `Bearer ${adminKey}`
+      ...adminKeyHeaders(adminKey)
     },
     signal
   })
@@ -272,7 +274,7 @@ export async function abortFileUpload(
 ): Promise<void> {
   await apiClient.post(`/pastes/${pasteId}/files/${uploadId}/abort`, null, {
     headers: {
-      Authorization: `Bearer ${adminKey}`
+      ...adminKeyHeaders(adminKey)
     }
   })
 }
@@ -284,7 +286,7 @@ export async function deleteFile(
 ): Promise<void> {
   await apiClient.delete(`/pastes/${pasteId}/files/${fileId}`, {
     headers: {
-      Authorization: `Bearer ${adminKey}`
+      ...adminKeyHeaders(adminKey)
     }
   })
 }

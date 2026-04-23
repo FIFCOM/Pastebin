@@ -47,20 +47,20 @@ function buildAccessKeyQuery(accessKey) {
   return `?access_key=${encodeURIComponent(trimmed)}`
 }
 
-function buildAdminAuthHeader(adminKey) {
+function buildAdminKeyHeader(adminKey) {
   if (!adminKey) return null
   const trimmed = String(adminKey).trim()
   if (!trimmed) return null
-  return `Bearer ${trimmed}`
+  return trimmed
 }
 
 function manifestCacheKey(pasteId, fileId) {
   return `${pasteId}:${fileId}`
 }
 
-async function fetchJson(url, authHeaderOrNull) {
+async function fetchJson(url, adminKeyOrNull) {
   const headers = new Headers()
-  if (authHeaderOrNull) headers.set('Authorization', authHeaderOrNull)
+  if (adminKeyOrNull) headers.set('X-Paste-Admin-Key', adminKeyOrNull)
 
   const resp = await fetch(url, { cache: 'no-store', headers })
   if (!resp.ok) {
@@ -80,7 +80,7 @@ async function getManifest(pasteId, fileId, accessKey, adminKey) {
   const url =
     `/api/pastes/${encodeURIComponent(pasteId)}/files/${encodeURIComponent(fileId)}/manifest` +
     buildAccessKeyQuery(accessKey)
-  const manifest = await fetchJson(url, buildAdminAuthHeader(adminKey))
+  const manifest = await fetchJson(url, buildAdminKeyHeader(adminKey))
   manifestCache.set(key, { manifest, ts: Date.now() })
   return manifest
 }
@@ -93,7 +93,7 @@ async function getMimeType(pasteId, fileId, accessKey, adminKey) {
   const url =
     `/api/pastes/${encodeURIComponent(pasteId)}/files/${encodeURIComponent(fileId)}/meta` +
     buildAccessKeyQuery(accessKey)
-  const meta = await fetchJson(url, buildAdminAuthHeader(adminKey))
+  const meta = await fetchJson(url, buildAdminKeyHeader(adminKey))
   const mimeType = (meta && meta.mime_type) ? String(meta.mime_type) : 'application/octet-stream'
   metaCache.set(key, { mimeType, ts: Date.now() })
   return mimeType
@@ -262,10 +262,10 @@ async function handlePlainFileRequest(request, pasteId, fileId) {
     buildAccessKeyQuery(ctx.accessKey)
 
   const abortController = new AbortController()
-  const authHeader = buildAdminAuthHeader(ctx.adminKey)
+  const adminKeyHeader = buildAdminKeyHeader(ctx.adminKey)
   const upstreamHeaders = new Headers()
   upstreamHeaders.set('Range', `bytes=${encStart}-${encEnd}`)
-  if (authHeader) upstreamHeaders.set('Authorization', authHeader)
+  if (adminKeyHeader) upstreamHeaders.set('X-Paste-Admin-Key', adminKeyHeader)
   const upstreamResp = await fetch(fileUrl, {
     headers: upstreamHeaders,
     cache: 'no-store',

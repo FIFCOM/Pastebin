@@ -2,7 +2,7 @@
 
 本节覆盖协作模块中**唯一支持可选 API Key 识别**的两个接口。
 
-> 其余协作接口（创建房间、加入房间、成员列表、分享 Paste、WebSocket 等）使用 `member_token` 认证，**不支持**用户 API Key（`pk_...`），不在本文档范围内。
+> 其余协作 HTTP 接口（创建房间、加入房间、成员列表、分享 Paste 等）通过 `X-Member-Token` 传递 `member_token`，**不支持**用户 API Key（`pk_...`）。WebSocket 仍按实时协议在连接后提交 `member_token`。
 
 ---
 
@@ -71,15 +71,15 @@
 
 ## 不支持 API Key 的协作接口
 
-以下协作接口**仅支持 `member_token` 认证**，不接受用户 API Key：
+以下协作 HTTP 接口仅支持通过 `X-Member-Token` 传递 `member_token`，不接受用户 API Key：
 
 | 接口 | 认证方式 |
 |------|----------|
-| `POST /api/rooms` — 创建房间 | `member_token` |
+| `POST /api/rooms` — 创建房间 | `X-Member-Token` |
 | `GET /api/join/{pin_code}` — 获取房间信息 | 无需认证 |
-| `POST /api/rooms/{room_id}/join` — 加入房间 | `member_token` |
-| `GET /api/rooms/{room_id}/members` — 成员列表 | `member_token` |
-| `POST /api/rooms/{room_id}/pastes` — 分享 Paste | `member_token` |
-| `GET /api/rooms/{room_id}/pastes` — 房间 Paste 列表 | `member_token` |
-| `DELETE /api/rooms/{room_id}/leave` — 离开房间 | `member_token` |
-| `WS /api/rooms/{room_id}/ws` — 实时 WebSocket | `member_token` |
+| `POST /api/rooms/{room_id}/join` — 加入房间 | `X-Member-Token` |
+| `GET /api/rooms/{room_id}/members` — 成员列表 | `X-Member-Token` |
+| `POST /api/rooms/{room_id}/pastes` — 分享 Paste | `X-Member-Token` |
+| `GET /api/rooms/{room_id}/pastes` — 房间 Paste 列表 | `X-Member-Token` |
+| `DELETE /api/rooms/{room_id}/leave` — 离开房间 | `X-Member-Token` |
+| `WS /api/rooms/{room_id}/ws` — 实时 WebSocket | 连接后按实时协议提交 `member_token` |

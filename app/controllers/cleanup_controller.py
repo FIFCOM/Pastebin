@@ -14,23 +14,19 @@ from config.config import settings
 router = APIRouter(prefix="/api/internal", tags=["内部任务"])
 
 
-def verify_internal_token(authorization: str = Header(...)) -> None:
+def verify_internal_token(
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),
+) -> None:
     """
     验证内部认证令牌
 
     Args:
-        authorization: Authorization header
+        x_internal_token: X-Internal-Token header
 
     Raises:
         HTTPException: 当令牌无效时
     """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="无效的Authorization格式")
-
-    token = authorization[7:]  # 移除 "Bearer " 前缀
-
-    # 从配置获取内部令牌
-    if token != settings.internal_token:
+    if x_internal_token != settings.internal_token:
         raise HTTPException(status_code=401, detail="无效的内部认证令牌")
 
 

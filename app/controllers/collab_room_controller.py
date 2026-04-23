@@ -36,23 +36,15 @@ from app.services.collab_room_service import CollabRoomService
 router = APIRouter(prefix="/api", tags=["协作房间"])
 
 
-def _get_member_token_from_header(authorization: str | None) -> str:
-    """从Authorization头中提取member_token"""
-    if not authorization:
+def _get_member_token_from_header(x_member_token: str | None) -> str:
+    """从X-Member-Token头中读取member_token。"""
+    if not x_member_token or not x_member_token.strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="缺少Authorization头",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="缺少X-Member-Token头",
         )
 
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的Authorization格式",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return authorization[7:]  # 去掉 "Bearer " 前缀
+    return x_member_token.strip()
 
 
 @router.post("/rooms/member-token", response_model=MemberTokenResponse)
@@ -107,17 +99,17 @@ async def refresh_member_token(
 @router.post("/rooms", response_model=RoomCreateResponse)
 async def create_room(
     room_data: RoomCreateRequest,
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     创建协作房间
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
 
     当前不接受任何自定义房间参数，最大成员数由后端配置控制。
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         return CollabRoomService.create_room(db, member_token, room_data)
@@ -154,17 +146,17 @@ async def get_room_info_by_pin(
 async def join_room(
     room_id: str,
     join_data: RoomJoinRequest,
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     加入房间
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
 
     - **pin_code**: 6位PIN码
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         return CollabRoomService.join_room(db, member_token, room_id, join_data)
@@ -190,15 +182,15 @@ async def join_room(
 @router.get("/rooms/{room_id}/members", response_model=RoomMembersResponse)
 async def get_room_members(
     room_id: str,
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     获取成员列表
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         return CollabRoomService.get_room_members(
@@ -222,20 +214,20 @@ async def get_room_members(
 async def share_paste_to_room(
     room_id: str,
     share_data: PasteShareRequest,
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     分享Paste到房间
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
 
     - **paste_id**: Paste ID
     - **encrypted_paste_key**: 用room_key加密的paste密钥
     - **encrypted_admin_key**: 可选，用room_key加密的admin_key；提供后接收者可进入编辑
     - **target_member_id**: 目标接收者ID，不提供则发送给所有人
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         shared_paste = CollabRoomService.share_paste_to_room(
@@ -267,17 +259,17 @@ async def get_room_pastes(
     type: str = Query(
         "received", regex="^(received|sent|all)$", description="接收的|发送的|全部"
     ),
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     获取房间内的Paste（只返回发送给当前用户或所有人的）
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
 
     - **type**: received（接收的）|sent（发送的）|all（全部），默认为received
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         return CollabRoomService.get_room_pastes(db, member_token, room_id, type)
@@ -295,15 +287,15 @@ async def get_room_pastes(
 @router.delete("/rooms/{room_id}/leave", response_model=MessageResponse)
 async def leave_room(
     room_id: str,
-    authorization: str | None = Header(None),
+    x_member_token: str | None = Header(None, alias="X-Member-Token"),
     db: Session = Depends(get_db),
 ):
     """
     离开房间
 
-    需要在Authorization头中提供member_token: Bearer {member_token}
+    需要在X-Member-Token头中提供member_token
     """
-    member_token = _get_member_token_from_header(authorization)
+    member_token = _get_member_token_from_header(x_member_token)
 
     try:
         leave_result = CollabRoomService.leave_room(db, member_token, room_id)

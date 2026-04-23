@@ -21,7 +21,7 @@ POST /api/pastes/{paste_id}/publish       ← 发布
 其中，第 1 步是公开接口，无需登录或 API Key。第 1 步返回的 `admin_key` 是后续所有操作的管理凭据，需要通过请求头传递：
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 ---
@@ -87,7 +87,7 @@ curl -X POST http://localhost:8000/api/pastes \
 ```bash
 curl -X POST http://localhost:8000/api/pastes/Ab3kL9xQ/content \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer your_admin_key' \
+  -H 'X-Paste-Admin-Key: your_admin_key' \
   -d '{
     "content": "Hello MaterialBin\nThis paste was created by API."
   }'
@@ -107,7 +107,7 @@ curl -X POST http://localhost:8000/api/pastes/Ab3kL9xQ/content \
 ```bash
 curl -X POST http://localhost:8000/api/pastes/Ab3kL9xQ/publish \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer your_admin_key' \
+  -H 'X-Paste-Admin-Key: your_admin_key' \
   -d '{
     "settings": {
       "title": "My First Paste",
@@ -188,7 +188,7 @@ Content-Type: application/json
 **认证：** 需要
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 **请求参数（二选一）：**
@@ -219,7 +219,7 @@ Authorization: Bearer {admin_key}
 **认证：** 需要
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 **请求体：**
@@ -261,7 +261,7 @@ Authorization: Bearer {admin_key}
 ```bash
 curl -X POST http://localhost:8000/api/pastes/Ab3kL9xQ/publish \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer your_admin_key' \
+  -H 'X-Paste-Admin-Key: your_admin_key' \
   -d '{
     "settings": {
       "title": "Markdown Demo",
@@ -291,10 +291,10 @@ This is a markdown paste.
 
 ### 写入内容返回 401
 
-通常是缺少 `Authorization` 请求头，或格式不正确。正确格式为：
+通常是缺少 `X-Paste-Admin-Key` 请求头。正确格式为：
 
 ```http
-Authorization: Bearer {admin_key}
+X-Paste-Admin-Key: {admin_key}
 ```
 
 ### 写入内容返回 403

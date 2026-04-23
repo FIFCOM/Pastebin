@@ -184,15 +184,15 @@ export const API_KEY_CAPABILITY_MATRIX: ApiKeyMatrixEntry[] = [
   { endpoint: 'POST /api/users/login-totp', capability: 'unsupported', dependsOn: '无认证', notes: 'TOTP 登录，不走 API Key' },
   { endpoint: 'POST /api/users/refresh', capability: 'unsupported', dependsOn: 'Cookie refresh token', notes: '刷新 token 接口，不走 API Key' },
   { endpoint: 'POST /api/users/logout', capability: 'unsupported', dependsOn: 'Cookie refresh token', notes: '登出接口，不走 API Key' },
-  { endpoint: '/api/pastes/* (写接口)', capability: 'unsupported', dependsOn: 'admin_key', notes: '依赖 admin_key，不走用户 API Key' },
-  { endpoint: '/api/pastes/* (读接口)', capability: 'unsupported', dependsOn: '公开 / access_key / encryption_key / admin_key', notes: '按访问密钥验证，不走用户 API Key' },
-  { endpoint: 'POST /api/rooms', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
+  { endpoint: '/api/pastes/* (写接口)', capability: 'unsupported', dependsOn: 'X-Paste-Admin-Key', notes: '依赖 admin_key，不走用户 API Key' },
+  { endpoint: '/api/pastes/* (读接口)', capability: 'unsupported', dependsOn: '公开 / access_key / encryption_key / X-Paste-Admin-Key', notes: '按访问密钥验证，不走用户 API Key' },
+  { endpoint: 'POST /api/rooms', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
   { endpoint: 'GET /api/join/{pin_code}', capability: 'unsupported', dependsOn: '无认证', notes: '公开接口' },
-  { endpoint: 'POST /api/rooms/{room_id}/join', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
-  { endpoint: 'GET /api/rooms/{room_id}/members', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
-  { endpoint: 'POST /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
-  { endpoint: 'GET /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
-  { endpoint: 'DELETE /api/rooms/{room_id}/leave', capability: 'unsupported', dependsOn: 'member_token', notes: '依赖 member_token' },
+  { endpoint: 'POST /api/rooms/{room_id}/join', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
+  { endpoint: 'GET /api/rooms/{room_id}/members', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
+  { endpoint: 'POST /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
+  { endpoint: 'GET /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
+  { endpoint: 'DELETE /api/rooms/{room_id}/leave', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
   { endpoint: 'WS /api/rooms/{room_id}/ws', capability: 'unsupported', dependsOn: 'member_token', notes: 'WebSocket 连接，依赖 member_token' }
 ]
 

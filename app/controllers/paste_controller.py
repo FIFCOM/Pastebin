@@ -225,32 +225,22 @@ def _parse_range_header(range_header: str | None, size: int) -> tuple[int, int] 
     return (start, end)
 
 
-def _get_admin_key_from_header(authorization: str | None) -> str:
-    """从Authorization头中提取admin_key"""
-    if not authorization:
+def _get_admin_key_from_header(x_paste_admin_key: str | None) -> str:
+    """从X-Paste-Admin-Key头中读取admin_key。"""
+    if not x_paste_admin_key or not x_paste_admin_key.strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="缺少Authorization头",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="缺少X-Paste-Admin-Key头",
         )
 
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的Authorization格式",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return authorization[7:]  # 去掉 "Bearer " 前缀
+    return x_paste_admin_key.strip()
 
 
-def _try_get_admin_key_from_header(authorization: str | None) -> str | None:
-    """尝试从Authorization头中提取admin_key（失败返回None，不抛异常）。"""
-    if not authorization:
+def _try_get_admin_key_from_header(x_paste_admin_key: str | None) -> str | None:
+    """尝试从X-Paste-Admin-Key头中读取admin_key。"""
+    if not x_paste_admin_key:
         return None
-    if not authorization.startswith("Bearer "):
-        return None
-    v = authorization[7:].strip()
+    v = x_paste_admin_key.strip()
     if not v:
         return None
     return v
@@ -277,7 +267,7 @@ async def create_paste(paste_data: PasteCreateRequest, db: Session = Depends(get
 async def update_paste_content(
     paste_id: str,
     content_data: PasteContentUpdateRequest,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     encryption_key: str | None = Header(
         None, alias="X-Encryption-Key", description="服务端加密模式下用于加密写入的密钥"
     ),
@@ -286,12 +276,12 @@ async def update_paste_content(
     """
     上传/更新Paste内容
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
 
     - **encrypted_content**: Base64编码的加密内容（客户端加密模式）
     - **content**: 明文内容（服务端加密模式）
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
 
     try:
         PasteService.update_paste_content(
@@ -317,7 +307,7 @@ async def update_paste_content(
 async def init_file_upload(
     paste_id: str,
     body: FileUploadInitRequest,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     encryption_key: str | None = Header(
         None, alias="X-Encryption-Key", description="服务端加密模式下用于加密写入的密钥"
     ),
@@ -329,7 +319,7 @@ async def init_file_upload(
     返回 upload_id / chunk_size / total_chunks。
     分片上传使用二进制 PUT，不要再使用 JSON Base64。
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
     try:
         return PasteService.init_file_upload(
             db, paste_id, admin_key, body, encryption_key=encryption_key
@@ -355,15 +345,15 @@ async def init_file_upload(
 async def get_file_upload_status(
     paste_id: str,
     upload_id: str,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     获取分片上传状态（用于断点续传）
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
     try:
         return PasteService.get_file_upload_status(db, paste_id, upload_id, admin_key)
     except ValueError as e:
@@ -393,7 +383,7 @@ async def upload_file_chunk(
     upload_id: str,
     index: int,
     request: Request,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
@@ -401,7 +391,7 @@ async def upload_file_chunk(
 
     Content-Type: application/octet-stream
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
     try:
         # 准备上传：验证权限、Session状态，计算预期参数
         prep = PasteService.prepare_chunk_upload(
@@ -501,7 +491,7 @@ async def complete_file_upload(
     paste_id: str,
     upload_id: str,
     body: FileUploadCompleteRequest,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     encryption_key: str | None = Header(
         None, alias="X-Encryption-Key", description="服务端加密模式下用于加密写入的密钥"
     ),
@@ -510,7 +500,7 @@ async def complete_file_upload(
     """
     完成分片上传并落盘
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
     try:
         return PasteService.complete_file_upload(
             db, paste_id, upload_id, admin_key, body, encryption_key=encryption_key
@@ -538,13 +528,13 @@ async def complete_file_upload(
 async def abort_file_upload(
     paste_id: str,
     upload_id: str,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     取消分片上传并清理临时数据
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
     try:
         PasteService.abort_file_upload(db, paste_id, upload_id, admin_key)
         return MessageResponse(message="上传已取消", timestamp=int(time.time()))
@@ -567,15 +557,15 @@ async def abort_file_upload(
 async def delete_file(
     paste_id: str,
     file_id: str,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     删除文件
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
 
     try:
         PasteService.delete_file(db, paste_id, file_id, admin_key)
@@ -599,19 +589,19 @@ async def delete_file(
 async def publish_paste(
     paste_id: str,
     publish_data: PastePublishRequest,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     发布Paste
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
 
     - **expire_time**: 过期时间（7d, 30d, 1y, never）
     - **max_views**: 最大查看次数（1表示阅后即焚，-1表示无限制）
     - **access_key**: 访问密钥（可选）
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
 
     try:
         return PasteService.publish_paste(db, paste_id, admin_key, publish_data)
@@ -634,7 +624,7 @@ async def publish_paste(
 async def get_paste_info(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
@@ -642,7 +632,7 @@ async def get_paste_info(
 
     - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
     """
-    admin_key = _try_get_admin_key_from_header(authorization)
+    admin_key = _try_get_admin_key_from_header(x_paste_admin_key)
     try:
         return PasteService.get_paste_info(
             db, paste_id, access_key, admin_key=admin_key
@@ -675,7 +665,7 @@ async def get_paste_content(
     paste_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
@@ -684,7 +674,7 @@ async def get_paste_content(
     - **access_key**: 访问密钥（如果Paste设置了访问密钥则需要提供）
     - **encryption_key**: 解密密钥（可选，如果提供且正确则返回解密后的内容）
     """
-    admin_key = _try_get_admin_key_from_header(authorization)
+    admin_key = _try_get_admin_key_from_header(x_paste_admin_key)
     try:
         return PasteService.get_paste_content(
             db,
@@ -721,7 +711,7 @@ async def get_file_manifest(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
@@ -743,7 +733,7 @@ async def get_file_manifest(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
-        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_key = _try_get_admin_key_from_header(x_paste_admin_key)
         admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
 
         if str(paste.status) == "draft" and not admin_ok:  # type: ignore
@@ -870,7 +860,7 @@ async def get_file_meta(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
@@ -892,7 +882,7 @@ async def get_file_meta(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
-        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_key = _try_get_admin_key_from_header(x_paste_admin_key)
         admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
 
         if str(paste.status) == "draft" and not admin_ok:  # type: ignore
@@ -969,7 +959,7 @@ async def get_file(
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
     encryption_key: str | None = Query(None, description="解密密钥（可选）"),
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     range_header: str | None = Header(
         None, alias="Range", description="HTTP Range头（bytes=...）"
     ),
@@ -994,7 +984,7 @@ async def get_file(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paste不存在或不可访问"
             )
 
-        admin_key = _try_get_admin_key_from_header(authorization)
+        admin_key = _try_get_admin_key_from_header(x_paste_admin_key)
         admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
 
         if str(paste.status) == "draft" and not admin_ok:  # type: ignore
@@ -1270,13 +1260,13 @@ async def get_file(
 async def update_paste(
     paste_id: str,
     update_data: PasteUpdateRequest,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     更新Paste设置
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
 
     - **title**: 新标题（可选）
     - **type**: Paste类型：txt或md（可选）
@@ -1284,7 +1274,7 @@ async def update_paste(
     - **max_views**: 最大查看次数（可选）
     - **access_key**: 访问密钥，空字符串表示禁用（可选）
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
 
     try:
         PasteService.update_paste(db, paste_id, admin_key, update_data)
@@ -1307,15 +1297,15 @@ async def update_paste(
 @router.delete("/{paste_id}", response_model=MessageResponse)
 async def delete_paste(
     paste_id: str,
-    authorization: str | None = Header(None),
+    x_paste_admin_key: str | None = Header(None, alias="X-Paste-Admin-Key"),
     db: Session = Depends(get_db),
 ):
     """
     删除Paste
 
-    需要在Authorization头中提供admin_key: Bearer {admin_key}
+    需要在X-Paste-Admin-Key头中提供admin_key
     """
-    admin_key = _get_admin_key_from_header(authorization)
+    admin_key = _get_admin_key_from_header(x_paste_admin_key)
 
     try:
         PasteService.delete_paste(db, paste_id, admin_key)

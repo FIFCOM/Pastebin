@@ -2,7 +2,7 @@
 
 本节覆盖账户管理相关接口。当前本页所有接口都仅支持 `access_token`，不再接受 API Key（`pk_...`）。
 
-> 如无特殊说明，统一通过 `Authorization: Bearer ...` 传递凭据。
+> 如无特殊说明，统一通过 `Authorization: Bearer {access_token}` 传递用户登录态。
 
 ## 当前用户信息
 

@@ -19,13 +19,13 @@
 本文档覆盖以下两类接口：
 
 - **用户接口**：账户管理、密钥管理、会话管理、两步验证等接口，统一使用 `access_token`
-- **Paste 接口**：包括公开的创建接口，以及基于 `admin_key` 认证的内容写入、文件上传、发布等接口
+- **Paste 接口**：包括公开的创建接口，以及基于 `X-Paste-Admin-Key` 的内容写入、文件上传、发布等接口
 
 ---
 
 ## 快速开始
 
-当前若接口会读取 API Key，仍通过 `Authorization` 请求头传递凭据：
+`Authorization` 仅用于用户身份凭据。当前若接口会读取 API Key，仍通过 `Authorization` 请求头传递：
 
 ```http
 Authorization: Bearer pk_你的API密钥
