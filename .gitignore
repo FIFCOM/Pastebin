@@ -66,6 +66,7 @@ ipython_config.py
 
 # Environments
 .env
+.env.docker
 .venv
 env/
 venv/
@@ -179,8 +180,8 @@ uv.lock
 .env.production.local
 
 # Docker
-.dockerignore
 docker-compose.override.yml
+docker-data/
 # Coverage reports
 htmlcov/
 .coverage

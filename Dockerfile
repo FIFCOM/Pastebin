@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS frontend-builder
+FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c AS frontend-builder
 
 WORKDIR /build/web
 
@@ -9,11 +9,29 @@ COPY web/ ./
 RUN npm run build
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:520153e2deb359602c9cffd84e491e3431d76e7bf95a3255c9ce9433b76ab99a AS runtime
+
+ARG APP_UID=1000
+ARG APP_GID=1000
+ARG APP_VERSION=0.1.0
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Material Bin" \
+    org.opencontainers.image.description="An open-source Pastebin with Material Design, encrypted storage, file upload, and sharing." \
+    org.opencontainers.image.source="https://github.com/FIFCOM/MaterialBin" \
+    org.opencontainers.image.version="${APP_VERSION}" \
+    org.opencontainers.image.revision="${VCS_REF}" \
+    org.opencontainers.image.created="${BUILD_DATE}"
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DEBUG=false
 ENV PATH="/app/.venv/bin:${PATH}"
+ENV HOME="/app"
+
+RUN groupadd --gid "${APP_GID}" appuser \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --home-dir /app --shell /usr/sbin/nologin --no-create-home appuser
 
 WORKDIR /app
 
@@ -28,10 +46,14 @@ COPY main.py README.md .env.example ./
 COPY docker ./docker
 COPY --from=frontend-builder /build/web/dist ./web/dist
 
-RUN chmod +x /app/docker/entrypoint.sh
-RUN chmod +x /app/docker/cleanup-runner.sh
-RUN chmod +x /app/docker/runtime-common.sh
+RUN mkdir -p /app/data \
+    && chmod +x /app/docker/entrypoint.sh \
+    && chmod +x /app/docker/cleanup-runner.sh \
+    && chmod +x /app/docker/runtime-common.sh \
+    && chown -R appuser:appuser /app
 
 EXPOSE 8000
+
+USER appuser
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

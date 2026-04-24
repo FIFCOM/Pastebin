@@ -1,13 +1,12 @@
 services:
   materialbin:
-    build:
-      context: .
+    image: "${MATERIALBIN_IMAGE:-ghcr.io/fifcom/materialbin:latest}"
     container_name: materialbin
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8000}:8000"
     environment:
-      DEBUG: "${DEBUG:-false}"
+      DEBUG: "${MATERIALBIN_DEBUG:-false}"
       HOST: "0.0.0.0"
       PORT: "8000"
       DB_DRIVER: "${DB_DRIVER:-sqlite}"
@@ -17,7 +16,7 @@ services:
       MEMBER_TOKEN_SECRET_KEY: "${MEMBER_TOKEN_SECRET_KEY:-change-this-member-token-secret-key-in-production}"
       INTERNAL_TOKEN: "${INTERNAL_TOKEN:-change-this-internal-token-in-production}"
     volumes:
-      - materialbin_data:/app/data
+      - "${MATERIALBIN_DATA_VOLUME:-materialbin_data}:/app/data"
     healthcheck:
       test:
         [
@@ -30,15 +29,14 @@ services:
       start_period: 20s
 
   materialbin-cleanup:
-    build:
-      context: .
+    image: "${MATERIALBIN_IMAGE:-ghcr.io/fifcom/materialbin:latest}"
     container_name: materialbin-cleanup
     restart: unless-stopped
     depends_on:
       materialbin:
         condition: service_started
     environment:
-      DEBUG: "${DEBUG:-false}"
+      DEBUG: "${MATERIALBIN_DEBUG:-false}"
       DB_DRIVER: "${DB_DRIVER:-sqlite}"
       SQLITE_PATH: "${SQLITE_PATH:-/app/data/material_bin.db}"
       DATA_DIR: "${DATA_DIR:-/app/data}"
@@ -49,7 +47,7 @@ services:
       CLEANUP_RUN_ON_START: "${CLEANUP_RUN_ON_START:-true}"
       CLEANUP_TASKS: "${CLEANUP_TASKS:-}"
     volumes:
-      - materialbin_data:/app/data
+      - "${MATERIALBIN_DATA_VOLUME:-materialbin_data}:/app/data"
     entrypoint: ["/app/docker/cleanup-runner.sh"]
 
 volumes:

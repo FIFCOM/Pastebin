@@ -15,29 +15,6 @@
 - 📊 SQLite / MySQL 数据库兼容
 - 🚀 FastAPI + Pydantic + SQLAlchemy + Vue 3
 
-## 项目结构
-
-```
-├── app/
-│   ├── controllers/        # 控制器层 - API路由
-│   ├── services/          # 服务层 - 业务逻辑
-│   ├── models/           # 模型层 - 数据库模型
-│   ├── schemas/          # Pydantic模型
-│   └── core/            # 核心配置和工具
-├── config/              # 配置管理
-├── docker/              # 容器启动脚本
-├── web/                 # Web前端（Vue 3 + Vite）
-│   ├── src/             # 页面、组件、路由、请求封装等
-│   ├── public/          # 静态资源
-│   └── vite.config.ts   # 开发代理等配置
-├── main.py             # 应用入口
-├── Dockerfile          # 单镜像构建（后端 + 前端静态产物）
-├── compose.yaml        # 默认 SQLite 部署
-├── compose.mysql.yaml  # MySQL 覆盖配置
-├── pyproject.toml      # 项目配置
-├── .env.example        # 应用环境变量示例
-└── .env.docker.example # Docker Compose 环境变量示例
-```
 
 ## 快速开始
 
@@ -112,12 +89,13 @@ npm run dev
 - 可选接入独立 MySQL 容器
 - 默认同时启动一个自动定时清理容器
 
-### 1. 默认部署：SQLite
+### 1. 默认部署：SQLite（拉取发布镜像）
 
 ```bash
 cp .env.docker.example .env.docker
 
-docker compose --env-file .env.docker up -d --build
+# 必须先编辑 .env.docker，把 SECRET_KEY / MEMBER_TOKEN_SECRET_KEY / INTERNAL_TOKEN 换成随机长字符串
+docker compose --env-file .env.docker up -d
 ```
 
 访问地址：
@@ -129,8 +107,33 @@ docker compose --env-file .env.docker up -d --build
 
 - `DB_DRIVER=sqlite`
 - SQLite 文件位于容器内 `/app/data/material_bin.db`
-- 上传文件与 SQLite 数据都落在 compose 卷 `materialbin_data`
+- 上传文件与 SQLite 数据默认保存在 Docker named volume `materialbin_data`
 - `materialbin-cleanup` 会每 `900` 秒自动执行一次 cleanup CLI
+
+如果需要从当前源码本地构建镜像，使用额外的 build 覆盖文件：
+
+```bash
+docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+推荐保持默认的 Docker named volume：
+
+```env
+MATERIALBIN_DATA_VOLUME=materialbin_data
+```
+
+如果需要把数据直接落到宿主目录，可以改成 bind mount。由于镜像默认使用非 root 用户运行，请先确保 UID `1000` 可以写入该目录：
+
+```bash
+mkdir -p docker-data
+sudo chown 1000:1000 docker-data
+```
+
+然后在 `.env.docker` 中设置：
+
+```env
+MATERIALBIN_DATA_VOLUME=./docker-data
+```
 
 ### 2. 可选部署：MySQL
 
@@ -138,13 +141,16 @@ docker compose --env-file .env.docker up -d --build
 cp .env.docker.example .env.docker
 
 # 编辑 .env.docker，至少确认以下变量：
+# SECRET_KEY=...
+# MEMBER_TOKEN_SECRET_KEY=...
+# INTERNAL_TOKEN=...
 # DB_DRIVER=mysql
 # MYSQL_DATABASE=material_bin
 # MYSQL_USER=material_bin
 # MYSQL_PASSWORD=material_bin
 # MYSQL_ROOT_PASSWORD=materialbin-root-password
 
-docker compose --env-file .env.docker -f compose.yaml -f compose.mysql.yaml up -d --build
+docker compose --env-file .env.docker -f compose.yaml -f compose.mysql.yaml up -d
 ```
 
 此时：
@@ -155,6 +161,16 @@ docker compose --env-file .env.docker -f compose.yaml -f compose.mysql.yaml up -
 - 自动清理容器会复用同一组 MySQL 连接配置
 
 ### 3. 容器环境变量说明
+
+镜像与数据卷：
+
+```env
+MATERIALBIN_IMAGE=ghcr.io/fifcom/materialbin:latest
+MATERIALBIN_DATA_VOLUME=materialbin_data
+MATERIALBIN_DEBUG=false
+```
+
+`MATERIALBIN_IMAGE` 可切换到指定版本标签；`MATERIALBIN_DATA_VOLUME` 推荐保持默认 named volume。如果设置成 `./docker-data` 这样的宿主目录绑定，需要先处理目录写入权限。
 
 容器启动时支持两种数据库配置方式：
 
@@ -224,32 +240,11 @@ docker compose down -v
 docker compose -f compose.yaml -f compose.mysql.yaml down -v
 ```
 
+### 6. 镜像发布
+
+`Dockerfile` 使用带 digest 的基础镜像，并写入 OCI image labels。仓库内的 GitHub Actions 工作流会在推送 `v*` tag 时发布 GHCR 镜像，同时启用 BuildKit SBOM / provenance，并用 Trivy 扫描 HIGH / CRITICAL 漏洞。
+
 ## API端点
-
-### 安装态错误契约（HTTP 428）
-
-当服务端检测到尚未完成安装（例如 `.env` 不存在或管理员未创建）时，除安装与健康检查白名单接口外，会返回 `428 Precondition Required`：
-
-```json
-{
-  "error": "安装未完成",
-  "detail": "安装未完成，请先完成安装",
-  "status_code": 428,
-  "code": "INSTALL_REQUIRED"
-}
-```
-
-第三方客户端建议按以下顺序处理：
-- 先判断 HTTP 状态码是否为 `428`
-- 再判断响应 `code === "INSTALL_REQUIRED"`
-- 命中后跳转或提示用户完成安装流程（Web 默认引导到 `/install`）
-
-安装白名单路径（不会被安装门禁拦截）：
-- `/api/install` 与 `/api/install/*`
-- `/api/health` 与 `/api/health/`
-- `/api/docs` 与 `/api/docs/*`
-- `/api/openapi.json`
-- `/api/openapi/docs`、`/api/openapi/redoc`
 
 ### 内部任务（需要内部令牌）
 
@@ -287,44 +282,6 @@ uv run python -m app.cleanup_cli expired_drafts expired_pastes expired_members
 
 - `GET /api/health` - 健康检查
 
-## 使用说明
-
-### 用户注册
-
-注册时需要提供：
-- `email`: 用户邮箱
-- `password`: SHA256哈希后的密码（64位十六进制字符串）
-
-系统会：
-1. 自动生成用户名（格式：USER_XXXXXXXX）
-2. 使用bcrypt再次加密密码
-3. 生成用户密钥并使用PBKDF2+AES加密存储
-
-### 用户登录
-
-登录时需要提供：
-- `username`: 系统生成的用户名
-- `password`: 与注册时相同的SHA256哈希密码
-
-系统会：
-1. 验证用户凭据
-2. 恢复用户密钥
-3. 创建会话和JWT令牌
-
-### 密码安全
-
-本系统采用双重加密：
-1. 客户端：明文密码 → SHA256哈希
-2. 服务端：SHA256哈希 → bcrypt加密存储
-
-### 密钥管理
-
-按照AGENT.md的规范：
-1. 使用PBKDF2从密码和盐派生master_key
-2. 生成随机encryption_key作为用户密钥
-3. 使用master_key加密用户密钥存储
-4. 登录时重新派生master_key并解密用户密钥
-
 ## 数据库
 
 ### SQLite（默认）
@@ -340,14 +297,8 @@ Docker 部署时也可以不直接写 `DATABASE_URL`，而是使用 `DB_DRIVER=m
 
 ## 开发
 
-### 代码格式化
-```bash
-uv run ruff format .
-uv run ruff check .
-```
-
 ### 数据库管理
-服务启动时不会自动建表；首次安装会在创建管理员前自动执行建表。
+首次安装会在创建管理员前自动执行建表。
 
 ```bash
 # 初始化数据库
@@ -360,15 +311,3 @@ uv run python -c "from app.core.init_db import reset_database; reset_database()"
 ## 环境变量
 
 参考`.env.example`文件中的所有可配置项。
-
-## 安全注意事项
-
-1. 生产环境必须修改`SECRET_KEY`
-2. 限制CORS允许的域名
-3. 使用HTTPS
-4. 定期清理过期会话
-5. 监控异常登录行为
-
-## 许可证
-
-MIT License
