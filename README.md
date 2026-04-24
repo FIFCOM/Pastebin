@@ -70,14 +70,6 @@ export VITE_BACKEND="http://localhost:8000"
 npm run dev
 ```
 
-打开 Vite 输出的本地地址（默认类似 http://localhost:5173）。
-
-前端页面路由：
-- `/`：Paste 编辑/发布
-- `/p/:paste_id`：Paste 查看（需要在 URL hash 携带密钥：`/p/:id#encryption_key`）
-- `/docs`、`/docs/:section`：API 文档页面（内容由后端 `/api/docs*` 返回 Markdown 原文）
-- `/login`、`/register`：登录/注册
-
 ## Docker 部署
 
 项目现在支持用单个应用镜像部署，镜像会：
@@ -114,6 +106,18 @@ docker compose --env-file .env.docker up -d
 
 ```bash
 docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+如果只想构建镜像而不启动容器，可以执行：
+
+```bash
+docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
+```
+
+如果需要强制重建且不使用缓存：
+
+```bash
+docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build --no-cache
 ```
 
 推荐保持默认的 Docker named volume：

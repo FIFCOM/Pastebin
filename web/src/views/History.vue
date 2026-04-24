@@ -714,7 +714,8 @@ watch(
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-.status-badge[data-status='published'] {
+.status-badge[data-status='published'],
+.status-badge[data-status='edited'] {
   background: rgb(var(--mdui-color-primary-container));
   color: rgb(var(--mdui-color-on-primary-container));
 }

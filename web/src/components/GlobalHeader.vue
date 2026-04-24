@@ -9,7 +9,9 @@
         >
           <mdui-icon-menu />
         </mdui-button-icon>
-        <button class="brand-link" type="button" @click="goHome">Material Bin</button>
+        <button class="brand-link" type="button" @click="goHome">
+          <span>Material Bin</span>
+        </button>
       </div>
     </mdui-top-app-bar-title>
     <div class="header-spacer"></div>

@@ -8,13 +8,3 @@ services:
         APP_VERSION: "${APP_VERSION:-0.1.0}"
         VCS_REF: "${VCS_REF:-local}"
         BUILD_DATE: "${BUILD_DATE:-local}"
-
-  materialbin-cleanup:
-    build:
-      context: .
-      args:
-        APP_UID: "${APP_UID:-1000}"
-        APP_GID: "${APP_GID:-1000}"
-        APP_VERSION: "${APP_VERSION:-0.1.0}"
-        VCS_REF: "${VCS_REF:-local}"
-        BUILD_DATE: "${BUILD_DATE:-local}"

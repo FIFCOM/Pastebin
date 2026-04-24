@@ -103,10 +103,7 @@ function openFileDownload(fileId: string) {
   const href = buildMbDownloadPageHref(props.pasteId, fileId, {
     encryptionKeyHash: downloadHash.value
   })
-  const win = window.open(href, '_blank', 'noopener,noreferrer')
-  if (!win) {
-    window.location.href = href
-  }
+  window.open(href, '_blank', 'noopener,noreferrer')
 }
 
 async function decryptFileName(file: PasteFileLike): Promise<string> {

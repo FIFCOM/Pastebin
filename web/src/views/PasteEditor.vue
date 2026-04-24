@@ -783,13 +783,14 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 }
 
 .collab-entry {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 6px;
   margin-right: auto;
 }
 
 .room-status-button {
-  justify-self: start;
+  --mdui-button-height: 40px;
 }
 
 .share-prompt-button {
@@ -797,7 +798,12 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 }
 
 .submit-wrapper {
-  display: inline-block;
+  display: flex;
+  align-items: center;
+}
+
+.submit-wrapper :deep(mdui-button) {
+  --mdui-button-height: 40px;
 }
 
 .submit-wrapper.disabled {
