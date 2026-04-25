@@ -105,6 +105,26 @@ md.use(markdownItKatex, {
   errorColor: '#cc0000'
 })
 
+const defaultTableOpenRenderer =
+  md.renderer.rules.table_open ||
+  ((tokens, idx, options, env, self) => {
+    void env
+    return self.renderToken(tokens, idx, options)
+  })
+
+md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+  `<div class="markdown-table-wrapper">${defaultTableOpenRenderer(tokens, idx, options, env, self)}`
+
+const defaultTableCloseRenderer =
+  md.renderer.rules.table_close ||
+  ((tokens, idx, options, env, self) => {
+    void env
+    return self.renderToken(tokens, idx, options)
+  })
+
+md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+  `${defaultTableCloseRenderer(tokens, idx, options, env, self)}</div>`
+
 // ---- MaterialBin internal file links handling (encrypted blobs) ----
 const defaultImageRenderer =
   md.renderer.rules.image ||
@@ -313,7 +333,8 @@ onBeforeUnmount(() => {
   color: rgb(var(--mdui-color-on-surface));
   line-height: 1.7;
   font-size: 0.95rem;
-  overflow-x: auto;
+  max-width: 100%;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -461,17 +482,41 @@ onBeforeUnmount(() => {
 }
 
 /* 表格样式 */
+.markdown-viewer :deep(.markdown-table-wrapper) {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  border-radius: 8px;
+}
+
 .markdown-viewer :deep(table) {
   border-collapse: collapse;
-  width: 100%;
-  margin-bottom: 1em;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
 }
 
 .markdown-viewer :deep(th),
 .markdown-viewer :deep(td) {
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  border: 0;
+  border-right: 1px solid rgb(var(--mdui-color-outline-variant));
+  border-bottom: 1px solid rgb(var(--mdui-color-outline-variant));
   padding: 0.5em 1em;
   text-align: left;
+  white-space: nowrap;
+}
+
+.markdown-viewer :deep(th:last-child),
+.markdown-viewer :deep(td:last-child) {
+  border-right: 0;
+}
+
+.markdown-viewer :deep(tbody tr:last-child th),
+.markdown-viewer :deep(tbody tr:last-child td) {
+  border-bottom: 0;
 }
 
 .markdown-viewer :deep(th) {

@@ -744,11 +744,13 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 <style scoped>
 .paste-editor {
   width: 100%;
+  min-width: 0;
   height: 100%;
   padding: 0;
 }
 
 .editor-section {
+  min-width: 0;
   margin-bottom: 24px;
 }
 
@@ -817,12 +819,14 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 .editor-swap {
   display: grid;
   gap: 0;
+  min-width: 0;
 }
 
 .editor-wrapper,
 .publish-panel-wrapper {
   display: grid;
   grid-template-rows: 1fr;
+  min-width: 0;
   transition: grid-template-rows 0.35s var(--mdui-motion-easing-standard);
   will-change: grid-template-rows;
 }
@@ -843,6 +847,7 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 .editor-inner,
 .publish-panel-inner {
   overflow: hidden;
+  min-width: 0;
   min-height: 0;
 }
 

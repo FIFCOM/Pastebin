@@ -128,6 +128,22 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
   // }
 ]
 
+const DOCS_GROUP_ICON_BY_LABEL: Record<string, string> = {
+  入门: 'menu_book',
+  'Paste 接口': 'content_paste',
+  用户接口: 'manage_accounts',
+  协作接口: 'groups'
+}
+
+const DOCS_SECTION_ICON_BY_SLUG: Record<string, string> = {
+  overview: 'dashboard',
+  authentication: 'vpn_key',
+  'paste-creation': 'note_add',
+  'paste-files': 'folder_open',
+  'api-keys': 'key',
+  collaboration: 'groups'
+}
+
 const route = useRoute()
 const router = useRouter()
 const { currentUser } = useAuth()
@@ -158,11 +174,11 @@ const sidebarSections = computed<SidebarSection[]>(() => {
       result.push({
         value: `docs-${groupLabel}`,
         label: groupLabel,
-        icon: 'description',
+        icon: DOCS_GROUP_ICON_BY_LABEL[groupLabel] ?? 'description',
         items: items.map((item) => ({
           key: item.slug,
           label: item.sidebarLabel,
-          icon: 'article',
+          icon: DOCS_SECTION_ICON_BY_SLUG[item.slug] ?? 'article',
           path: getDocsSectionPath(item.slug),
           active: item.slug === route.params.section
         }))

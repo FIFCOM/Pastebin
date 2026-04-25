@@ -4,7 +4,7 @@ services:
     container_name: materialbin
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
     environment:
       DEBUG: "${MATERIALBIN_DEBUG:-false}"
       HOST: "0.0.0.0"

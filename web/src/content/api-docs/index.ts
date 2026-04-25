@@ -28,10 +28,10 @@ export const API_DOCS_SECTIONS: ApiDocsSection[] = [
   },
   {
     slug: 'authentication',
-    title: '认证方式',
-    sidebarLabel: '认证方式',
+    title: '认证与凭据',
+    sidebarLabel: '认证与凭据',
     group: '入门',
-    description: 'API Key、Access Token 等各种认证方式的说明'
+    description: 'API Key、Paste 管理密钥、访问密码和加密密钥的区别'
   },
   {
     slug: 'paste-creation',
@@ -41,37 +41,33 @@ export const API_DOCS_SECTIONS: ApiDocsSection[] = [
     description: '公开 Paste 创建接口说明'
   },
   {
-    slug: 'pastes-files',
-    title: 'Paste 内容与文件管理',
+    slug: 'paste-files',
+    title: 'Paste 内容与文件',
     sidebarLabel: '内容与文件',
     group: 'Paste 接口',
-    description: 'Paste 内容、文件上传、发布与管理的完整接口'
-  },
-  {
-    slug: 'account-security',
-    title: '账户与安全',
-    sidebarLabel: '账户与安全',
-    group: '用户接口',
-    description: '用户信息、会话管理、TOTP 两步验证等接口'
+    description: 'Paste 内容、文件、读取与下载接口'
   },
   {
     slug: 'api-keys',
-    title: 'API Key 管理',
-    sidebarLabel: 'API Key 管理',
+    title: 'API Key 可用接口',
+    sidebarLabel: 'API Key 接口',
     group: '用户接口',
-    description: '创建、查看、删除 API Key 的接口说明'
+    description: '当前会读取用户 API Key 的协作令牌接口'
   },
   {
     slug: 'collaboration',
-    title: '协作成员令牌',
-    sidebarLabel: '协作令牌',
+    title: '协作公开接口',
+    sidebarLabel: '协作公开接口',
     group: '协作接口',
-    description: '获取与刷新协作成员令牌的接口'
+    description: '获取成员令牌、刷新成员令牌和查询加入信息'
   }
 ]
 
 // Included endpoint families
 export const INCLUDED_ENDPOINT_FAMILIES = [
+  'POST /api/rooms/member-token — 获取成员令牌，可选读取 API Key',
+  'POST /api/rooms/member-token/refresh — 刷新成员令牌，可选读取 API Key',
+  'GET /api/join/{pin_code} — 获取房间加入信息',
   'POST /api/pastes — 公开 Paste 创建',
   'POST /api/pastes/{paste_id}/content — 内容写入',
   'POST /api/pastes/{paste_id}/files/init — 文件上传初始化',
@@ -88,43 +84,18 @@ export const INCLUDED_ENDPOINT_FAMILIES = [
   'GET /api/pastes/{paste_id}/files/{file_id} — 下载文件',
   'PUT /api/pastes/{paste_id} — 更新 Paste',
   'DELETE /api/pastes/{paste_id} — 删除 Paste',
-  'POST /api/users/logout-all — 全部设备登出',
-  'GET /api/users/me — 当前用户信息',
-  'GET /api/users/{user_id} — 获取用户',
-  'PUT /api/users/{user_id} — 更新用户',
-  'DELETE /api/users/{user_id} — 删除用户',
-  'DELETE /api/users/sessions/{session_id} — 撤销会话',
-  'GET /api/users/me/totp — TOTP 状态',
-  'POST /api/users/me/totp — 设置 TOTP',
-  'POST /api/users/me/totp/verify — 验证 TOTP',
-  'DELETE /api/users/me/totp — 禁用 TOTP',
-  'GET /api/user/apikeys — 列出 API Key',
-  'POST /api/user/apikeys — 创建 API Key',
-  'DELETE /api/user/apikeys/{key_id} — 删除 API Key',
-  'POST /api/user/apikeys/cleanup-expired — 清理过期 Key',
-  'POST /api/rooms/member-token — 获取成员令牌',
-  'POST /api/rooms/member-token/refresh — 刷新成员令牌',
-  'GET /api/users — 用户列表（管理员）',
-  'POST /api/users — 创建用户（管理员）',
-  'POST /api/users/cleanup-sessions — 清理过期会话（管理员）'
+  'GET /api/config — 配置信息',
+  'GET /api/docs — 默认 API 文档',
+  'GET /api/docs/{slug} — 指定 API 文档'
 ]
 
 // Explicit exclusions
 export const EXCLUDED_ENDPOINT_FAMILIES = [
+  '用户账户类接口和仅 access_token 的接口',
+  '/api/user/history/* — 用户 Paste 历史',
   '/api/internal/* — 内部接口',
   '/api/install/* — 安装引导接口',
-  'GET /api/health — 健康检查',
-  'GET /api/config — 配置信息',
-  'POST /api/users/register — 用户注册',
-  'POST /api/users/login — 用户登录',
-  'POST /api/users/login-totp — TOTP 登录',
-  'POST /api/users/refresh — 刷新 Token',
-  'POST /api/users/logout — 单个登出',
-  '/api/user/history/* — 用户 Paste 历史',
-  'GET /api/users/{user_id}/sessions — 会话列表',
-  'DELETE /api/users/{user_id}/sessions/others — 撤销其他会话',
   'POST /api/rooms — 创建房间',
-  'GET /api/join/{pin_code} — 获取房间信息',
   'POST /api/rooms/{room_id}/join — 加入房间',
   'GET /api/rooms/{room_id}/members — 成员列表',
   'POST /api/rooms/{room_id}/pastes — 分享 Paste 到房间',
@@ -139,61 +110,15 @@ export type ApiKeyCapability = 'supported' | 'optional' | 'unsupported'
 export type ApiKeyMatrixEntry = {
   endpoint: string
   capability: ApiKeyCapability
-  dependsOn: string
+  credential: string
   notes: string
 }
 
 export const API_KEY_CAPABILITY_MATRIX: ApiKeyMatrixEntry[] = [
-  { endpoint: 'POST /api/users/logout-all', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'GET /api/users/me', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'GET /api/users/{user_id}', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'PUT /api/users/{user_id}', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'DELETE /api/users/{user_id}', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'DELETE /api/users/sessions/{session_id}', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'GET /api/users/me/totp', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'POST /api/users/me/totp', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'POST /api/users/me/totp/verify', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'DELETE /api/users/me/totp', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'GET /api/user/apikeys', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'POST /api/user/apikeys', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'DELETE /api/user/apikeys/{key_id}', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'POST /api/user/apikeys/cleanup-expired', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅支持 access_token' },
-  { endpoint: 'GET /api/users', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅管理员可用，且仅支持 access_token' },
-  { endpoint: 'POST /api/users', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅管理员可用，且仅支持 access_token' },
-  { endpoint: 'POST /api/users/cleanup-sessions', capability: 'unsupported', dependsOn: 'get_current_user_by_access_token', notes: '仅管理员可用，且仅支持 access_token' },
-
-  // Optional — depends(get_optional_user)
-  { endpoint: 'POST /api/rooms/member-token', capability: 'optional', dependsOn: 'get_optional_user', notes: '可不登录获取，登录后使用真实用户名' },
-  { endpoint: 'POST /api/rooms/member-token/refresh', capability: 'optional', dependsOn: 'get_optional_user', notes: '刷新成员令牌，可选携带身份' },
-
-  // Unsupported — depends(get_current_user_and_session)
-  { endpoint: 'GET /api/users/{user_id}/sessions', capability: 'unsupported', dependsOn: 'get_current_user_and_session', notes: '需要 session，不支持 API Key' },
-  { endpoint: 'DELETE /api/users/{user_id}/sessions/others', capability: 'unsupported', dependsOn: 'get_current_user_and_session', notes: '需要 session，不支持 API Key' },
-
-  // Unsupported — depends(get_current_user_with_key)
-  { endpoint: 'GET /api/user/history', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-  { endpoint: 'POST /api/user/history/import_guest', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-  { endpoint: 'POST /api/user/history/{paste_id}', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-  { endpoint: 'GET /api/user/history/{paste_id}', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-  { endpoint: 'PUT /api/user/history/{paste_id}/star', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-  { endpoint: 'DELETE /api/user/history/{paste_id}', capability: 'unsupported', dependsOn: 'get_current_user_with_key', notes: '需要恢复用户密钥，不支持 API Key' },
-
-  // Unsupported — other auth models
-  { endpoint: 'POST /api/users/register', capability: 'unsupported', dependsOn: '无认证', notes: '公开注册，不走 API Key' },
-  { endpoint: 'POST /api/users/login', capability: 'unsupported', dependsOn: '无认证', notes: '登录接口，不走 API Key' },
-  { endpoint: 'POST /api/users/login-totp', capability: 'unsupported', dependsOn: '无认证', notes: 'TOTP 登录，不走 API Key' },
-  { endpoint: 'POST /api/users/refresh', capability: 'unsupported', dependsOn: 'Cookie refresh token', notes: '刷新 token 接口，不走 API Key' },
-  { endpoint: 'POST /api/users/logout', capability: 'unsupported', dependsOn: 'Cookie refresh token', notes: '登出接口，不走 API Key' },
-  { endpoint: '/api/pastes/* (写接口)', capability: 'unsupported', dependsOn: 'X-Paste-Admin-Key', notes: '依赖 admin_key，不走用户 API Key' },
-  { endpoint: '/api/pastes/* (读接口)', capability: 'unsupported', dependsOn: '公开 / access_key / encryption_key / X-Paste-Admin-Key', notes: '按访问密钥验证，不走用户 API Key' },
-  { endpoint: 'POST /api/rooms', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'GET /api/join/{pin_code}', capability: 'unsupported', dependsOn: '无认证', notes: '公开接口' },
-  { endpoint: 'POST /api/rooms/{room_id}/join', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'GET /api/rooms/{room_id}/members', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'POST /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'GET /api/rooms/{room_id}/pastes', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'DELETE /api/rooms/{room_id}/leave', capability: 'unsupported', dependsOn: 'X-Member-Token', notes: '依赖 member_token' },
-  { endpoint: 'WS /api/rooms/{room_id}/ws', capability: 'unsupported', dependsOn: 'member_token', notes: 'WebSocket 连接，依赖 member_token' }
+  { endpoint: 'POST /api/rooms/member-token', capability: 'optional', credential: 'Authorization: Bearer pk_...', notes: '可匿名调用；传入 API Key 时使用用户显示名' },
+  { endpoint: 'POST /api/rooms/member-token/refresh', capability: 'optional', credential: 'Authorization: Bearer pk_...', notes: '需要 X-Member-Token；API Key 只用于同步显示名' },
+  { endpoint: '/api/pastes/*', capability: 'unsupported', credential: 'X-Paste-Admin-Key / access_key / encryption_key', notes: 'Paste 接口使用 Paste 专用凭据' },
+  { endpoint: 'GET /api/join/{pin_code}', capability: 'unsupported', credential: '无', notes: '公开查询加入信息' }
 ]
 
 export function getSectionBySlug(slug: string): ApiDocsSection | undefined {

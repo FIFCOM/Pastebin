@@ -4,7 +4,7 @@ import axios, {
   type AxiosInstance,
   type InternalAxiosRequestConfig
 } from 'axios'
-import { clearAccessToken, loadAccessToken, saveAccessToken } from './token'
+import { clearAccessToken, hasKnownAuthSession, loadAccessToken, saveAccessToken } from './token'
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -98,6 +98,10 @@ function redirectToInstallIfNeeded(): void {
 }
 
 export async function refreshAccessToken(): Promise<string> {
+  if (!hasKnownAuthSession()) {
+    return Promise.reject(new Error('Skip token refresh without a known auth session'))
+  }
+
   if (!refreshInFlight) {
     refreshInFlight = authHttp
       .post('/users/refresh')
@@ -213,9 +217,8 @@ apiHttp.interceptors.response.use(
 
     try {
       const token = loadAccessToken()
-      // 1) 如果请求携带了当前 access token，说明 token 过期/失效：刷新并重试
-      // 2) 如果请求没带 token（比如刷新 cookie 仍有效、但内存 token 丢失），也尝试刷新并重试一次
-      if (token && reqAuthStr && reqAuthStr !== `Bearer ${token}`) {
+      // 只有携带当前 access token 的请求才尝试 refresh；匿名 401 不触发续期。
+      if (!token || !reqAuthStr || reqAuthStr !== `Bearer ${token}`) {
         return Promise.reject(error)
       }
 

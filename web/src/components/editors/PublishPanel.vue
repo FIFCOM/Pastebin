@@ -13,7 +13,7 @@
     <div class="info-section">
       <div v-if="pasteUrl" class="qr-section">
         <div class="qr-box">
-          <QrCode :value="pasteUrl" :size="180" />
+          <QrCode :value="pasteUrl" :size="148" />
         </div>
       </div>
 
@@ -392,6 +392,8 @@ syncMaxViewsModeFromValue()
 
 <style scoped>
 .publish-panel {
+  --publish-qr-frame-size: 168px;
+  --publish-qr-inset: 20px;
   background: rgb(var(--mdui-color-background));
   border-radius: 12px;
 }
@@ -458,16 +460,31 @@ syncMaxViewsModeFromValue()
   display: grid;
   justify-items: center;
   gap: 8px;
-  padding: 12px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
   border-radius: 12px;
   background: rgb(var(--mdui-color-surface));
 }
 
 .qr-box {
+  display: grid;
+  place-items: center;
+  width: var(--publish-qr-frame-size);
+  height: var(--publish-qr-frame-size);
+  max-width: 100%;
+  overflow: hidden;
   background: #fff;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 10px;
   box-sizing: border-box;
+}
+
+.qr-box :deep(.qr-canvas) {
+  width: auto !important;
+  height: auto !important;
+  max-width: calc(100% - var(--publish-qr-inset)) !important;
+  max-height: calc(100% - var(--publish-qr-inset)) !important;
 }
 
 .advanced-section {
@@ -554,5 +571,20 @@ syncMaxViewsModeFromValue()
 
 .full-width {
   width: 100%;
+}
+
+@media (max-width: 480px) {
+  .publish-panel {
+    --publish-qr-frame-size: min(148px, calc(100vw - 64px));
+    --publish-qr-inset: 20px;
+  }
+
+  .qr-section {
+    padding: 8px;
+  }
+
+  .qr-box {
+    border-radius: 9px;
+  }
 }
 </style>

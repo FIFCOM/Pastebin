@@ -109,17 +109,10 @@ watch(
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* Responsive: ensure code blocks and tables scroll on narrow screens */
-.api-docs-content :deep(pre),
-.api-docs-content :deep(table) {
+/* Responsive: ensure code blocks stay contained; tables handle their own scrolling in Markdown.vue */
+.api-docs-content :deep(pre) {
   overflow-x: auto;
   max-width: 100%;
-}
-
-.api-docs-content :deep(table) {
-  display: block;
-  overflow-x: auto;
-  white-space: nowrap;
 }
 
 @media (max-width: 640px) {

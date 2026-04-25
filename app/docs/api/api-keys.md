@@ -1,96 +1,79 @@
-# API Key 管理
+# API Key 可用接口
 
-本节覆盖 API Key 的自管理接口。这些接口仅接受 `access_token`，不再支持 `Authorization: Bearer pk_{api_key}`。
+当前 Material Bin 的用户 API Key 只在协作成员令牌接口中作为**可选身份识别**使用。
 
-> **注意**：你必须先通过登录拿到 `access_token`，再管理自己的 API Key。
+API Key 通过 `Authorization` 请求头传递：
+
+```http
+Authorization: Bearer pk_your_api_key
+```
+
+不传 API Key 时，这些接口仍可匿名调用。
 
 ---
 
-## 列出 API Key
+## 获取成员令牌
 
-### `GET /api/user/apikeys`
+### `POST /api/rooms/member-token`
 
-获取当前用户的所有 API Key 列表。
+获取协作房间成员令牌。
 
-| 参数 | 说明 |
-|------|------|
-| `Authorization` | `Bearer {access_token}` |
+**认证：** 可选 API Key
 
-**响应**：返回 API Key 列表，**不包含密钥明文**。每条记录包含：
+| 请求头 | 必填 | 说明 |
+|--------|------|------|
+| `Authorization` | 否 | `Bearer pk_your_api_key` |
+
+**请求体：** 不需要
+
+**响应字段：**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | integer | Key ID |
-| `name` | string | 名称 |
-| `is_active` | boolean | 是否有效 |
-| `expires_at` | string | 过期时间（可为 null） |
-| `last_used_at` | string | 最后使用时间 |
-| `created_at` | string | 创建时间 |
+| `member_token` | string | 协作成员令牌，有效期 24 小时 |
+| `display_name` | string | 显示名。传入有效 API Key 时使用用户显示名，否则为 `Guest_xxxxx` |
+
+**示例：**
+
+```bash
+curl -X POST https://example.com/api/rooms/member-token \
+  -H 'Authorization: Bearer pk_your_api_key'
+```
+
+匿名调用：
+
+```bash
+curl -X POST https://example.com/api/rooms/member-token
+```
 
 ---
 
-## 创建 API Key
+## 刷新成员令牌
 
-### `POST /api/user/apikeys`
+### `POST /api/rooms/member-token/refresh`
 
-创建新的 API Key。
+刷新已有成员令牌，并在传入有效 API Key 时同步用户显示名。
 
-| 参数 | 说明 |
-|------|------|
-| `Authorization` | `Bearer {access_token}` |
+**认证：** 可选 API Key
 
-**请求体**：
+| 请求头 | 必填 | 说明 |
+|--------|------|------|
+| `X-Member-Token` | 是 | 当前已有的 `member_token` |
+| `Authorization` | 否 | `Bearer pk_your_api_key` |
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `name` | string | 否 | API Key 名称（用于标识） |
+**请求体：** 不需要
 
-**响应**：返回新创建的 API Key 信息，**包含密钥明文（`key` 字段）**。
+**响应字段：**
 
-> **重要**：密钥明文**仅在创建时返回一次**，之后无法查看。请妥善保存。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `member_token` | string | 新的成员令牌 |
+| `display_name` | string | 更新后的显示名 |
 
----
+**示例：**
 
-## 删除 API Key
-
-### `DELETE /api/user/apikeys/{key_id}`
-
-删除指定的 API Key。
-
-| 参数 | 说明 |
-|------|------|
-| `key_id` | 路径参数，Key ID |
-| `Authorization` | `Bearer {access_token}` |
-
-用户只能删除自己的 API Key。
-
-> 注意：删除某个 API Key 后，后续也无法再用于那些会可选识别用户身份的接口。
-
-**可能的错误**：
-
-| 状态码 | 说明 |
-|--------|------|
-| 404 | API Key 不存在或无权限删除 |
-
----
-
-## 清理过期 API Key
-
-### `POST /api/user/apikeys/cleanup-expired`
-
-清理当前用户已过期的 API Key。
-
-| 参数 | 说明 |
-|------|------|
-| `Authorization` | `Bearer {access_token}` |
-
-**响应**：`MessageResponse`，包含清理的数量。
-
----
-
-## 权限边界说明
-
-- API Key 自管理接口只接受 `access_token`
-- 普通用户的 API Key 不具备额外的后台管理权限
-- 管理员的 API Key 也不能再调用账户管理接口
-- API Key 当前只会在少数“可选识别用户身份”的接口中被读取
+```bash
+curl -X POST https://example.com/api/rooms/member-token/refresh \
+  -H 'X-Member-Token: your_member_token' \
+  -H 'Authorization: Bearer pk_your_api_key'
+```

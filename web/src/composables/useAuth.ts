@@ -9,7 +9,13 @@ import {
   logoutAllSessions
 } from '../services/auth'
 import { refreshAccessToken } from '../services/http'
-import { AUTH_TOKEN_EVENT, clearAccessToken, loadAccessToken, saveAccessToken } from '../services/token'
+import {
+  AUTH_TOKEN_EVENT,
+  clearAccessToken,
+  hasKnownAuthSession,
+  loadAccessToken,
+  saveAccessToken
+} from '../services/token'
 import { useHistory, clearUserHistoryCache, resetHistoryState } from './useHistory'
 
 /**
@@ -63,15 +69,17 @@ async function initAuth(): Promise<void> {
       }
     }
 
-    // 2) 尝试使用 refresh token cookie 静默恢复会话（内存 access token 模式）
-    try {
-      const newToken = await refreshAccessToken()
-      accessToken.value = newToken
-      currentUser.value = await fetchCurrentUser()
-    } catch {
-      clearAccessToken()
-      accessToken.value = null
-      currentUser.value = null
+    // 2) 仅在本浏览器已知存在登录会话时，才用 refresh cookie 静默恢复会话。
+    if (hasKnownAuthSession()) {
+      try {
+        const newToken = await refreshAccessToken()
+        accessToken.value = newToken
+        currentUser.value = await fetchCurrentUser()
+      } catch {
+        clearAccessToken()
+        accessToken.value = null
+        currentUser.value = null
+      }
     }
   } finally {
     isAuthInitialized.value = true

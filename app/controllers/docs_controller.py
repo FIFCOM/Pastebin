@@ -15,8 +15,7 @@ DOC_SLUGS = {
     "overview",
     "authentication",
     "paste-creation",
-    "pastes-files",
-    "account-security",
+    "paste-files",
     "api-keys",
     "collaboration",
 }

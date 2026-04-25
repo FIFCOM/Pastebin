@@ -340,12 +340,49 @@ onMounted(() => {
 
 <style scoped>
 .vditor-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border-radius: 4px;
   overflow: hidden;
 }
 
 :deep(.vditor) {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0;
   border: none;
+}
+
+:deep(.vditor-content),
+:deep(.vditor-sv),
+:deep(.vditor-ir),
+:deep(.vditor-ir pre),
+:deep(.vditor-wysiwyg),
+:deep(.vditor-wysiwyg pre),
+:deep(.vditor-preview),
+:deep(.vditor-preview .vditor-reset) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:deep(.vditor-content) {
+  overflow-x: hidden;
+}
+
+:deep(.vditor-sv),
+:deep(.vditor-ir),
+:deep(.vditor-wysiwyg),
+:deep(.vditor-preview) {
+  overflow-x: auto;
+}
+
+:deep(.vditor-reset pre),
+:deep(.vditor-reset table) {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 :deep(.vditor-toolbar) {
