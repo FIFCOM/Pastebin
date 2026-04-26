@@ -1,5 +1,11 @@
 <template>
-  <div ref="viewerRef" class="markdown-viewer mdui-prose" v-html="renderedHtml"></div>
+  <div
+    :key="actualTheme"
+    ref="viewerRef"
+    class="markdown-viewer mdui-prose"
+    v-html="renderedHtml"
+    @click="handleViewerClick"
+  ></div>
   <!-- 动态主题样式 -->
   <component :is="'style'" v-text="highlightStyle"></component>
 
@@ -14,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/common'
 import markdownItAnchor from 'markdown-it-anchor'
@@ -37,6 +43,8 @@ const props = defineProps<{
 
 const { actualTheme } = useTheme()
 const viewerRef = ref<HTMLElement | null>(null)
+let mermaidApiPromise: Promise<typeof import('mermaid').default> | null = null
+let mermaidRenderGeneration = 0
 
 // 主题样式映射
 const themeStyles = {
@@ -58,6 +66,10 @@ const md = new MarkdownIt({
   typographer: false,
   breaks: true,        // 将段内换行转换为 <br>
   highlight(str, lang) {
+    if (lang === 'mermaid') {
+      return ''
+    }
+
     // 官方文档推荐写法：优先使用指定语言，否则可选用自动检测或回退为转义文本
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -79,6 +91,29 @@ const md = new MarkdownIt({
   }
 })
 
+const defaultFenceRenderer =
+  md.renderer.rules.fence ||
+  ((tokens, idx, options, env, self) => {
+    void env
+    return self.renderToken(tokens, idx, options)
+  })
+
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  if (!token) {
+    return defaultFenceRenderer(tokens, idx, options, env, self)
+  }
+
+  const lang = token.info.trim().split(/\s+/)[0]
+
+  if (lang !== 'mermaid') {
+    return defaultFenceRenderer(tokens, idx, options, env, self)
+  }
+
+  const code = md.utils.escapeHtml(token.content)
+  return `<div class="mermaid-diagram"><pre class="mermaid-source"><code class="language-mermaid">${code}</code></pre></div>`
+}
+
 // 启用 markdown-it-anchor：为标题生成 id
 md.use(markdownItAnchor, {
   slugify: (s: string) =>
@@ -99,7 +134,7 @@ md.use(markdownItTocDoneRight, {
   level: [1, 2, 3, 4]
 })
 
- // 启用 markdown-it-katex（VS Code 同款实现）：渲染行内/块级 LaTeX 公式
+// 启用 markdown-it-katex（VS Code 同款实现）：渲染行内/块级 LaTeX 公式
 md.use(markdownItKatex, {
   throwOnError: false,
   errorColor: '#cc0000'
@@ -185,7 +220,7 @@ const renderedHtml = computed(() => {
     return md.render(props.content)
   } catch (error) {
     console.error('Markdown 渲染失败:', error)
-    return `<pre><code>${props.content}</code></pre>`
+    return `<pre><code>${md.utils.escapeHtml(props.content)}</code></pre>`
   }
 })
 
@@ -253,60 +288,128 @@ async function openImagePreview(img: HTMLImageElement) {
   imagePreviewLoading.value = false
 }
 
-// 挂载后拦截 TOC 内部链接点击，避免修改 URL hash
-onMounted(() => {
-  const handleClick = (event: MouseEvent) => {
-    const target = event.target instanceof HTMLElement ? event.target : null
-    if (!target) return
+function loadMermaidApi() {
+  mermaidApiPromise ??= import('mermaid').then((module) => module.default)
+  return mermaidApiPromise
+}
 
-    const img = target.closest('img') as HTMLImageElement | null
-    if (img && viewerRef.value?.contains(img)) {
-      // Keep Ctrl/Cmd-click behavior for linked images.
-      const imgLink = img.closest('a')
-      if (imgLink && (event.ctrlKey || event.metaKey)) return
+async function renderMermaidDiagrams(renderGeneration: number) {
+  const root = viewerRef.value
+  if (!root) return
 
-      // Click-to-zoom image preview (also works for external images).
-      event.preventDefault()
-      void openImagePreview(img)
-      return
+  const diagrams = Array.from(root.querySelectorAll<HTMLElement>('.mermaid-diagram:not([data-mermaid-rendered])'))
+  if (diagrams.length === 0) return
+
+  const mermaid = await loadMermaidApi()
+  if (renderGeneration !== mermaidRenderGeneration) return
+
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: actualTheme.value === 'dark' ? 'dark' : 'default',
+    fontFamily: 'sans-serif',
+    altFontFamily: 'sans-serif',
+    flowchart: {
+      htmlLabels: false,
+      useMaxWidth: true
+    },
+    sequence: {
+      useMaxWidth: true,
+      diagramMarginX: 8,
+      diagramMarginY: 8,
+      boxMargin: 8,
+      showSequenceNumbers: true
+    },
+    gantt: {
+      leftPadding: 75,
+      rightPadding: 20
     }
-
-    const anchor = target.closest('a')
-    
-    if (!anchor) return
-    
-    const href = anchor.getAttribute('href')
-    if (!href || !href.startsWith('#')) return
-    
-    // 阻止默认的 hash 跳转行为
-    event.preventDefault()
-    
-    // 提取目标 id
-    const targetId = href.slice(1)
-    if (!targetId) return
-    
-    // 查找目标元素
-    const targetElement = viewerRef.value?.querySelector(`#${CSS.escape(targetId)}`)
-    if (!targetElement) return
-    
-    // 平滑滚动到目标位置，不修改 URL
-    targetElement.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start'
-    })
-  }
-  
-  viewerRef.value?.addEventListener('click', handleClick)
-  
-  onBeforeUnmount(() => {
-    viewerRef.value?.removeEventListener('click', handleClick)
   })
-})
+
+  for (const [index, diagram] of diagrams.entries()) {
+    if (renderGeneration !== mermaidRenderGeneration) return
+
+    const source = diagram.querySelector('code.language-mermaid')?.textContent?.trim()
+    if (!source) continue
+
+    try {
+      const id = `mb-mermaid-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`
+      const { svg, bindFunctions } = await mermaid.render(id, source)
+      if (renderGeneration !== mermaidRenderGeneration) return
+
+      const rendered = document.createElement('div')
+      rendered.className = 'mermaid-rendered'
+      rendered.innerHTML = svg
+      diagram.replaceChildren(rendered)
+      bindFunctions?.(rendered)
+      diagram.dataset.mermaidRendered = 'true'
+    } catch (error) {
+      if (renderGeneration !== mermaidRenderGeneration) return
+
+      const pre = document.createElement('pre')
+      pre.className = 'mermaid-source'
+      const code = document.createElement('code')
+      code.className = 'language-mermaid'
+      code.textContent = source
+      pre.append(code)
+
+      const errorMessage = document.createElement('div')
+      errorMessage.className = 'mermaid-error'
+      errorMessage.textContent = error instanceof Error ? error.message : 'Mermaid 渲染失败'
+
+      diagram.replaceChildren(pre, errorMessage)
+      diagram.dataset.mermaidRendered = 'error'
+    }
+  }
+}
+
+// 拦截 TOC 内部链接点击，避免修改 URL hash；图片点击进入预览。
+function handleViewerClick(event: MouseEvent) {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  if (!target) return
+
+  const img = target.closest('img') as HTMLImageElement | null
+  if (img && viewerRef.value?.contains(img)) {
+    // Keep Ctrl/Cmd-click behavior for linked images.
+    const imgLink = img.closest('a')
+    if (imgLink && (event.ctrlKey || event.metaKey)) return
+
+    // Click-to-zoom image preview (also works for external images).
+    event.preventDefault()
+    void openImagePreview(img)
+    return
+  }
+
+  const anchor = target.closest('a')
+
+  if (!anchor) return
+
+  const href = anchor.getAttribute('href')
+  if (!href || !href.startsWith('#')) return
+
+  // 阻止默认的 hash 跳转行为
+  event.preventDefault()
+
+  // 提取目标 id
+  const targetId = href.slice(1)
+  if (!targetId) return
+
+  // 查找目标元素
+  const targetElement = viewerRef.value?.querySelector(`#${CSS.escape(targetId)}`)
+  if (!targetElement) return
+
+  // 平滑滚动到目标位置，不修改 URL
+  targetElement.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  })
+}
 
 watch(
-  [renderedHtml, () => props.encryptionKey, () => props.accessKey],
+  [renderedHtml, () => props.encryptionKey, () => props.accessKey, () => actualTheme.value],
   async () => {
     const gen = internalImages.bumpGeneration()
+    const mermaidGen = (mermaidRenderGeneration += 1)
 
     // DOM updated (v-html)
     await nextTick()
@@ -314,6 +417,7 @@ watch(
     internalImages.revokeAllBlobUrls()
     if (!viewerRef.value) return
 
+    await renderMermaidDiagrams(mermaidGen)
     await internalImages.hydrateEncryptedImages(viewerRef.value, gen)
   },
   { flush: 'post', immediate: true }
@@ -328,7 +432,6 @@ onBeforeUnmount(() => {
 <style scoped>
 /* 全局 Markdown 容器基础样式，遵循 MDUI 配色与排版建议 */
 .markdown-viewer {
-  
   border-radius: 8px;
   color: rgb(var(--mdui-color-on-surface));
   line-height: 1.7;
@@ -464,6 +567,44 @@ onBeforeUnmount(() => {
   border-radius: 0;
   font-size: 0.875em;
   font-family: inherit;
+}
+
+.markdown-viewer :deep(.mermaid-diagram) {
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+  padding: 1em;
+  border-radius: 8px;
+  background-color: rgb(var(--mdui-color-surface-container));
+  color: rgb(var(--mdui-color-on-surface));
+  text-align: center;
+}
+
+.markdown-viewer :deep(.mermaid-source) {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  text-align: left;
+}
+
+.markdown-viewer :deep(.mermaid-source code) {
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-viewer :deep(.mermaid-rendered svg) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.markdown-viewer :deep(.mermaid-error) {
+  margin-top: 0.75em;
+  color: rgb(var(--mdui-color-error));
+  text-align: left;
+  white-space: pre-wrap;
 }
 
 /* 引用样式 */
