@@ -16,16 +16,6 @@
           @clear="handleClearSearch"
         ></mdui-text-field>
 
-        <mdui-segmented-button-group
-          class="history-filter-group"
-          :value="starredFilter"
-          @change="handleStarredFilterChange"
-          selects="single"
-        >
-          <mdui-segmented-button value="all">全部</mdui-segmented-button>
-          <mdui-segmented-button value="starred">已收藏</mdui-segmented-button>
-        </mdui-segmented-button-group>
-
         <mdui-button
           class="filter-search-button"
           variant="filled"
@@ -58,7 +48,11 @@
       </div>
 
       <div v-else class="history-list-wrapper">
-        <mdui-collapse class="history-collapse">
+        <mdui-collapse
+          ref="historyCollapseRef"
+          class="history-collapse"
+          @change="syncExpandedHistoryItems"
+        >
           <mdui-collapse-item
             v-for="item in historyItems"
             :key="item.paste_id"
@@ -68,16 +62,6 @@
             <div slot="header" class="history-item-header">
               <div class="history-item-main">
                 <div class="title-cell">
-                  <mdui-icon
-                    v-if="item.is_starred"
-                    name="star"
-                    class="star-icon starred"
-                  ></mdui-icon>
-                  <mdui-icon
-                    v-else
-                    name="star_border"
-                    class="star-icon"
-                  ></mdui-icon>
                   <span class="title-text">{{ item.title || '(无标题)' }}</span>
                 </div>
 
@@ -93,25 +77,29 @@
               </div>
             </div>
 
-            <div class="history-item-actions" role="group" :aria-label="`历史记录 ${item.title || item.paste_id} 的操作`">
-              <mdui-button-icon
-                class="circle-action"
-                :title="item.is_starred ? '取消收藏' : '收藏'"
-                :aria-label="item.is_starred ? '取消收藏' : '收藏此记录'"
-                :aria-pressed="item.is_starred ? 'true' : 'false'"
-                @click="handleToggleStar(item)"
+            <div
+              class="history-item-actions"
+              role="group"
+              :aria-hidden="isHistoryItemExpanded(item.paste_id) ? undefined : 'true'"
+              :inert="isHistoryItemExpanded(item.paste_id) ? undefined : true"
+              :aria-label="`历史记录 ${item.title || item.paste_id} 的操作`"
+            >
+              <mdui-button class="history-action-button" variant="tonal" @click.stop="handleView(item)">
+                <mdui-icon slot="icon" name="open_in_new"></mdui-icon>
+                打开
+              </mdui-button>
+              <mdui-button class="history-action-button" variant="outlined" @click.stop="handleEdit(item)">
+                <mdui-icon slot="icon" name="edit"></mdui-icon>
+                编辑
+              </mdui-button>
+              <mdui-button
+                class="history-action-button history-action-button--danger"
+                variant="outlined"
+                @click.stop="handleDelete(item)"
               >
-                <mdui-icon :name="item.is_starred ? 'star' : 'star_border'"></mdui-icon>
-              </mdui-button-icon>
-              <mdui-button-icon class="circle-action" title="查看" aria-label="查看记录" @click="handleView(item)">
-                <mdui-icon name="open_in_new"></mdui-icon>
-              </mdui-button-icon>
-              <mdui-button-icon class="circle-action" title="编辑" aria-label="编辑记录" @click="handleEdit(item)">
-                <mdui-icon name="edit"></mdui-icon>
-              </mdui-button-icon>
-              <mdui-button-icon class="circle-action" title="删除" aria-label="删除记录" @click="handleDelete(item)">
-                <mdui-icon name="delete_outline"></mdui-icon>
-              </mdui-button-icon>
+                <mdui-icon slot="icon" name="delete_outline"></mdui-icon>
+                删除
+              </mdui-button>
             </div>
           </mdui-collapse-item>
         </mdui-collapse>
@@ -131,18 +119,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { LocationQueryRaw } from 'vue-router'
 import 'mdui/components/button.js'
 import 'mdui/components/text-field.js'
-import 'mdui/components/button-icon.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/circular-progress.js'
-import 'mdui/components/segmented-button-group.js'
-import 'mdui/components/segmented-button.js'
 import 'mdui/components/collapse.js'
 import 'mdui/components/collapse-item.js'
+import type { Collapse } from 'mdui/components/collapse.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import { dialog } from 'mdui/functions/dialog.js'
 import PaginationFooter from '../components/common/PaginationFooter.vue'
@@ -150,6 +136,7 @@ import type { HistoryListItem } from '../services/history'
 import { getHistoryDetail } from '../services/history'
 import { useHistory, loadGuestHistory } from '../composables/useHistory'
 import { useAuth } from '../composables/useAuth'
+import { registerHeaderActions, unregisterHeaderActions } from '../composables/useHeaderActions'
 
 const router = useRouter()
 const route = useRoute()
@@ -162,38 +149,34 @@ const {
   historyLoading,
   historySearch,
   fetchHistory,
-  toggleStar,
   removeFromHistory,
   initFromCache
 } = useHistory()
 
-type StarredFilterValue = 'all' | 'starred'
-
 interface HistoryRouteState {
   page: number
   search: string
-  starred: StarredFilterValue
 }
 
 interface FetchHistoryOptions {
   page?: number
   reset?: boolean
   search?: string
-  starred?: boolean | null
 }
 
 const searchInput = ref('')
-const starredFilter = ref<StarredFilterValue>('all')
+const historyCollapseRef = ref<Collapse | null>(null)
+const expandedHistoryItemIds = ref<string[]>([])
 const showViewsColumn = computed(() => !!currentUser.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
-const hasActiveFilters = computed(() => historySearch.value.trim().length > 0 || starredFilter.value === 'starred')
-const resultsHeadline = computed(() => (starredFilter.value === 'starred' ? '已收藏记录' : '全部历史记录'))
+const hasActiveFilters = computed(() => historySearch.value.trim().length > 0)
+const resultsHeadline = computed(() => (hasActiveFilters.value ? '搜索结果' : '全部历史记录'))
 const emptyState = computed(() => {
   if (hasActiveFilters.value) {
     return {
       icon: 'search_off',
       title: '没有匹配的历史记录',
-      copy: '尝试清空搜索条件或切换回全部记录，以查看更多内容。'
+      copy: '尝试清空搜索条件，以查看更多历史内容。'
     }
   }
 
@@ -201,7 +184,7 @@ const emptyState = computed(() => {
     return {
       icon: 'history',
       title: '你的历史记录还是空的',
-      copy: '当你保存、编辑或收藏内容后，这里会自动显示对应的记录。'
+      copy: '当你保存或编辑内容后，这里会自动显示对应的记录。'
     }
   }
 
@@ -214,6 +197,7 @@ const emptyState = computed(() => {
 const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 const HAS_TZ_SUFFIX_RE = /(Z|[+\-]\d{2}:\d{2})$/i
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
+const HEADER_OWNER_ID = 'history-page'
 
 function currentUserId(): number | null {
   return currentUser.value?.id ?? null
@@ -236,33 +220,28 @@ function parsePositiveInteger(value: string): number | null {
 
 function parseRouteState(): HistoryRouteState {
   const search = firstQueryValue(route.query.search).trim()
-  const starred = firstQueryValue(route.query.starred).trim() === 'starred' ? 'starred' : 'all'
   const parsedPage = parsePositiveInteger(firstQueryValue(route.query.page))
 
   return {
     page: parsedPage ?? 1,
-    search,
-    starred
+    search
   }
 }
 
 function syncRouteQueryFromState() {
   const desiredPage = historyPage.value > 1 ? String(historyPage.value) : ''
   const desiredSearch = historySearch.value.trim()
-  const desiredStarred = starredFilter.value === 'starred' ? 'starred' : ''
   const currentPage = firstQueryValue(route.query.page).trim()
   const currentSearch = firstQueryValue(route.query.search).trim()
-  const currentStarred = firstQueryValue(route.query.starred).trim()
 
   if (
     currentPage === desiredPage &&
-    currentSearch === desiredSearch &&
-    currentStarred === desiredStarred
+    currentSearch === desiredSearch
   ) {
     return
   }
 
-  const nextQuery: LocationQueryRaw = { ...route.query }
+  const nextQuery: LocationQueryRaw = {}
   if (desiredPage) {
     nextQuery.page = desiredPage
   } else {
@@ -273,12 +252,6 @@ function syncRouteQueryFromState() {
   } else {
     delete nextQuery.search
   }
-  if (desiredStarred) {
-    nextQuery.starred = desiredStarred
-  } else {
-    delete nextQuery.starred
-  }
-
   void router.replace({ query: nextQuery })
 }
 
@@ -291,10 +264,9 @@ async function fetchHistoryAndSyncRoute(opts: FetchHistoryOptions = {}) {
 async function applyRouteQuery() {
   const state = parseRouteState()
   const searchChanged = historySearch.value !== state.search
-  const filterChanged = starredFilter.value !== state.starred
   const pageChanged = historyPage.value !== state.page
 
-  if (!searchChanged && !filterChanged && !pageChanged) {
+  if (!searchChanged && !pageChanged) {
     if (searchInput.value !== state.search) {
       searchInput.value = state.search
     }
@@ -303,12 +275,10 @@ async function applyRouteQuery() {
   }
 
   searchInput.value = state.search
-  starredFilter.value = state.starred
   await fetchHistoryAndSyncRoute({
     page: state.page,
-    reset: searchChanged || filterChanged,
-    search: state.search,
-    starred: state.starred === 'starred' ? true : null
+    reset: searchChanged,
+    search: state.search
   })
 }
 
@@ -357,29 +327,29 @@ function handleSearch() {
   void fetchHistoryAndSyncRoute({ reset: true, search: searchInput.value })
 }
 
-function eventValue(e: Event): string {
-  const target = e.target as HTMLInputElement | { value?: unknown } | null
-  const value = target && 'value' in target ? target.value : ''
-  return typeof value === 'string' ? value : value == null ? '' : String(value)
-}
-
 function handleClearSearch() {
   searchInput.value = ''
   void fetchHistoryAndSyncRoute({ reset: true, search: '' })
-}
-
-function handleStarredFilterChange(e: Event) {
-  const val = eventValue(e)
-  if (!val) return
-  starredFilter.value = val === 'starred' ? 'starred' : 'all'
-  const starred = val === 'starred' ? true : null
-  void fetchHistoryAndSyncRoute({ reset: true, starred, search: searchInput.value })
 }
 
 function goToPage(page: number) {
   const target = Math.min(Math.max(Math.trunc(page), 1), totalPages.value)
   if (target === historyPage.value) return
   void fetchHistoryAndSyncRoute({ page: target })
+}
+
+function syncExpandedHistoryItems() {
+  const value = historyCollapseRef.value?.value
+  if (Array.isArray(value)) {
+    expandedHistoryItemIds.value = value.map((item) => String(item))
+    return
+  }
+
+  expandedHistoryItemIds.value = typeof value === 'string' && value ? [value] : []
+}
+
+function isHistoryItemExpanded(pasteId: string): boolean {
+  return expandedHistoryItemIds.value.includes(pasteId)
 }
 
 function navigateToEditor(pasteId: string, adminKey: string, encryptionKey: string) {
@@ -444,20 +414,6 @@ async function handleEdit(item: HistoryListItem) {
   }
 }
 
-async function handleToggleStar(item: HistoryListItem) {
-  if (!currentUser.value) return
-  try {
-    const nextStarred = !item.is_starred
-    await toggleStar(item.paste_id, nextStarred, currentUser.value.id)
-    if (starredFilter.value === 'starred' && !nextStarred) {
-      const targetPage = Math.min(historyPage.value, totalPages.value)
-      await fetchHistoryAndSyncRoute({ page: targetPage })
-    }
-  } catch {
-    snackbar({ message: '操作失败', closeable: true })
-  }
-}
-
 function handleDelete(item: HistoryListItem) {
   dialog({
     headline: '删除历史记录',
@@ -482,24 +438,45 @@ function handleDelete(item: HistoryListItem) {
 }
 
 onMounted(() => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'history-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    },
+    {
+      id: 'history-favorites',
+      label: '收藏',
+      ariaLabel: '查看收藏',
+      icon: 'star',
+      kind: 'icon',
+      onClick: () => { void router.push('/favorites') }
+    }
+  ])
+
   const userId = currentUserId()
   if (userId !== null) {
     initFromCache(userId)
   }
   const state = parseRouteState()
   searchInput.value = state.search
-  starredFilter.value = state.starred
 
   void fetchHistoryAndSyncRoute({
     page: state.page,
     reset: true,
-    search: state.search,
-    starred: state.starred === 'starred' ? true : null
+    search: state.search
   })
 })
 
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
+})
+
 watch(
-  [() => route.query.page, () => route.query.search, () => route.query.starred],
+  [() => route.query.page, () => route.query.search],
   () => {
     void applyRouteQuery()
   }
@@ -574,11 +551,6 @@ watch(
 .search-field {
   flex: 1 1 320px;
   min-width: 0;
-}
-
-.history-filter-group {
-  flex: 0 1 auto;
-  max-width: 100%;
 }
 
 .filter-search-button {
@@ -677,21 +649,39 @@ watch(
   flex-wrap: wrap;
 }
 
+.history-item-actions[aria-hidden='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.history-action-button {
+  --mdui-button-height: 38px;
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.history-action-button::part(container) {
+  border-radius: 999px;
+}
+
+.history-action-button--danger {
+  color: rgb(var(--mdui-color-error));
+}
+
+.history-action-button--danger::part(container) {
+  border-color: rgb(var(--mdui-color-error) / 0.68);
+  background: rgb(var(--mdui-color-error-container) / 0.24);
+}
+
+.history-action-button--danger mdui-icon {
+  color: rgb(var(--mdui-color-error));
+}
+
 .title-cell {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.star-icon {
-  font-size: 18px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-  flex-shrink: 0;
-}
-
-.star-icon.starred {
-  color: rgb(var(--mdui-color-primary));
 }
 
 .title-text {
@@ -720,10 +710,6 @@ watch(
   color: rgb(var(--mdui-color-on-primary-container));
 }
 
-.circle-action {
-  border-radius: 999px;
-}
-
 @media (max-width: 768px) {
   .history-surface {
     padding: 18px;
@@ -743,7 +729,6 @@ watch(
   }
 
   .search-field,
-  .history-filter-group,
   .filter-search-button {
     flex-basis: 100%;
   }
@@ -780,6 +765,7 @@ watch(
   }
 
   .history-item-actions {
+    gap: 6px;
     padding: 0 16px 16px;
   }
 }

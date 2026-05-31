@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuth } from '../composables/useAuth'
@@ -24,10 +24,12 @@ import {
   normalizeUserTab,
   type UserTabValue
 } from '../components/users/navigation'
+import { registerHeaderActions, unregisterHeaderActions } from '../composables/useHeaderActions'
 
 const router = useRouter()
 const route = useRoute()
 const { currentUser, isAuthInitialized } = useAuth()
+const HEADER_OWNER_ID = 'user-management-page'
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const activeTab = ref<UserTabValue>('profile')
@@ -69,6 +71,39 @@ watch(
   },
   { immediate: true }
 )
+
+onMounted(() => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'users-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    },
+    {
+      id: 'users-history',
+      label: '历史记录',
+      ariaLabel: '查看历史记录',
+      icon: 'history',
+      kind: 'icon',
+      onClick: () => { void router.push('/history') }
+    },
+    {
+      id: 'users-favorites',
+      label: '收藏',
+      ariaLabel: '查看收藏',
+      icon: 'star',
+      kind: 'icon',
+      onClick: () => { void router.push('/favorites') }
+    }
+  ])
+})
+
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
+})
 </script>
 
 <style scoped>

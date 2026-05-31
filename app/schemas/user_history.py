@@ -18,12 +18,6 @@ class UserHistorySaveRequest(BaseModel):
     admin_key: str = Field(..., description="管理权限令牌，用于验证权限")
 
 
-class UserHistoryStarRequest(BaseModel):
-    """收藏/取消收藏Paste请求"""
-
-    is_starred: bool = Field(..., description="是否收藏")
-
-
 class GuestHistoryItem(BaseModel):
     """游客历史条目（导入时使用）"""
 
@@ -51,7 +45,6 @@ class UserHistoryListItem(BaseModel):
     title: str | None = Field(default=None, description="Paste标题")
     max_views: int = Field(..., description="最大查看次数")
     view_count: int = Field(..., description="当前查看次数")
-    is_starred: bool = Field(..., description="是否收藏")
     published_at: datetime | None = Field(default=None, description="发布时间")
     paste_updated_at: datetime = Field(..., description="Paste更新时间")
     history_updated_at: datetime = Field(..., description="历史记录更新时间")
@@ -71,7 +64,6 @@ class UserHistoryDetail(BaseModel):
     encryption_key: str = Field(..., description="paste密钥（解密后）")
     max_views: int = Field(..., description="最大查看次数")
     view_count: int = Field(..., description="当前查看次数")
-    is_starred: bool = Field(..., description="是否收藏")
     published_at: datetime | None = Field(default=None, description="发布时间")
     paste_updated_at: datetime = Field(..., description="Paste更新时间")
     history_updated_at: datetime = Field(..., description="历史记录更新时间")
@@ -107,7 +99,6 @@ class UserHistorySearchParams(BaseModel):
 
     page: int = Field(1, ge=1, description="页码")
     limit: int = Field(20, ge=1, le=100, description="每页数量")
-    starred: bool | None = Field(default=None, description="收藏状态过滤：true|false")
     search: str | None = Field(default=None, description="搜索关键词，搜索title")
 
     class Config:

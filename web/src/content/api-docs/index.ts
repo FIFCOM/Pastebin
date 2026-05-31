@@ -92,7 +92,7 @@ export const INCLUDED_ENDPOINT_FAMILIES = [
 // Explicit exclusions
 export const EXCLUDED_ENDPOINT_FAMILIES = [
   '用户账户类接口和仅 access_token 的接口',
-  '/api/user/history/* — 用户 Paste 历史',
+  '/api/user/history/* 和 /api/user/favorites/* — 用户 Paste 历史与收藏',
   '/api/internal/* — 内部接口',
   '/api/install/* — 安装引导接口',
   'POST /api/rooms — 创建房间',

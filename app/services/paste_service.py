@@ -9,6 +9,7 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -700,11 +701,41 @@ class PasteService:
     @staticmethod
     def _verify_access_key(paste: Paste, access_key: str | None) -> bool:
         """验证访问密钥"""
-        if not paste.access_key_hash:  # type: ignore
+        access_key_hash = cast(str | None, cast(object, paste.access_key_hash))
+        if not access_key_hash:
             return True  # 没有设置访问密钥
         if not access_key:
             return False  # 需要访问密钥但未提供
-        return verify_password(access_key, str(paste.access_key_hash))  # type: ignore
+        return verify_password(access_key, access_key_hash)
+
+    @staticmethod
+    def validate_paste_read_access(
+        paste: Paste,
+        access_key: str | None = None,
+        admin_key: str | None = None,
+    ) -> bool:
+        """验证Paste读取权限，不产生浏览/读取副作用。"""
+        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
+
+        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
+            raise ValueError("草稿状态的Paste不可访问")
+
+        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
+            raise ValueError("访问密钥错误")
+
+        expire_at = cast(datetime | None, cast(object, paste.expire_at))
+        if not admin_ok and is_expired(expire_at):
+            raise ValueError("Paste已过期")
+
+        if not admin_ok:
+            paste_max_views = int(cast(int | None, cast(object, paste.max_views)) or -1)
+            paste_view_count = int(
+                cast(int | None, cast(object, paste.view_count)) or 0
+            )
+            if paste_max_views > 0 and paste_view_count >= paste_max_views:
+                raise ValueError("Paste已达到最大查看次数")
+
+        return admin_ok
 
     @staticmethod
     def _save_content_to_file(paste_id: str, content: str) -> str:
@@ -1011,16 +1042,7 @@ class PasteService:
         if not paste:
             raise ValueError("Paste不存在")
 
-        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
-
-        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
-            raise ValueError("草稿状态的Paste不可访问")
-
-        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
-            raise ValueError("访问密钥错误")
-
-        if not admin_ok and is_expired(paste.expire_at):  # type: ignore[arg-type]
-            raise ValueError("Paste已过期")
+        _ = PasteService.validate_paste_read_access(paste, access_key, admin_key)
 
         return PasteResponse(
             title=str(paste.title) if paste.title else None,  # type: ignore
@@ -1060,16 +1082,7 @@ class PasteService:
         if not paste:
             raise ValueError("Paste不存在")
 
-        admin_ok = bool(admin_key and PasteService._verify_admin_key(paste, admin_key))
-
-        if str(paste.status) == "draft" and not admin_ok:  # type: ignore
-            raise ValueError("草稿状态的Paste不可访问")
-
-        if not admin_ok and not PasteService._verify_access_key(paste, access_key):
-            raise ValueError("访问密钥错误")
-
-        if not admin_ok and is_expired(paste.expire_at):  # type: ignore[arg-type]
-            raise ValueError("Paste已过期")
+        admin_ok = PasteService.validate_paste_read_access(paste, access_key, admin_key)
 
         content_path = paste.content_path  # type: ignore
         if content_path is None or str(content_path).strip() == "":

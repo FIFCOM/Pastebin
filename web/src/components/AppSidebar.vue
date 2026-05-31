@@ -9,46 +9,83 @@
   >
     <div class="sidebar-shell">
       <mdui-list class="sidebar-nav">
-        <mdui-collapse ref="sidebarCollapseRef" class="sidebar-collapse" :key="defaultExpandedSectionsKey" :value="expandedSections" @change="syncExpandedSections">
-          <mdui-collapse-item
-            v-for="section in sidebarSections"
-            :key="section.value"
-            :value="section.value"
-            class="sidebar-section"
-          >
+        <mdui-collapse
+          v-if="hasCollapsibleSections"
+          ref="sidebarCollapseRef"
+          class="sidebar-collapse"
+          :key="defaultExpandedSectionsKey"
+          :value="expandedSections"
+          @change="syncExpandedSections"
+        >
+          <template v-for="section in sidebarRenderSections" :key="section.value">
             <mdui-list-item
-              slot="header"
-              class="sidebar-group-header"
+              v-if="section.singleItem"
+              :data-testid="getSidebarItemTestId(section, section.singleItem)"
+              class="sidebar-list-item sidebar-list-item--single"
               rounded
               alignment="center"
-              :icon="section.icon"
-            >
-              <span class="sidebar-group-label">{{ section.label }}</span>
-              <mdui-icon
-                slot="end-icon"
-                :class="['sidebar-group-chevron', { 'sidebar-group-chevron--expanded': isSectionExpanded(section.value) }]"
-                name="expand_more"
-              ></mdui-icon>
-            </mdui-list-item>
+              :active="section.singleItem.active ?? false"
+              :disabled="section.singleItem.disabled ?? false"
+              :headline="section.singleItem.label"
+              :icon="section.singleItem.icon"
+              @click="handleSidebarItemClick(section.singleItem)"
+            ></mdui-list-item>
 
-            <div class="sidebar-group-body">
+            <mdui-collapse-item
+              v-else-if="section.isCollapsible"
+              :value="section.value"
+              class="sidebar-section"
+            >
               <mdui-list-item
-                v-for="item in section.items"
-                :key="item.key"
-                :data-testid="item.testid ?? (section.value.startsWith('docs-') ? `api-docs-sidebar-item-${item.key}` : undefined)"
-                class="sidebar-list-item"
+                slot="header"
+                class="sidebar-group-header"
                 rounded
                 alignment="center"
-                :active="item.active ?? false"
-                :disabled="item.disabled ?? false"
-                :headline="item.label"
-                :description="item.description"
-                :icon="item.icon"
-                @click="handleSidebarItemClick(item)"
-              ></mdui-list-item>
-            </div>
-          </mdui-collapse-item>
+                :icon="section.icon"
+              >
+                <span class="sidebar-group-label">{{ section.label }}</span>
+                <mdui-icon
+                  slot="end-icon"
+                  :class="['sidebar-group-chevron', { 'sidebar-group-chevron--expanded': isSectionExpanded(section.value) }]"
+                  name="expand_more"
+                ></mdui-icon>
+              </mdui-list-item>
+
+              <div class="sidebar-group-body">
+                <mdui-list-item
+                  v-for="item in section.items"
+                  :key="item.key"
+                  :data-testid="getSidebarItemTestId(section, item)"
+                  class="sidebar-list-item"
+                  rounded
+                  alignment="center"
+                  :active="item.active ?? false"
+                  :disabled="item.disabled ?? false"
+                  :headline="item.label"
+                  :icon="item.icon"
+                  @click="handleSidebarItemClick(item)"
+                ></mdui-list-item>
+              </div>
+            </mdui-collapse-item>
+          </template>
         </mdui-collapse>
+
+        <div v-else class="sidebar-menu">
+          <template v-for="section in sidebarRenderSections" :key="section.value">
+            <mdui-list-item
+              v-if="section.singleItem"
+              :data-testid="getSidebarItemTestId(section, section.singleItem)"
+              class="sidebar-list-item sidebar-list-item--single"
+              rounded
+              alignment="center"
+              :active="section.singleItem.active ?? false"
+              :disabled="section.singleItem.disabled ?? false"
+              :headline="section.singleItem.label"
+              :icon="section.singleItem.icon"
+              @click="handleSidebarItemClick(section.singleItem)"
+            ></mdui-list-item>
+          </template>
+        </div>
       </mdui-list>
     </div>
   </mdui-navigation-drawer>
@@ -73,7 +110,6 @@ type SidebarSectionItem = {
   key: string
   label: string
   icon: string
-  description?: string
   disabled?: boolean
   active?: boolean
   path?: string
@@ -88,6 +124,11 @@ type SidebarSection = {
   items: SidebarSectionItem[]
 }
 
+type SidebarRenderSection = SidebarSection & {
+  isCollapsible: boolean
+  singleItem: SidebarSectionItem | null
+}
+
 const DEFAULT_SECTIONS: SidebarSection[] = [
   {
     value: 'docs',
@@ -98,7 +139,6 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         key: 'api-docs',
         label: 'API文档',
         icon: 'article',
-        description: 'Material Bin API 使用文档',
         path: DOCS_OVERVIEW_PATH,
         testid: 'api-docs-sidebar-entry'
       }
@@ -205,7 +245,15 @@ const sidebarSections = computed<SidebarSection[]>(() => {
   }))
 })
 
-const defaultExpandedSections = computed(() => sidebarSections.value.map((section) => section.value))
+const sidebarRenderSections = computed<SidebarRenderSection[]>(() =>
+  sidebarSections.value.map((section) => ({
+    ...section,
+    isCollapsible: section.items.length > 1,
+    singleItem: section.items.length === 1 ? section.items[0] ?? null : null
+  }))
+)
+const hasCollapsibleSections = computed(() => sidebarRenderSections.value.some((section) => section.isCollapsible))
+const defaultExpandedSections = computed(() => sidebarRenderSections.value.filter((section) => section.isCollapsible).map((section) => section.value))
 const defaultExpandedSectionsKey = computed(() => defaultExpandedSections.value.join('|'))
 
 watch(
@@ -229,6 +277,10 @@ function syncExpandedSections() {
 
 function isSectionExpanded(sectionValue: string): boolean {
   return expandedSections.value.includes(sectionValue)
+}
+
+function getSidebarItemTestId(section: SidebarSection, item: SidebarSectionItem): string | undefined {
+  return item.testid ?? (section.value.startsWith('docs-') ? `api-docs-sidebar-item-${item.key}` : undefined)
 }
 
 function handleSidebarItemClick(item: SidebarSectionItem) {
@@ -297,6 +349,7 @@ function handleSidebarItemClick(item: SidebarSectionItem) {
   display: block;
 }
 
+.sidebar-menu,
 .sidebar-collapse {
   display: grid;
   gap: 12px;
@@ -348,10 +401,6 @@ function handleSidebarItemClick(item: SidebarSectionItem) {
 
 .sidebar-list-item[disabled]::part(headline) {
   opacity: 0.9;
-}
-
-.sidebar-list-item[disabled]::part(description) {
-  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 @media (max-width: 640px) {

@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onBeforeUnmount, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
@@ -172,6 +172,11 @@ import { buildUnreadPasteKey, useCollabUnreadPastes } from '../composables/useCo
 import { useRoomPresenceSync } from '../composables/useRoomPresenceSync'
 import { useRoomSession } from '../composables/useRoomSession'
 import { useHistory } from '../composables/useHistory'
+import {
+  registerHeaderActions,
+  triggerHeaderActionFlash,
+  unregisterHeaderActions
+} from '../composables/useHeaderActions'
 
 const { currentUser } = useAuth()
 const { addToHistory } = useHistory()
@@ -180,13 +185,22 @@ const { activeRoom } = useRoomSession()
 const { markUnreadPaste } = useCollabUnreadPastes()
 const isIncomingSharePromptOpen = ref(false)
 const lastIncomingSharePromptKey = ref('')
+const HEADER_OWNER_ID = 'paste-editor-page'
+const EDITOR_ROOM_ACTION_ID = 'paste-editor-room'
 
 useRoomPresenceSync({
+  onMemberJoined: () => {
+    if (currentPasteId.value && encryptionKey.value) {
+      shouldPromptShare.value = true
+    }
+    triggerHeaderActionFlash(EDITOR_ROOM_ACTION_ID)
+  },
   onPasteShared: (event) => {
     const eventKey = `${event.paste_id}-${event.timestamp}`
     if (lastIncomingSharePromptKey.value === eventKey) return
     lastIncomingSharePromptKey.value = eventKey
     markUnreadPaste(activeRoom.value?.roomId, buildUnreadPasteKey(event.paste_id, event.timestamp))
+    triggerHeaderActionFlash(EDITOR_ROOM_ACTION_ID)
     void promptOpenWorkspaceForIncomingShare()
   }
 })
@@ -469,6 +483,15 @@ function handleOpenCollabEntry(): void {
   openWorkspaceDialog(shouldPromptShare.value ? 'share' : 'overview')
 }
 
+function handleHeaderRoomAction(): void {
+  if (!activeRoom.value) {
+    openJoinDialog()
+    return
+  }
+
+  openWorkspaceDialog(shouldPromptShare.value ? 'share' : 'overview')
+}
+
 function handleCurrentPasteShared(): void {
   shouldPromptShare.value = false
 }
@@ -706,6 +729,34 @@ const resetForm = () => {
 
 // 生命周期钩子
 onMounted(() => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: EDITOR_ROOM_ACTION_ID,
+      label: () => (activeRoom.value ? '协作房间' : '加入协作房间'),
+      ariaLabel: () => (activeRoom.value ? '打开协作工作区' : '打开加入房间界面'),
+      icon: 'groups',
+      kind: 'icon',
+      active: () => Boolean(activeRoom.value),
+      onClick: handleHeaderRoomAction
+    },
+    {
+      id: 'paste-editor-history',
+      label: '历史记录',
+      ariaLabel: '查看历史记录',
+      icon: 'history',
+      kind: 'icon',
+      onClick: () => { void router.push('/history') }
+    },
+    {
+      id: 'paste-editor-favorites',
+      label: '收藏',
+      ariaLabel: '查看收藏',
+      icon: 'star',
+      kind: 'icon',
+      onClick: () => { void router.push('/favorites') }
+    }
+  ])
+
   // 从 localStorage 中读取保存的内容类型偏好
   const savedContentType = localStorage.getItem('content_type')
   if (savedContentType === 'md' || savedContentType === 'txt') {
@@ -714,6 +765,10 @@ onMounted(() => {
     // 如果没有保存的偏好，默认使用 txt
     contentType.value = 'txt'
   }
+})
+
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
 })
 
 watch(

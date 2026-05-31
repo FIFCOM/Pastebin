@@ -39,6 +39,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/History.vue'),
   },
   {
+    path: '/favorites',
+    name: 'Favorites',
+    component: () => import('../views/Favorites.vue')
+  },
+  {
     path: '/collab',
     redirect: '/'
   },

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_attribute
 
 from app.models.collab_room import CollabRoom, Member, RoomMember
 from app.models.paste import File, FileUploadSession, Paste
@@ -228,7 +229,9 @@ class CleanupService:
                             db.delete(room)
                             continue
 
-                        setattr(room, "creator_member_id", str(successor.member_id))
+                        set_attribute(
+                            room, "creator_member_id", str(successor.member_id)
+                        )
                         affected_room_ids.add(str(room.id))  # type: ignore
 
                     # 记录该成员参与的房间，用于后续同步 member_count
@@ -262,7 +265,7 @@ class CleanupService:
                 room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
                 if not room:
                     continue
-                setattr(
+                set_attribute(
                     room,
                     "member_count",
                     db.query(RoomMember).filter(RoomMember.room_id == room_id).count(),

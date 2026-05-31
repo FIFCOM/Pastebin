@@ -4,9 +4,11 @@
 
 import logging
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.attributes import set_attribute
 
 from app.core.security import (
     bytes_to_str,
@@ -27,7 +29,6 @@ from app.schemas.user_history import (
     UserHistoryListResponse,
     UserHistorySaveRequest,
     UserHistorySearchParams,
-    UserHistoryStarRequest,
 )
 from app.services.paste_service import PasteService
 
@@ -79,10 +80,9 @@ class UserHistoryService:
             title=str(paste.title) if paste.title else None,
             max_views=int(paste.max_views or -1),
             view_count=int(paste.view_count or 0),
-            is_starred=bool(user_history.is_starred),
             published_at=paste.published_at,
             paste_updated_at=paste.updated_at,
-            history_updated_at=user_history.updated_at,
+            history_updated_at=cast(datetime, cast(object, user_history.updated_at)),
             expire_at=paste.expire_at,
         )
 
@@ -118,10 +118,10 @@ class UserHistoryService:
         )
 
         if existing:
-            existing.encrypted_paste_key = encrypted_paste_key
-            existing.encrypted_admin_key = encrypted_admin_key
-            existing.is_deleted = False
-            existing.updated_at = now
+            set_attribute(existing, "encrypted_paste_key", encrypted_paste_key)
+            set_attribute(existing, "encrypted_admin_key", encrypted_admin_key)
+            set_attribute(existing, "is_deleted", False)
+            set_attribute(existing, "updated_at", now)
             db.commit()
             db.refresh(existing)
             return existing
@@ -132,7 +132,6 @@ class UserHistoryService:
             paste_id=paste_id,
             encrypted_paste_key=encrypted_paste_key,
             encrypted_admin_key=encrypted_admin_key,
-            is_starred=False,
             is_deleted=False,
             created_at=now,
             updated_at=now,
@@ -155,10 +154,10 @@ class UserHistoryService:
             )
             if existing is None:
                 raise
-            existing.encrypted_paste_key = encrypted_paste_key
-            existing.encrypted_admin_key = encrypted_admin_key
-            existing.is_deleted = False
-            existing.updated_at = now
+            set_attribute(existing, "encrypted_paste_key", encrypted_paste_key)
+            set_attribute(existing, "encrypted_admin_key", encrypted_admin_key)
+            set_attribute(existing, "is_deleted", False)
+            set_attribute(existing, "updated_at", now)
             db.commit()
             db.refresh(existing)
             return existing
@@ -184,7 +183,7 @@ class UserHistoryService:
         if not PasteService._verify_admin_key(paste, save_request.admin_key):
             raise ValueError("管理权限验证失败")
 
-        UserHistoryService._upsert_history(
+        _ = UserHistoryService._upsert_history(
             db,
             user_id,
             paste_id,
@@ -209,9 +208,6 @@ class UserHistoryService:
             )
             .options(joinedload(UserHistory.paste))
         )
-
-        if search_params.starred is not None:
-            query = query.filter(UserHistory.is_starred == search_params.starred)
 
         if search_params.search:
             search_term = f"%{search_params.search}%"
@@ -287,37 +283,11 @@ class UserHistoryService:
             encryption_key=decrypted_paste_key,
             max_views=int(paste.max_views or -1),
             view_count=int(paste.view_count or 0),
-            is_starred=bool(record.is_starred),
             published_at=paste.published_at,
             paste_updated_at=paste.updated_at,
-            history_updated_at=record.updated_at,
+            history_updated_at=cast(datetime, cast(object, record.updated_at)),
             expire_at=paste.expire_at,
         )
-
-    @staticmethod
-    def update_history_star_status(
-        db: Session,
-        user_id: int,
-        paste_id: str,
-        star_request: UserHistoryStarRequest,
-    ) -> None:
-        """更新Paste收藏状态"""
-        record = (
-            db.query(UserHistory)
-            .filter(
-                UserHistory.user_id == user_id,
-                UserHistory.paste_id == paste_id,
-                UserHistory.is_deleted == False,  # noqa: E712
-            )
-            .first()
-        )
-
-        if not record:
-            raise ValueError("该Paste未保存到用户账户")
-
-        record.is_starred = star_request.is_starred
-        record.updated_at = datetime.now(UTC)
-        db.commit()
 
     @staticmethod
     def soft_delete_history(
@@ -338,8 +308,8 @@ class UserHistoryService:
         if not record:
             raise ValueError("该Paste未保存到用户账户")
 
-        record.is_deleted = True
-        record.updated_at = datetime.now(UTC)
+        set_attribute(record, "is_deleted", True)
+        set_attribute(record, "updated_at", datetime.now(UTC))
         db.commit()
 
     @staticmethod
@@ -362,12 +332,15 @@ class UserHistoryService:
                 deduped.append(item)
 
         # 上限保护
+        overflow_count = max(0, len(deduped) - IMPORT_GUEST_MAX_ITEMS)
         deduped = deduped[:IMPORT_GUEST_MAX_ITEMS]
 
         imported = 0
         imported_ids: list[str] = []
-        skipped = 0
+        skipped = overflow_count
         errors: list[str] = []
+        if overflow_count > 0:
+            errors.append(f"超出导入上限，已跳过 {overflow_count} 条")
 
         for item in deduped:
             try:
@@ -392,7 +365,7 @@ class UserHistoryService:
                     errors.append(f"{item.paste_id}: 校验失败")
                     continue
 
-                UserHistoryService._upsert_history(
+                _ = UserHistoryService._upsert_history(
                     db,
                     user_id,
                     item.paste_id,

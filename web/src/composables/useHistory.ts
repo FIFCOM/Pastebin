@@ -3,7 +3,6 @@ import type { HistoryListItem, ImportGuestItem } from '../services/history'
 import {
   getHistory,
   saveToHistory,
-  starHistory,
   deleteHistory,
   importGuestHistory
 } from '../services/history'
@@ -109,7 +108,6 @@ function toGuestHistoryListItem(item: LocalGuestHistoryItem): HistoryListItem {
     title: title || null,
     max_views: -1,
     view_count: 0,
-    is_starred: false,
     published_at: null,
     paste_updated_at: iso,
     history_updated_at: iso,
@@ -153,17 +151,17 @@ const historyPage = ref(1)
 const historyLimit = ref(20)
 const historyLoading = ref(false)
 const historySearch = ref('')
-const historyStarredFilter = ref<boolean | null>(null)
 let latestFetchRequestId = 0
+let latestImportRequestId = 0
 
 export function resetHistoryState(): void {
   latestFetchRequestId += 1
+  latestImportRequestId += 1
   historyItems.value = []
   historyTotal.value = 0
   historyPage.value = 1
   historyLoading.value = false
   historySearch.value = ''
-  historyStarredFilter.value = null
 }
 
 export function useHistory() {
@@ -175,7 +173,6 @@ export function useHistory() {
     page?: number
     reset?: boolean
     search?: string
-    starred?: boolean | null
   } = {}, userId?: number | null): Promise<boolean> {
     const requestId = ++latestFetchRequestId
     const requestedPage = opts.page ?? (opts.reset ? 1 : historyPage.value)
@@ -184,7 +181,6 @@ export function useHistory() {
       historyPage.value = 1
     }
     if (opts.search !== undefined) historySearch.value = opts.search
-    if (opts.starred !== undefined) historyStarredFilter.value = opts.starred
 
     historyLoading.value = true
     try {
@@ -200,13 +196,12 @@ export function useHistory() {
           .sort((a, b) => guestCreatedAt(b) - guestCreatedAt(a))
           .map(toGuestHistoryListItem)
 
-        const visibleItems = historyStarredFilter.value === true ? [] : guestItems
-        const total = visibleItems.length
+        const total = guestItems.length
         const totalPages = Math.max(1, Math.ceil(total / historyLimit.value))
         const safePage = Math.min(Math.max(requestedPage, 1), totalPages)
         if (requestId !== latestFetchRequestId) return false
         const start = (safePage - 1) * historyLimit.value
-        historyItems.value = visibleItems.slice(start, start + historyLimit.value)
+        historyItems.value = guestItems.slice(start, start + historyLimit.value)
         historyTotal.value = total
         historyPage.value = safePage
         return true
@@ -217,7 +212,6 @@ export function useHistory() {
         limit: historyLimit.value
       }
       if (historySearch.value) params.search = historySearch.value
-      if (historyStarredFilter.value !== null) params.starred = historyStarredFilter.value
 
       let resp = await getHistory(params)
       if (requestId !== latestFetchRequestId) return false
@@ -236,7 +230,7 @@ export function useHistory() {
       historyItems.value = resp.items
       historyTotal.value = resp.total
       historyPage.value = safePage
-      if (!historySearch.value && historyStarredFilter.value === null && historyPage.value === 1) {
+      if (!historySearch.value && historyPage.value === 1) {
         saveUserHistoryCache(userId, historyItems.value)
       }
       return true
@@ -279,7 +273,6 @@ export function useHistory() {
         title: detail.title,
         max_views: detail.max_views,
         view_count: detail.view_count,
-        is_starred: detail.is_starred,
         published_at: detail.published_at,
         paste_updated_at: detail.paste_updated_at,
         history_updated_at: detail.history_updated_at,
@@ -298,15 +291,6 @@ export function useHistory() {
     }
   }
 
-  async function toggleStar(pasteId: string, isStarred: boolean, userId: number): Promise<void> {
-    await starHistory(pasteId, isStarred)
-    const idx = historyItems.value.findIndex((i) => i.paste_id === pasteId)
-    if (idx >= 0) {
-      historyItems.value[idx] = { ...historyItems.value[idx], is_starred: isStarred } as HistoryListItem
-      saveUserHistoryCache(userId, historyItems.value)
-    }
-  }
-
   async function removeFromHistory(pasteId: string, userId: number | null): Promise<void> {
     if (userId == null) {
       removeGuestHistoryItem(pasteId)
@@ -321,6 +305,7 @@ export function useHistory() {
   }
 
   async function importGuestAndSync(userId: number): Promise<void> {
+    const requestId = ++latestImportRequestId
     const guestItems = loadGuestHistory().filter((i) => !i.isDeleted)
     if (guestItems.length === 0) {
       clearGuestHistory()
@@ -335,16 +320,19 @@ export function useHistory() {
 
     try {
       const resp = await importGuestHistory(importItems)
+      if (requestId !== latestImportRequestId) return
+
       // 用服务端快照覆盖本地
       historyItems.value = resp.snapshot.items
       historyTotal.value = resp.snapshot.total
       historyPage.value = 1
       saveUserHistoryCache(userId, resp.snapshot.items)
       removeGuestHistoryItems(resp.imported_ids)
-      if (resp.skipped === 0) {
+      if (loadGuestHistory().length === 0) {
         clearGuestHistory()
       }
     } catch (e) {
+      if (requestId !== latestImportRequestId) return
       console.error('导入游客历史失败:', e)
     }
   }
@@ -369,12 +357,10 @@ export function useHistory() {
     historyLimit,
     historyLoading,
     historySearch,
-    historyStarredFilter,
     hasMore,
     fetchHistory,
     loadMore,
     addToHistory,
-    toggleStar,
     removeFromHistory,
     importGuestAndSync,
     initFromCache

@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/text-field.js'
@@ -71,10 +71,12 @@ import 'mdui/components/button.js'
 import 'mdui/components/card.js'
 
 import { useAuth } from '../composables/useAuth'
+import { registerHeaderActions, unregisterHeaderActions } from '../composables/useHeaderActions'
 
 const route = useRoute()
 const router = useRouter()
 const { login, loginWithTotp } = useAuth()
+const HEADER_OWNER_ID = 'login-page'
 
 const email = ref('')
 const password = ref('')
@@ -152,6 +154,23 @@ function goRegister() {
     query: redirect ? { redirect } : undefined
   })
 }
+
+onMounted(() => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'login-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    }
+  ])
+})
+
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
+})
 </script>
 
 <style scoped>

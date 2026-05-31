@@ -11,6 +11,7 @@ from .health_controller import router as health_router
 from .install_controller import router as install_router
 from .paste_controller import router as paste_router
 from .user_controller import router as user_router
+from .user_favorite_controller import router as user_favorite_router
 from .user_history_controller import router as user_history_router
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "health_router",
     "api_key_router",
     "paste_router",
+    "user_favorite_router",
     "user_history_router",
     "collab_room_router",
     "cleanup_router",

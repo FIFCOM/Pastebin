@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   DOCS_OVERVIEW_PATH,
@@ -22,6 +22,7 @@ import {
 } from '@/content/api-docs'
 import Markdown from '@/components/viewers/Markdown.vue'
 import { getApiDocsMarkdown } from '@/services/docs'
+import { registerHeaderActions, unregisterHeaderActions } from '@/composables/useHeaderActions'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +31,7 @@ const markdownContent = ref('')
 const loading = ref(false)
 let latestRequestId = 0
 const validSlugs = new Set(getValidSlugs())
+const HEADER_OWNER_ID = 'api-docs-page'
 
 const currentSlug = computed(() => {
   const sectionParam = route.params.section
@@ -88,6 +90,39 @@ watch(
   },
   { immediate: true }
 )
+
+onMounted(() => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'docs-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    },
+    {
+      id: 'docs-history',
+      label: '历史记录',
+      ariaLabel: '查看历史记录',
+      icon: 'history',
+      kind: 'icon',
+      onClick: () => { void router.push('/history') }
+    },
+    {
+      id: 'docs-favorites',
+      label: '收藏',
+      ariaLabel: '查看收藏',
+      icon: 'star',
+      kind: 'icon',
+      onClick: () => { void router.push('/favorites') }
+    }
+  ])
+})
+
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
+})
 </script>
 
 <style scoped>

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_attribute
 
 from app.core.security import (
     bytes_to_str,
@@ -34,9 +35,9 @@ from app.schemas.collab_room import (
     RoomMembersResponse,
     RoomPastesResponse,
     SharedPasteInfo,
-    calculate_is_online,
     build_join_url,
     build_ws_url,
+    calculate_is_online,
 )
 from config.config import settings
 
@@ -126,9 +127,9 @@ class CollabRoomService:
         """创建成员JWT令牌"""
         # 设置24小时过期
         exp = int((datetime.now(UTC) + timedelta(hours=24)).timestamp())
-        member_id = str(getattr(member, "id"))
-        display_name = str(getattr(member, "display_name"))
-        raw_user_id = getattr(member, "user_id", None)
+        member_id = str(member.id)  # type: ignore[arg-type]
+        display_name = str(member.display_name)  # type: ignore[arg-type]
+        raw_user_id = member.user_id  # type: ignore[assignment]
         user_id = int(raw_user_id) if isinstance(raw_user_id, int) else None
 
         payload = MemberTokenPayload(
@@ -239,7 +240,7 @@ class CollabRoomService:
             return None
 
         now = datetime.now(UTC)
-        setattr(membership, "last_seen", now)
+        set_attribute(membership, "last_seen", now)
         db.commit()
         return now
 
@@ -266,7 +267,7 @@ class CollabRoomService:
         count = db.query(RoomMember).filter(RoomMember.room_id == room_id).count()
         room = db.query(CollabRoom).filter(CollabRoom.id == room_id).first()
         if room:
-            setattr(room, "member_count", int(count))
+            set_attribute(room, "member_count", int(count))
         return int(count)
 
     @staticmethod
@@ -336,8 +337,8 @@ class CollabRoomService:
         """
         _, member = CollabRoomService._get_member_by_token(db, member_token)
 
-        next_display_name = str(getattr(member, "display_name"))
-        next_user_id = getattr(member, "user_id", None)
+        next_display_name = str(member.display_name)  # type: ignore[arg-type]
+        next_user_id = member.user_id  # type: ignore[assignment]
 
         if user_id is not None:
             user = db.query(User).filter(User.id == user_id).first()
@@ -346,9 +347,9 @@ class CollabRoomService:
             next_display_name = str(user.username)  # type: ignore[arg-type]
             next_user_id = user_id
 
-        setattr(member, "display_name", next_display_name)
-        setattr(member, "user_id", next_user_id)
-        setattr(member, "expire_at", datetime.now(UTC) + timedelta(hours=24))
+        set_attribute(member, "display_name", next_display_name)
+        set_attribute(member, "user_id", next_user_id)
+        set_attribute(member, "expire_at", datetime.now(UTC) + timedelta(hours=24))
 
         db.commit()
         db.refresh(member)
@@ -423,7 +424,7 @@ class CollabRoomService:
                 room_id=str(room.id),  # type: ignore
                 pin_code=pin_code,
                 join_url=build_join_url(pin_code),
-                max_members=int(room.max_members),  # type: ignore[arg-type]
+                max_members=cast(int, cast(object, room.max_members)),
             )
 
         raise ValueError(f"无法生成唯一的PIN码: {last_error}")
@@ -494,7 +495,7 @@ class CollabRoomService:
         )
 
         if existing_membership:
-            setattr(existing_membership, "last_seen", datetime.now(UTC))
+            set_attribute(existing_membership, "last_seen", datetime.now(UTC))
             db.commit()
         else:
             reserved_slots = (
@@ -536,7 +537,7 @@ class CollabRoomService:
                 )
                 if not existing_membership:
                     raise
-                setattr(existing_membership, "last_seen", datetime.now(UTC))
+                set_attribute(existing_membership, "last_seen", datetime.now(UTC))
                 db.commit()
 
         # 获取房间成员列表
@@ -660,7 +661,7 @@ class CollabRoomService:
         db.refresh(room_paste)
         target_member_id = room_paste.target_member_id
         paste_title = getattr(paste, "title", None)
-        shared_at = cast(datetime, getattr(room_paste, "shared_at"))
+        shared_at = cast(datetime, cast(object, room_paste.shared_at))
 
         return SharedPasteInfo(
             paste_id=str(room_paste.paste_id),  # type: ignore
@@ -734,7 +735,7 @@ class CollabRoomService:
             paste_is_expired = is_expired(expire_at)
             target_member_id = room_paste_record.target_member_id
             paste_title = getattr(paste_record, "title", None)
-            shared_at = cast(datetime, getattr(room_paste_record, "shared_at"))
+            shared_at = cast(datetime, cast(object, room_paste_record.shared_at))
             paste_infos.append(
                 SharedPasteInfo(
                     paste_id=str(room_paste_record.paste_id),  # type: ignore
@@ -782,7 +783,7 @@ class CollabRoomService:
                 excluded_member_ids={member_id},
             )
             if next_owner:
-                setattr(room, "creator_member_id", str(next_owner.member_id))
+                set_attribute(room, "creator_member_id", str(next_owner.member_id))
 
         db.delete(membership)
         db.flush()

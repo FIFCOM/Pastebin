@@ -1,19 +1,16 @@
 import axios from 'axios'
 import { onBeforeUnmount, watch } from 'vue'
 import { useRoomSession } from './useRoomSession'
-import { useRoomRealtime } from './useRoomRealtime'
+import {
+  useRoomRealtime,
+  type RoomMemberJoinedEvent,
+  type RoomPasteSharedEvent
+} from './useRoomRealtime'
 import { getRoomInfoByPin } from '../services/rooms'
 
-type RealtimeEnvelope =
-  | { type: 'auth_ok'; member_id: string }
-  | { type: 'member_joined' }
-  | { type: 'member_left' }
-  | { type: 'pong' }
-  | { type: 'paste_shared'; paste_id: string; shared_by: string; target_member: string | null; timestamp: string }
-  | { type: 'error'; message?: string }
-
 interface UseRoomPresenceSyncOptions {
-  onPasteShared?: (event: Extract<RealtimeEnvelope, { type: 'paste_shared' }>) => void
+  onMemberJoined?: (event: RoomMemberJoinedEvent) => void
+  onPasteShared?: (event: RoomPasteSharedEvent) => void
 }
 
 export function useRoomPresenceSync(options: UseRoomPresenceSyncOptions = {}) {
@@ -39,7 +36,15 @@ export function useRoomPresenceSync(options: UseRoomPresenceSyncOptions = {}) {
   }
 
   const unsubscribe = subscribe((event) => {
-    if (event.type === 'auth_ok' || event.type === 'member_joined' || event.type === 'member_left') {
+    if (event.type === 'member_joined') {
+      void refreshRoomCount()
+      if (selfMemberId.value && event.member_id !== selfMemberId.value) {
+        options.onMemberJoined?.(event)
+      }
+      return
+    }
+
+    if (event.type === 'auth_ok' || event.type === 'member_left') {
       void refreshRoomCount()
       return
     }

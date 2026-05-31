@@ -16,16 +16,42 @@
     </mdui-top-app-bar-title>
     <div class="header-spacer"></div>
 
-    <!-- 功能图标按钮 -->
-    <mdui-button-icon aria-label="打开加入房间界面" @click="handleOpenJoinDialog">
-      <mdui-icon-groups />
-    </mdui-button-icon>
-    <mdui-button-icon aria-label="查看历史记录" @click="goHistory">
-      <mdui-icon-history />
-    </mdui-button-icon>
-    <!-- <mdui-button-icon aria-label="分享功能（暂未开放）">
-      <mdui-icon-share />
-    </mdui-button-icon> -->
+    <template v-for="action in activeHeaderActions" :key="action.flashKey">
+      <mdui-button-icon
+        v-if="action.kind === 'icon'"
+        class="header-action header-action-icon"
+        :class="{
+          'header-action--active': action.active,
+          'header-action--flash': action.flashing
+        }"
+        :title="action.label"
+        :aria-label="action.ariaLabel"
+        :aria-pressed="action.active ? 'true' : undefined"
+        :disabled="action.disabled"
+        @click="handleActionClick(action)"
+      >
+        <mdui-icon v-if="action.icon" :name="action.icon"></mdui-icon>
+        <span v-else class="header-action-fallback">{{ action.label }}</span>
+      </mdui-button-icon>
+
+      <mdui-button
+        v-else
+        class="header-action header-action-text"
+        :class="{
+          'header-action--active': action.active,
+          'header-action--flash': action.flashing
+        }"
+        variant="text"
+        :title="action.label"
+        :aria-label="action.ariaLabel"
+        :aria-pressed="action.active ? 'true' : undefined"
+        :disabled="action.disabled"
+        @click="handleActionClick(action)"
+      >
+        <mdui-icon v-if="action.icon" slot="icon" :name="action.icon"></mdui-icon>
+        {{ action.label }}
+      </mdui-button>
+    </template>
 
     <!-- 未登录：显示登录按钮 -->
     <template v-if="!isLoggedIn">
@@ -67,9 +93,6 @@
 <script setup lang="ts">
 import '@mdui/icons/menu.js'
 import '@mdui/icons/account-circle.js'
-import '@mdui/icons/groups.js'
-import '@mdui/icons/history.js'
-import '@mdui/icons/share.js'
 
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -79,14 +102,14 @@ import 'mdui/components/menu.js'
 import 'mdui/components/menu-item.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
+import 'mdui/components/icon.js'
 
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
-import { useCollabDialogState } from '../composables/useCollabDialogState'
+import { activeHeaderActions, type ActiveHeaderAction } from '../composables/useHeaderActions'
 
 const { isLoggedIn, currentUser, logout } = useAuth()
 const { toggleAppSidebar } = useAppSidebarState()
-const { openJoinDialog } = useCollabDialogState()
 
 const router = useRouter()
 const route = useRoute()
@@ -158,20 +181,19 @@ const goUserManagement = () => {
   router.push('/users')
 }
 
-const goHistory = () => {
-  router.push('/history')
-}
-
-const handleOpenJoinDialog = () => {
-  openJoinDialog()
-}
-
 const handleMenuClick = () => {
   toggleAppSidebar()
 }
 
 const goHome = () => {
   router.push('/')
+}
+
+function handleActionClick(action: ActiveHeaderAction): void {
+  if (action.disabled || !action.onClick) return
+  void Promise.resolve(action.onClick()).catch(() => {
+    snackbar({ message: '操作失败，请稍后重试', closeable: true })
+  })
 }
 
 onMounted(() => {
@@ -247,6 +269,41 @@ onBeforeUnmount(() => {
   flex-grow: 1;
 }
 
+.header-action {
+  flex-shrink: 0;
+}
+
+.header-action-icon {
+  border-radius: 999px;
+}
+
+.header-action-text {
+  margin-inline: 2px;
+}
+
+.header-action-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.header-action--active {
+  color: rgb(var(--mdui-color-primary));
+}
+
+.header-action--active::part(container) {
+  background: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
+}
+
+.header-action--flash,
+.header-action--flash::part(container) {
+  animation: headerActionPulse 720ms cubic-bezier(0.2, 0, 0, 1) 3;
+}
+
 /* 登录按钮 */
 .login-button {
   margin-right: 8px;
@@ -264,6 +321,38 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   .brand-link {
     font-size: 0.95rem;
+  }
+}
+
+@keyframes headerActionPulse {
+  0%,
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 rgb(var(--mdui-color-primary) / 0);
+  }
+
+  45% {
+    background-color: rgb(var(--mdui-color-primary-container));
+    box-shadow: 0 0 0 8px rgb(var(--mdui-color-primary) / 0.12);
+    color: rgb(var(--mdui-color-on-primary-container));
+  }
+}
+
+@keyframes headerActionReducedEmphasis {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+
+  50% {
+    background-color: rgb(var(--mdui-color-primary-container));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-action--flash,
+  .header-action--flash::part(container) {
+    animation: headerActionReducedEmphasis 220ms ease-out 1 both;
   }
 }
 

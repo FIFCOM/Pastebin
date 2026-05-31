@@ -19,10 +19,12 @@ from app.controllers import (
     health_router,
     install_router,
     paste_router,
+    user_favorite_router,
     user_history_router,
     user_router,
 )
 from app.core.error_handlers import register_exception_handlers
+from app.core.init_db import create_tables
 from app.core.middleware import InstallGateMiddleware
 from app.services.install_state_service import ENV_FILE
 from config.config import settings, validate_config
@@ -48,7 +50,11 @@ async def lifespan(app: FastAPI):
         if not settings.debug:
             raise
 
-    if not ENV_FILE.exists():
+    if ENV_FILE.exists():
+        print("正在检查数据库表...")
+        create_tables()
+        print("✓ 数据库表检查完成")
+    else:
         print("ℹ 未检测到 .env，应用将保持安装待完成状态")
 
     print("🚀 应用启动完成")
@@ -97,6 +103,7 @@ app.include_router(install_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
 app.include_router(paste_router)
+app.include_router(user_favorite_router)
 app.include_router(user_history_router)
 app.include_router(collab_room_router)
 app.include_router(cleanup_router)

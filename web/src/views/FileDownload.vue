@@ -116,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import { useTheme } from '@/composables/useTheme'
 import { buildFileChunkAad, decryptWithKey, strToBytes, urlSafeStrToKey } from '@/utils/crypto'
@@ -128,6 +128,7 @@ import FileInfoCard from '@/components/file-download/FileInfoCard.vue'
 import FilePreviewPanel from '@/components/file-download/FilePreviewPanel.vue'
 import type { DownloadState } from '@/components/file-download/types'
 import { useDownloadProgress } from '@/composables/useDownloadProgress'
+import { registerHeaderActions, unregisterHeaderActions } from '@/composables/useHeaderActions'
 import {
   buildAccessKeyQuery,
   getPublicFileManifest,
@@ -148,8 +149,10 @@ import 'mdui/components/text-field.js'
 useTheme()
 
 const route = useRoute()
+const router = useRouter()
 const pasteId = computed(() => route.params.paste_id as string)
 const fileId = computed(() => route.params.file_id as string)
+const HEADER_OWNER_ID = 'file-download-page'
 
 const isLoading = ref(true)
 const error = ref('')
@@ -754,6 +757,33 @@ async function loadTextPreview(): Promise<void> {
 }
 
 onMounted(async () => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'file-download-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    },
+    {
+      id: 'file-download-history',
+      label: '历史记录',
+      ariaLabel: '查看历史记录',
+      icon: 'history',
+      kind: 'icon',
+      onClick: () => { void router.push('/history') }
+    },
+    {
+      id: 'file-download-favorites',
+      label: '收藏',
+      ariaLabel: '查看收藏',
+      icon: 'star',
+      kind: 'icon',
+      onClick: () => { void router.push('/favorites') }
+    }
+  ])
+
   isLoading.value = true
   error.value = ''
   await loadMetaAndManifest()
@@ -761,6 +791,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
   if (shareUrlCopiedTimer !== null) window.clearTimeout(shareUrlCopiedTimer)
 })
 </script>

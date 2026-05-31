@@ -6,7 +6,6 @@ export interface HistoryListItem {
   title: string | null
   max_views: number
   view_count: number
-  is_starred: boolean
   published_at: string | null
   paste_updated_at: string
   history_updated_at: string
@@ -42,7 +41,6 @@ export interface ImportGuestResponse {
 export interface HistoryListParams {
   page?: number
   limit?: number
-  starred?: boolean
   search?: string
 }
 
@@ -66,10 +64,6 @@ export async function saveToHistory(
     encryption_key: encryptionKey
   })
   return response.data
-}
-
-export async function starHistory(pasteId: string, isStarred: boolean): Promise<void> {
-  await apiHttp.put(`/user/history/${pasteId}/star`, { is_starred: isStarred })
 }
 
 export async function deleteHistory(pasteId: string): Promise<void> {

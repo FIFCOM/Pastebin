@@ -84,9 +84,13 @@ npm run dev
 ### 1. 默认部署：SQLite（拉取发布镜像）
 
 ```bash
+# 必须先编辑 .env.docker，把 SECRET_KEY / MEMBER_TOKEN_SECRET_KEY / INTERNAL_TOKEN 换成随机长字符串
 cp .env.docker.example .env.docker
 
-# 必须先编辑 .env.docker，把 SECRET_KEY / MEMBER_TOKEN_SECRET_KEY / INTERNAL_TOKEN 换成随机长字符串
+# 从源码globalheader构建镜像
+docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
+
+# 启动容器
 docker compose --env-file .env.docker up -d
 ```
 
@@ -101,24 +105,6 @@ docker compose --env-file .env.docker up -d
 - SQLite 文件位于容器内 `/app/data/material_bin.db`
 - 上传文件与 SQLite 数据默认保存在 Docker named volume `materialbin_data`
 - `materialbin-cleanup` 会每 `900` 秒自动执行一次 cleanup CLI
-
-如果需要从当前源码本地构建镜像，使用额外的 build 覆盖文件：
-
-```bash
-docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml up -d --build
-```
-
-如果只想构建镜像而不启动容器，可以执行：
-
-```bash
-docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
-```
-
-如果需要强制重建且不使用缓存：
-
-```bash
-docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build --no-cache
-```
 
 推荐保持默认的 Docker named volume：
 

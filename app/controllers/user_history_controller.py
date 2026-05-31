@@ -18,7 +18,6 @@ from app.schemas.user_history import (
     UserHistoryListResponse,
     UserHistorySaveRequest,
     UserHistorySearchParams,
-    UserHistoryStarRequest,
 )
 from app.services.user_history_service import UserHistoryService
 
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 async def get_user_history(
     page: int = Query(1, ge=1, description="页码"),
     limit: int = Query(20, ge=1, le=100, description="每页数量"),
-    starred: bool | None = Query(None, description="收藏状态过滤"),
     search: str | None = Query(None, description="搜索关键词，搜索title"),
     user_and_key: tuple[UserResponse, bytes] = Depends(get_current_user_with_key),
     db: Session = Depends(get_db),
@@ -42,7 +40,6 @@ async def get_user_history(
     支持以下查询参数：
     - **page**: 页码
     - **limit**: 每页数量
-    - **starred**: 收藏状态过滤 (true|false)
     - **search**: 搜索关键词，搜索title
     """
     current_user, _ = user_and_key
@@ -50,7 +47,6 @@ async def get_user_history(
     search_params = UserHistorySearchParams(
         page=page,
         limit=limit,
-        starred=starred,
         search=search,
     )
 
@@ -195,45 +191,6 @@ async def get_user_history_item(
             status_code=500,
             detail="获取历史详情失败，请稍后重试",
         ) from None
-
-
-@router.put("/{paste_id}/star", response_model=MessageResponse)
-async def update_history_star_status(
-    paste_id: str,
-    star_request: UserHistoryStarRequest,
-    user_and_key: tuple[UserResponse, bytes] = Depends(get_current_user_with_key),
-    db: Session = Depends(get_db),
-):
-    """
-    收藏/取消收藏Paste
-
-    - **is_starred**: 是否收藏
-    """
-    current_user, _ = user_and_key
-
-    try:
-        UserHistoryService.update_history_star_status(
-            db, current_user.id, paste_id, star_request
-        )
-        action = "收藏" if star_request.is_starred else "取消收藏"
-        return MessageResponse(message=f"已{action}该Paste")
-    except ValueError as e:
-        if "未保存" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="该Paste未保存到用户账户",
-            ) from None
-        else:
-            logger.exception(
-                "更新收藏状态失败 user_id=%s paste_id=%s error=%s",
-                current_user.id,
-                paste_id,
-                str(e),
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="更新收藏状态失败，请检查请求参数",
-            ) from None
 
 
 @router.delete("/{paste_id}", response_model=MessageResponse)

@@ -28,9 +28,9 @@ from .collab_room import (
     WSErrorMessage,
     WSMemberJoinedMessage,
     WSMemberLeftMessage,
+    WSPasteSharedMessage,
     WSPingMessage,
     WSPongMessage,
-    WSPasteSharedMessage,
 )
 from .common import (
     ErrorResponse,

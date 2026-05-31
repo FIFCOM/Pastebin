@@ -79,12 +79,12 @@ class CollabRoomRealtimeService:
                 context = CollabRoomService.get_room_member_context(
                     db, auth_message.token, room_id
                 )
-                member_id = str(getattr(context.member, "id"))
+                member_id = str(context.member.id)  # type: ignore[arg-type]
                 _ = CollabRoomService.touch_room_presence(db, room_id, member_id)
                 connection = RealtimeConnection(
                     room_id=room_id,
                     member_id=member_id,
-                    display_name=str(getattr(context.member, "display_name")),
+                    display_name=str(context.member.display_name),  # type: ignore[arg-type]
                     websocket=websocket,
                 )
         except ValueError as exc:

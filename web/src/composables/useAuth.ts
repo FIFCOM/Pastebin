@@ -17,6 +17,7 @@ import {
   saveAccessToken
 } from '../services/token'
 import { useHistory, clearUserHistoryCache, resetHistoryState } from './useHistory'
+import { useFavorites, clearUserFavoritesCache, resetFavoritesState } from './useFavorites'
 
 /**
  * 全局认证状态（单例）
@@ -30,6 +31,23 @@ const isLoggedIn = computed(() => currentUser.value !== null)
 
 let tokenListenerBound = false
 
+function resetUserScopedLists(): void {
+  resetHistoryState()
+  resetFavoritesState()
+}
+
+function importGuestListsForUser(userId: number): void {
+  void Promise.all([
+    useHistory().importGuestAndSync(userId),
+    useFavorites().importGuestFavoritesAndSync(userId)
+  ])
+}
+
+function clearUserScopedCaches(userId: number): void {
+  clearUserHistoryCache(userId)
+  clearUserFavoritesCache(userId)
+}
+
 function bindTokenListener(): void {
   if (tokenListenerBound) return
   tokenListenerBound = true
@@ -38,6 +56,10 @@ function bindTokenListener(): void {
     const token = (evt as CustomEvent).detail?.token as string | null | undefined
     accessToken.value = token ?? null
     if (!accessToken.value) {
+      if (currentUser.value) {
+        clearUserScopedCaches(currentUser.value.id)
+      }
+      resetUserScopedLists()
       currentUser.value = null
     }
   })
@@ -62,7 +84,10 @@ async function initAuth(): Promise<void> {
     // 1) 先尝试使用内存中的 access token
     if (token) {
       try {
-        currentUser.value = await fetchCurrentUser()
+        const user = await fetchCurrentUser()
+        currentUser.value = user
+        resetUserScopedLists()
+        importGuestListsForUser(user.id)
         return
       } catch {
         // ignore: 改为尝试通过 refresh cookie 恢复会话
@@ -74,7 +99,10 @@ async function initAuth(): Promise<void> {
       try {
         const newToken = await refreshAccessToken()
         accessToken.value = newToken
-        currentUser.value = await fetchCurrentUser()
+        const user = await fetchCurrentUser()
+        currentUser.value = user
+        resetUserScopedLists()
+        importGuestListsForUser(user.id)
       } catch {
         clearAccessToken()
         accessToken.value = null
@@ -97,9 +125,8 @@ async function login(email: string, password: string): Promise<LoginResponse> {
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
-    resetHistoryState()
-    // 登录成功后导入游客历史
-    void useHistory().importGuestAndSync(resp.user.id)
+    resetUserScopedLists()
+    importGuestListsForUser(resp.user.id)
     return resp
   } catch (e) {
     // 登录失败时清理本地状态，但把错误抛给调用方处理
@@ -126,8 +153,8 @@ async function loginWithTotp(
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
-    resetHistoryState()
-    void useHistory().importGuestAndSync(resp.user.id)
+    resetUserScopedLists()
+    importGuestListsForUser(resp.user.id)
     return resp
   } catch (e) {
     clearAccessToken()
@@ -155,8 +182,8 @@ async function registerAndAutoLogin(
     accessToken.value = resp.access_token
     currentUser.value = resp.user
     saveAccessToken(resp.access_token)
-    resetHistoryState()
-    void useHistory().importGuestAndSync(resp.user.id)
+    resetUserScopedLists()
+    importGuestListsForUser(resp.user.id)
     return resp
   } catch (e) {
     clearAccessToken()
@@ -172,11 +199,11 @@ async function registerAndAutoLogin(
  * 退出登录：清理本地 token 和用户信息
  */
 function logout(): void {
-  // 登出前清理当前用户的本地历史缓存
+  // 登出前清理当前用户的本地列表缓存
   if (currentUser.value) {
-    clearUserHistoryCache(currentUser.value.id)
+    clearUserScopedCaches(currentUser.value.id)
   }
-  resetHistoryState()
+  resetUserScopedLists()
   currentUser.value = null
   accessToken.value = null
   clearAccessToken()
@@ -185,9 +212,9 @@ function logout(): void {
 
 function logoutAll(): void {
   if (currentUser.value) {
-    clearUserHistoryCache(currentUser.value.id)
+    clearUserScopedCaches(currentUser.value.id)
   }
-  resetHistoryState()
+  resetUserScopedLists()
   currentUser.value = null
   accessToken.value = null
   clearAccessToken()

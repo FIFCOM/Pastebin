@@ -112,11 +112,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { snackbar } from 'mdui/functions/snackbar.js'
 import { getPaste, getPasteContent, type PasteData, type PasteFile } from '@/services/paste'
 import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
 import { useTheme } from '@/composables/useTheme'
+import { useAuth } from '@/composables/useAuth'
+import { useFavorites } from '@/composables/useFavorites'
+import {
+  registerHeaderActions,
+  triggerHeaderActionFlash,
+  unregisterHeaderActions
+} from '@/composables/useHeaderActions'
 import { formatDate } from '@/utils/format'
 import PlainViewer from '@/components/viewers/Plain.vue'
 import PasteFilesDialog from '@/components/paste/PasteFilesDialog.vue'
@@ -140,6 +148,16 @@ useTheme()
 const MarkdownViewer = defineAsyncComponent(() => import('@/components/viewers/Markdown.vue'))
 
 const route = useRoute()
+const router = useRouter()
+const { currentUser } = useAuth()
+const {
+  addFavorite,
+  removeFavorite,
+  isFavorite,
+  initFavoritesFromCache
+} = useFavorites()
+const HEADER_OWNER_ID = 'paste-viewer-page'
+const VIEWER_FAVORITE_ACTION_ID = 'paste-viewer-favorite'
 
 // 状态
 const pasteData = ref<PasteData | null>(null)
@@ -149,6 +167,10 @@ const isLoading = ref<boolean>(true)
 const error = ref<string>('')
 const viewerType = ref<'txt' | 'md'>('txt')
 const encryptionKeyBytes = ref<Uint8Array | null>(null)
+const favoriteState = ref(false)
+const favoriteBusy = ref(false)
+const favoriteStateReady = ref(false)
+let favoriteReminderFrame = 0
 
 // Access Key 相关
 const accessKeyDialog = ref<any>(null)
@@ -177,6 +199,127 @@ const pasteViewsText = computed(() => {
 const pasteFilesText = computed(() => `${pasteFiles.value.length} 个文件`)
 const pasteId = computed(() => String(route.params.paste_id || ''))
 const encryptionKeyHash = computed(() => window.location.hash || '')
+
+function currentUserId(): number | null {
+  return currentUser.value?.id ?? null
+}
+
+function currentUrlEncryptionKey(): string {
+  if (typeof window === 'undefined') return ''
+  return window.location.hash.substring(1).trim()
+}
+
+async function copyDecryptedContent(): Promise<void> {
+  if (!decryptedContent.value) {
+    snackbar({ message: '内容尚未加载', closeable: true })
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(decryptedContent.value)
+    snackbar({ message: 'Paste 内容已复制' })
+  } catch {
+    snackbar({ message: '复制失败，请手动复制', closeable: true })
+  }
+}
+
+async function syncFavoriteState(): Promise<void> {
+  const id = pasteId.value
+  if (!id) {
+    favoriteState.value = false
+    favoriteStateReady.value = true
+    return
+  }
+
+  favoriteStateReady.value = false
+  favoriteState.value = await isFavorite(id, currentUserId())
+  favoriteStateReady.value = true
+}
+
+async function toggleFavorite(): Promise<void> {
+  const id = pasteId.value
+  if (!id || favoriteBusy.value) return
+
+  favoriteBusy.value = true
+  try {
+    if (favoriteState.value) {
+      await removeFavorite(id, currentUserId())
+      favoriteState.value = false
+      snackbar({ message: '已取消收藏' })
+      return
+    }
+
+    const key = currentUrlEncryptionKey()
+    if (!key) {
+      snackbar({ message: '缺少解密密钥，无法收藏', closeable: true })
+      return
+    }
+
+    await addFavorite(id, key, currentUserId(), {
+      title: pasteTitle.value,
+      status: pasteData.value?.status === 'edited' ? 'edited' : 'published',
+      accessKey: currentAccessKey.value
+    })
+    favoriteState.value = true
+    snackbar({ message: '已收藏' })
+  } catch {
+    snackbar({ message: favoriteState.value ? '取消收藏失败' : '收藏失败', closeable: true })
+  } finally {
+    favoriteBusy.value = false
+  }
+}
+
+function favoriteReminderKey(): string {
+  return `mb_favorite_reminded_${pasteId.value}`
+}
+
+function hasFavoriteReminderBeenShown(): boolean {
+  if (typeof window === 'undefined' || !pasteId.value) return true
+  try {
+    return sessionStorage.getItem(favoriteReminderKey()) === '1'
+  } catch {
+    return true
+  }
+}
+
+function markFavoriteReminderShown(): void {
+  if (typeof window === 'undefined' || !pasteId.value) return
+  try {
+    sessionStorage.setItem(favoriteReminderKey(), '1')
+  } catch {
+    // ignore unavailable storage
+  }
+}
+
+function isNearPageBottom(): boolean {
+  if (typeof window === 'undefined') return false
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || 0
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+  const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight || 0
+  return scrollTop + viewportHeight >= scrollHeight - 240
+}
+
+function maybeTriggerFavoriteReminder(): void {
+  if (!favoriteStateReady.value) return
+  if (!pasteData.value || !decryptedContent.value) return
+  if (favoriteState.value || hasFavoriteReminderBeenShown()) return
+  if (!isNearPageBottom()) return
+
+  markFavoriteReminderShown()
+  triggerHeaderActionFlash(VIEWER_FAVORITE_ACTION_ID)
+}
+
+function scheduleFavoriteReminderCheck(): void {
+  if (typeof window === 'undefined' || favoriteReminderFrame) return
+  favoriteReminderFrame = window.requestAnimationFrame(() => {
+    favoriteReminderFrame = 0
+    maybeTriggerFavoriteReminder()
+  })
+}
+
+function handleScrollForFavoriteReminder(): void {
+  scheduleFavoriteReminderCheck()
+}
 
 function openPasteFilesDialog() {
   pasteFilesDialog.value?.open()
@@ -327,7 +470,12 @@ async function handleAccessKeySubmit() {
   currentAccessKey.value = trimmedKey
 
   const success = await loadPaste(params.pasteId, params.encryptionKey, trimmedKey)
-  
+  if (success) {
+    await syncFavoriteState()
+  } else {
+    favoriteStateReady.value = true
+  }
+   
   if (!success && !error.value) {
     // 如果失败且没有其他错误（即 403），说明密钥错误
     accessKeyError.value = true
@@ -341,12 +489,51 @@ async function handleAccessKeySubmit() {
  * 初始化加载
  */
 onMounted(async () => {
+  registerHeaderActions(HEADER_OWNER_ID, [
+    {
+      id: 'paste-viewer-copy',
+      label: '复制内容',
+      ariaLabel: '复制 Paste 内容',
+      icon: 'content_copy',
+      kind: 'icon',
+      disabled: () => isLoading.value || !decryptedContent.value,
+      onClick: copyDecryptedContent
+    },
+    {
+      id: 'paste-viewer-new-paste',
+      label: '新建 Paste',
+      ariaLabel: '新建 Paste',
+      icon: 'add',
+      kind: 'icon',
+      onClick: () => { void router.push('/') }
+    },
+    {
+      id: VIEWER_FAVORITE_ACTION_ID,
+      label: () => (favoriteState.value ? '取消收藏' : '收藏'),
+      ariaLabel: () => (favoriteState.value ? '取消收藏此 Paste' : '收藏此 Paste'),
+      icon: () => (favoriteState.value ? 'star' : 'star_border'),
+      kind: 'icon',
+      active: () => favoriteState.value,
+      disabled: () => favoriteBusy.value || !pasteId.value,
+      onClick: toggleFavorite
+    }
+  ])
+
+  if (currentUser.value) {
+    initFavoritesFromCache(currentUser.value.id)
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('scroll', handleScrollForFavoriteReminder, { passive: true })
+  }
+
   isLoading.value = true
   error.value = ''
 
   const params = validateParams()
   if (!params) {
     isLoading.value = false
+    favoriteStateReady.value = true
     return
   }
 
@@ -359,13 +546,39 @@ onMounted(async () => {
   }
 
   const success = await loadPaste(params.pasteId, params.encryptionKey, cachedAccessKey)
-  
+  if (success) {
+    await syncFavoriteState()
+  } else {
+    favoriteStateReady.value = true
+  }
+   
   if (!success && !error.value) {
     // 首次加载时需要 access key
     showAccessKeyDialog(false)
   }
-  
+   
   isLoading.value = false
+})
+
+watch(
+  () => currentUser.value?.id ?? null,
+  (userId) => {
+    if (userId !== null) {
+      initFavoritesFromCache(userId)
+    }
+    void syncFavoriteState()
+  }
+)
+
+onBeforeUnmount(() => {
+  unregisterHeaderActions(HEADER_OWNER_ID)
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('scroll', handleScrollForFavoriteReminder)
+    if (favoriteReminderFrame) {
+      window.cancelAnimationFrame(favoriteReminderFrame)
+      favoriteReminderFrame = 0
+    }
+  }
 })
 </script>
 
