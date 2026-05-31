@@ -236,6 +236,9 @@ const initVditor = async () => {
         theme: {
           current: vditorTheme.value === 'dark' ? 'dark' : 'light',
         },
+        math: {
+          inlineDigit: true
+        },
         hljs: {
           style: vditorTheme.value === 'dark' ? 'github-dark' : 'github',
         },
