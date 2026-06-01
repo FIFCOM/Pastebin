@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .auth-page {
-  min-height: 100%;
+  min-height: calc(100dvh - var(--app-header-offset, 64px) - 64px);
   box-sizing: border-box;
   display: flex;
   align-items: center;
