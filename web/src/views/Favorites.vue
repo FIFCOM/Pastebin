@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <div v-if="favoriteLoading && favoriteItems.length === 0" class="loading-state" role="status">
+      <div v-if="isInitialFavoritesLoading" class="loading-state" role="status">
         <mdui-circular-progress></mdui-circular-progress>
         <div class="state-copy">正在加载收藏…</div>
       </div>
@@ -163,8 +163,10 @@ interface FetchFavoritesOptions {
 const searchInput = ref('')
 const favoritesCollapseRef = ref<Collapse | null>(null)
 const expandedFavoriteItemIds = ref<string[]>([])
+const hasInitializedFavoritesPage = ref(false)
 const totalPages = computed(() => Math.max(1, Math.ceil(favoriteTotal.value / favoriteLimit.value)))
 const hasActiveFilters = computed(() => favoriteSearch.value.trim().length > 0)
+const isInitialFavoritesLoading = computed(() => !hasInitializedFavoritesPage.value || (favoriteLoading.value && favoriteItems.value.length === 0))
 const resultsHeadline = computed(() => (hasActiveFilters.value ? '搜索结果' : '全部收藏'))
 const emptyState = computed(() => {
   if (hasActiveFilters.value) {
@@ -238,6 +240,7 @@ function syncRouteQueryFromState() {
 async function fetchFavoritesAndSyncRoute(opts: FetchFavoritesOptions = {}) {
   const applied = await fetchFavorites(opts, currentUserId())
   if (!applied) return
+  hasInitializedFavoritesPage.value = true
   syncRouteQueryFromState()
 }
 
@@ -396,6 +399,8 @@ onMounted(() => {
     page: state.page,
     reset: true,
     search: state.search
+  }).finally(() => {
+    hasInitializedFavoritesPage.value = true
   })
 })
 

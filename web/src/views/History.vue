@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <div v-if="historyLoading && historyItems.length === 0" class="loading-state" role="status">
+      <div v-if="isInitialHistoryLoading" class="loading-state" role="status">
         <mdui-circular-progress></mdui-circular-progress>
         <div class="state-copy">正在加载历史记录…</div>
       </div>
@@ -167,9 +167,11 @@ interface FetchHistoryOptions {
 const searchInput = ref('')
 const historyCollapseRef = ref<Collapse | null>(null)
 const expandedHistoryItemIds = ref<string[]>([])
+const hasInitializedHistoryPage = ref(false)
 const showViewsColumn = computed(() => !!currentUser.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
 const hasActiveFilters = computed(() => historySearch.value.trim().length > 0)
+const isInitialHistoryLoading = computed(() => !hasInitializedHistoryPage.value || (historyLoading.value && historyItems.value.length === 0))
 const resultsHeadline = computed(() => (hasActiveFilters.value ? '搜索结果' : '全部历史记录'))
 const emptyState = computed(() => {
   if (hasActiveFilters.value) {
@@ -258,6 +260,7 @@ function syncRouteQueryFromState() {
 async function fetchHistoryAndSyncRoute(opts: FetchHistoryOptions = {}) {
   const applied = await fetchHistory(opts, currentUserId())
   if (!applied) return
+  hasInitializedHistoryPage.value = true
   syncRouteQueryFromState()
 }
 
@@ -468,6 +471,8 @@ onMounted(() => {
     page: state.page,
     reset: true,
     search: state.search
+  }).finally(() => {
+    hasInitializedHistoryPage.value = true
   })
 })
 
