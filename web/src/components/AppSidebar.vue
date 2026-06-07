@@ -94,6 +94,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { LocationQueryRaw } from 'vue-router'
 import type { Collapse } from 'mdui/components/collapse.js'
 import 'mdui/components/collapse.js'
 import 'mdui/components/collapse-item.js'
@@ -183,6 +184,8 @@ const DOCS_SECTION_ICON_BY_SLUG: Record<string, string> = {
   'api-keys': 'key',
   collaboration: 'groups'
 }
+
+const USER_TAB_CONTENT_QUERY_KEYS = ['page', 'size', 'search', 'role', 'status', 'type', 'encryption_mode'] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -298,12 +301,16 @@ function handleSidebarItemClick(item: SidebarSectionItem) {
 
   if (item.tab) {
     const next = normalizeUserTab(item.tab, canAccessUsers.value)
+    const nextQuery: LocationQueryRaw = { ...route.query, tab: next }
+
+    if (next !== activeUserTab.value) {
+      for (const key of USER_TAB_CONTENT_QUERY_KEYS) {
+        delete nextQuery[key]
+      }
+    }
 
     void router.replace({
-      query: {
-        ...route.query,
-        tab: next
-      }
+      query: nextQuery
     })
   }
 

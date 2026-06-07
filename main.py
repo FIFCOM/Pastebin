@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.controllers import (
+    admin_router,
     api_key_router,
     cleanup_router,
     collab_room_router,
@@ -100,6 +101,7 @@ app.include_router(health_router)
 app.include_router(config_router)
 app.include_router(docs_router)
 app.include_router(install_router)
+app.include_router(admin_router)
 app.include_router(user_router)
 app.include_router(api_key_router)
 app.include_router(paste_router)

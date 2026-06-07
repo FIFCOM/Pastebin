@@ -319,13 +319,21 @@ async function saveUsername() {
 }
 
 async function saveEmail() {
-  if (!currentUser.value || !canSaveEmail.value || isSavingEmail.value) return
+  if (!currentUser.value || isSavingEmail.value) return
+
+  const nextEmail = emailDraft.value.trim()
+  if (!nextEmail) {
+    emailErrorMessage.value = '邮箱不能为空'
+    return
+  }
+
+  if (!canSaveEmail.value) return
 
   isSavingEmail.value = true
   emailErrorMessage.value = ''
   try {
     const updated = await updateUser(currentUser.value.id, {
-      email: emailDraft.value.trim(),
+      email: nextEmail,
       current_password: emailCurrentPassword.value.trim()
     })
     currentUser.value = updated

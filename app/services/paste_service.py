@@ -73,6 +73,20 @@ class PasteService:
         return Path(settings.data_dir) / "files" / paste_id / f"{file_id}.manifest.json"
 
     @staticmethod
+    def _remove_tree(path: Path) -> None:
+        if not path.exists():
+            return
+        if path.is_symlink():
+            path.unlink(missing_ok=True)
+            return
+        for child in path.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                PasteService._remove_tree(child)
+            else:
+                child.unlink(missing_ok=True)
+        path.rmdir()
+
+    @staticmethod
     def _paste_total_upload_limit_bytes() -> int:
         return int(settings.max_paste_total_upload_size)
 
@@ -936,6 +950,46 @@ class PasteService:
         db.commit()
 
     @staticmethod
+    def delete_paste_record(db: Session, paste: Paste) -> None:
+        paste_id = str(paste.id)
+        deletion_errors: list[str] = []
+
+        content_path = paste.content_path  # type: ignore
+        if content_path is not None and str(content_path).strip() != "":
+            try:
+                full_content_path = Path(settings.data_dir) / str(content_path)
+                full_content_path.unlink(missing_ok=True)
+            except Exception as e:
+                deletion_errors.append(f"内容文件 {content_path}: {e}")
+
+        files = db.query(File).filter(File.paste_id == paste_id).all()
+        for file_record in files:
+            file_id = str(file_record.id)  # type: ignore
+            try:
+                file_path = Path(settings.data_dir) / str(file_record.storage_path)  # type: ignore
+                file_path.unlink(missing_ok=True)
+                manifest_path = PasteService._final_manifest_path(
+                    paste_id,
+                    file_id,
+                )
+                manifest_path.unlink(missing_ok=True)
+            except Exception as e:
+                deletion_errors.append(f"附件 {file_id}: {e}")
+
+        try:
+            upload_root = Path(settings.data_dir) / "uploads" / "files" / paste_id
+            PasteService._remove_tree(upload_root)
+        except Exception as e:
+            deletion_errors.append(f"上传临时目录 {paste_id}: {e}")
+
+        if deletion_errors:
+            raise RuntimeError(
+                "删除 Paste 物理文件失败: " + "; ".join(deletion_errors)
+            )
+
+        db.delete(paste)
+
+    @staticmethod
     def publish_paste(
         db: Session, paste_id: str, admin_key: str, publish_data: PastePublishRequest
     ) -> PastePublishResponse:
@@ -1245,32 +1299,5 @@ class PasteService:
         if not PasteService._verify_admin_key(paste, admin_key):
             raise ValueError("管理密钥错误")
 
-        # 删除相关文件
-        files = db.query(File).filter(File.paste_id == paste_id).all()
-        for file_record in files:
-            try:
-                file_path = Path(settings.data_dir) / str(file_record.storage_path)  # type: ignore
-                if file_path.exists():
-                    file_path.unlink()
-                manifest_path = PasteService._final_manifest_path(
-                    paste_id,
-                    str(file_record.id),  # type: ignore
-                )
-                if manifest_path.exists():
-                    manifest_path.unlink()
-            except Exception:
-                pass  # 忽略文件删除错误
-
-        # 删除内容文件
-        content_path = paste.content_path  # type: ignore
-        if content_path is not None and str(content_path).strip() != "":
-            try:
-                full_content_path = Path(settings.data_dir) / str(content_path)
-                if full_content_path.exists():
-                    full_content_path.unlink()
-            except Exception:
-                pass
-
-        # 删除Paste记录（会级联删除相关记录）
-        db.delete(paste)
+        PasteService.delete_paste_record(db, paste)
         db.commit()

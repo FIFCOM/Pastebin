@@ -298,8 +298,17 @@ class UserService:
             if not next_username:
                 raise ValueError("用户名不能为空")
 
+        email_was_provided = "email" in user_data.model_fields_set
+        next_email: str | None = None
+        if email_was_provided:
+            if user_data.email is None:
+                raise ValueError("邮箱不能为空")
+            next_email = str(user_data.email).strip()
+            if not next_email:
+                raise ValueError("邮箱不能为空")
+
         wants_email_or_password_change = (
-            user_data.email is not None and user_data.email != user.email
+            email_was_provided and next_email != user.email
         ) or bool(user_data.password)
         if is_self and wants_email_or_password_change:
             if not user_data.current_password:
@@ -317,15 +326,15 @@ class UserService:
                 raise ValueError("用户名已存在")
             user.username = next_username  # type: ignore[assignment]
 
-        if user_data.email and user_data.email != user.email:
+        if email_was_provided and next_email != user.email:
             existing_user = (
                 db.query(User)
-                .filter(and_(User.email == user_data.email, User.id != user_id))
+                .filter(and_(User.email == next_email, User.id != user_id))
                 .first()
             )
             if existing_user:
                 raise ValueError("邮箱已被其他用户使用")
-            user.email = str(user_data.email)  # type: ignore[assignment]
+            user.email = next_email  # type: ignore[assignment]
 
         if user_data.password:
             salt, _encryption_key, encrypted_user_key = prepare_user_keys(

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_attribute
 
 from app.models.collab_room import CollabRoom, Member, RoomMember
-from app.models.paste import File, FileUploadSession, Paste
+from app.models.paste import FileUploadSession, Paste
 from app.models.user import UsedRefreshToken, UserSession
 from app.schemas.cleanup import CleanupResponse, CleanupTaskResult
 from app.services.collab_room_realtime_service import (
@@ -18,6 +18,7 @@ from app.services.collab_room_realtime_service import (
     CollabRoomRealtimeService,
 )
 from app.services.collab_room_service import CollabRoomService
+from app.services.paste_service import PasteService
 from config.config import settings
 
 
@@ -53,11 +54,7 @@ class CleanupService:
             deleted_count = 0
             for paste in expired_drafts:
                 try:
-                    # 删除关联的文件（物理文件和数据库记录）
-                    CleanupService._delete_paste_files(str(paste.id), db)
-
-                    # 删除paste记录（会级联删除paste_keys和files记录）
-                    db.delete(paste)
+                    PasteService.delete_paste_record(db, paste)
                     deleted_count += 1
 
                 except Exception as e:
@@ -111,11 +108,7 @@ class CleanupService:
             deleted_count = 0
             for paste in expired_pastes:
                 try:
-                    # 删除关联的文件（物理文件和数据库记录）
-                    CleanupService._delete_paste_files(str(paste.id), db)
-
-                    # 删除paste记录（会级联删除相关记录）
-                    db.delete(paste)
+                    PasteService.delete_paste_record(db, paste)
                     deleted_count += 1
 
                 except Exception as e:
@@ -469,70 +462,6 @@ class CleanupService:
                 message="清理 refresh token 记录失败",
                 error=str(e),
             )
-
-    @staticmethod
-    def _delete_paste_files(paste_id: str, db: Session) -> None:
-        """
-        删除paste关联的物理文件
-
-        Args:
-            paste_id: paste ID
-            db: 数据库会话
-        """
-        # 获取paste的内容文件路径
-        paste = db.query(Paste).filter(Paste.id == paste_id).first()
-        content_path = getattr(paste, "content_path", None) if paste else None
-        if content_path:
-            try:
-                content_file_path = os.path.join(settings.data_dir, str(content_path))
-                if os.path.exists(content_file_path):
-                    os.remove(content_file_path)
-            except Exception as e:
-                print(f"删除内容文件 {content_path} 时出错: {e}")
-
-        # 获取并删除关联的文件
-        files = db.query(File).filter(File.paste_id == paste_id).all()
-        for file_record in files:
-            try:
-                file_path = os.path.join(
-                    settings.data_dir, str(file_record.storage_path)
-                )
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-
-                # 分片上传的manifest（若存在）
-                manifest_path = os.path.join(
-                    settings.data_dir,
-                    "files",
-                    paste_id,
-                    f"{file_record.id}.manifest.json",  # type: ignore
-                )
-                if os.path.exists(manifest_path):
-                    os.remove(manifest_path)
-            except Exception as e:
-                print(f"删除文件 {file_record.storage_path} 时出错: {e}")
-
-        # 删除该 paste 下的临时上传目录（若有）
-        try:
-            upload_root = os.path.join(settings.data_dir, "uploads", "files", paste_id)
-            if os.path.exists(upload_root):
-                for root, dirs, files in os.walk(upload_root, topdown=False):
-                    for name in files:
-                        try:
-                            os.remove(os.path.join(root, name))
-                        except Exception:
-                            pass
-                    for name in dirs:
-                        try:
-                            os.rmdir(os.path.join(root, name))
-                        except Exception:
-                            pass
-                try:
-                    os.rmdir(upload_root)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
     @staticmethod
     def execute_cleanup_tasks(db: Session, task_names: list[str]) -> CleanupResponse:

@@ -1,11 +1,20 @@
 <template>
   <div ref="vditorRef" class="vditor-container"></div>
+  <ImagePreview
+    v-model:open="imagePreviewOpen"
+    :src="imagePreviewSrc"
+    :alt="imagePreviewAlt"
+    :loading="false"
+    :error="imagePreviewError"
+    @close="closeImagePreview"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, toRefs } from 'vue'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
+import ImagePreview from '@/components/common/ImagePreview.vue'
 import { useTheme } from '@/composables/useTheme'
 import { parseMbInternalFilePath } from '@/utils/mbFile'
 import { buildMbPlainFilePath, mbSwSetPasteContext } from '@/utils/mbSw'
@@ -42,6 +51,10 @@ let lastSwContext: { pasteId: string; key: Uint8Array | null; accessKey: string 
 const { actualTheme } = useTheme()
 const vditorTheme = ref<'classic' | 'dark'>('classic')
 const isMobile = ref(false)
+const imagePreviewOpen = ref(false)
+const imagePreviewSrc = ref('')
+const imagePreviewAlt = ref('')
+const imagePreviewError = ref('')
 
 const checkMobile = () => {
   const mobileQuery = window.matchMedia('(max-width: 768px)')
@@ -67,6 +80,23 @@ const destroyVditor = () => {
     }
     vditorInstance = null
   }
+}
+
+const closeImagePreview = () => {
+  imagePreviewOpen.value = false
+  imagePreviewSrc.value = ''
+  imagePreviewAlt.value = ''
+  imagePreviewError.value = ''
+}
+
+const openImagePreview = (element: Element) => {
+  if (!(element instanceof HTMLImageElement)) return
+  const img = element
+  const src = img.currentSrc || img.src || img.getAttribute('src') || ''
+  imagePreviewSrc.value = src
+  imagePreviewAlt.value = img.getAttribute('alt') || img.getAttribute('title') || ''
+  imagePreviewError.value = src ? '' : '图片地址为空，无法预览'
+  imagePreviewOpen.value = true
 }
 
 const ensureSwContext = async () => {
@@ -244,6 +274,10 @@ const initVditor = async () => {
         },
         mode: 'both',
         actions: []
+      },
+      image: {
+        isPreview: true,
+        preview: openImagePreview
       },
       input: (value) => {
         emit('update:modelValue', value)

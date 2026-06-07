@@ -15,8 +15,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuth } from '../composables/useAuth'
+import AdminCleanupPanel from '../components/users/AdminCleanupPanel.vue'
+import AdminOverviewPanel from '../components/users/AdminOverviewPanel.vue'
+import AdminPastesPanel from '../components/users/AdminPastesPanel.vue'
+import AdminUsersListPanel from '../components/users/AdminUsersListPanel.vue'
 import UserApiKeysPanel from '../components/users/UserApiKeysPanel.vue'
-import UserListPanel from '../components/users/UserListPanel.vue'
 import UserProfilePanel from '../components/users/UserProfilePanel.vue'
 import UserSessionsPanel from '../components/users/UserSessionsPanel.vue'
 import UserTotpPanel from '../components/users/UserTotpPanel.vue'
@@ -39,7 +42,10 @@ const activeComponentMap: Record<UserTabValue, Component> = {
   sessions: UserSessionsPanel,
   totp: UserTotpPanel,
   apikeys: UserApiKeysPanel,
-  users: UserListPanel
+  'admin-overview': AdminOverviewPanel,
+  'admin-users': AdminUsersListPanel,
+  'admin-pastes': AdminPastesPanel,
+  'admin-cleanup': AdminCleanupPanel
 }
 
 const activeComponent = computed(() => activeComponentMap[activeTab.value])

@@ -157,7 +157,7 @@
       ref="createDialogRef"
       close-on-esc
       close-on-overlay-click
-      @closed="resetCreateForm"
+      @closed="handleCreateDialogClosed"
     >
       <span slot="headline">创建用户</span>
 
@@ -228,7 +228,7 @@
       ref="editDialogRef"
       close-on-esc
       close-on-overlay-click
-      @closed="resetEditForm"
+      @closed="handleEditDialogClosed"
     >
       <span slot="headline">编辑用户</span>
 
@@ -301,6 +301,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { LocationQueryRaw } from 'vue-router'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
@@ -322,28 +324,48 @@ import UserPanelCard from './UserPanelCard.vue'
 import './panel.css'
 
 type DialogElement = HTMLElement & { open: boolean }
+type RoleFilter = 'all' | 'admin' | 'user'
+type StatusFilter = 'all' | 'active' | 'disabled'
 
+interface AdminUsersRouteState {
+  page: number
+  size: number
+  search: string
+  role: RoleFilter
+  status: StatusFilter
+}
+
+const router = useRouter()
+const route = useRoute()
 const { currentUser } = useAuth()
+const ADMIN_USERS_TAB = 'admin-users'
+const DEFAULT_PAGE_SIZE = 10
+const PAGE_SIZE_VALUES = [10, 20, 50, 100] as const
+const USER_LIST_QUERY_KEYS = ['page', 'size', 'search', 'role', 'status', 'type', 'encryption_mode'] as const
 
 const users = ref<UserResponse[]>([])
 const total = ref(0)
 const page = ref(1)
-const size = ref(10)
+const size = ref(DEFAULT_PAGE_SIZE)
 const isLoading = ref(false)
+const hasLoadedFromRoute = ref(false)
 
 const searchInput = ref('')
 const appliedSearch = ref('')
-const roleFilter = ref<'all' | 'admin' | 'user'>('all')
-const statusFilter = ref<'all' | 'active' | 'disabled'>('all')
+const roleFilter = ref<RoleFilter>('all')
+const statusFilter = ref<StatusFilter>('all')
 
 const canAccess = computed(() => currentUser.value?.role === 'admin')
+const isActivePanel = computed(() => firstQueryValue(route.query.tab) === ADMIN_USERS_TAB)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
 const hasActiveFilters = computed(
   () => appliedSearch.value.length > 0 || roleFilter.value !== 'all' || statusFilter.value !== 'all'
 )
 
 function handlePageChange(nextPage: number) {
+  if (page.value === nextPage) return
   page.value = nextPage
+  void loadAndSyncRoute()
 }
 
 function roleParam(): 'admin' | 'user' | undefined {
@@ -356,10 +378,78 @@ function statusParam(): boolean | undefined {
   return statusFilter.value === 'active'
 }
 
+function firstQueryValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+  return ''
+}
+
+function parsePositiveInteger(value: string): number | null {
+  const normalized = value.trim()
+  if (!/^\d+$/.test(normalized)) return null
+
+  const parsed = Number(normalized)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return null
+  return parsed
+}
+
+function parsePageSize(value: string): number {
+  const parsed = parsePositiveInteger(value)
+  return parsed && (PAGE_SIZE_VALUES as readonly number[]).includes(parsed) ? parsed : DEFAULT_PAGE_SIZE
+}
+
+function parseRoleFilter(value: string): RoleFilter {
+  return value === 'admin' || value === 'user' ? value : 'all'
+}
+
+function parseStatusFilter(value: string): StatusFilter {
+  return value === 'active' || value === 'disabled' ? value : 'all'
+}
+
+function parseRouteState(): AdminUsersRouteState {
+  return {
+    page: parsePositiveInteger(firstQueryValue(route.query.page)) ?? 1,
+    size: parsePageSize(firstQueryValue(route.query.size)),
+    search: firstQueryValue(route.query.search).trim(),
+    role: parseRoleFilter(firstQueryValue(route.query.role)),
+    status: parseStatusFilter(firstQueryValue(route.query.status))
+  }
+}
+
+function queryValuesMatch(nextQuery: LocationQueryRaw): boolean {
+  const keys = new Set([...Object.keys(route.query), ...Object.keys(nextQuery)])
+  for (const key of keys) {
+    if (firstQueryValue(route.query[key]) !== firstQueryValue(nextQuery[key])) {
+      return false
+    }
+  }
+  return true
+}
+
+function syncRouteQueryFromState() {
+  if (!isActivePanel.value) return
+
+  const nextQuery: LocationQueryRaw = { ...route.query }
+  for (const key of USER_LIST_QUERY_KEYS) {
+    delete nextQuery[key]
+  }
+
+  if (page.value > 1) nextQuery.page = String(page.value)
+  if (size.value !== DEFAULT_PAGE_SIZE) nextQuery.size = String(size.value)
+  if (appliedSearch.value.trim()) nextQuery.search = appliedSearch.value.trim()
+  if (roleFilter.value !== 'all') nextQuery.role = roleFilter.value
+  if (statusFilter.value !== 'all') nextQuery.status = statusFilter.value
+
+  if (!queryValuesMatch(nextQuery)) {
+    void router.replace({ query: nextQuery })
+  }
+}
+
 async function load() {
   if (!canAccess.value) {
     users.value = []
     total.value = 0
+    hasLoadedFromRoute.value = false
     return
   }
 
@@ -380,41 +470,80 @@ async function load() {
     snackbar({ message: extractErrorMessage(error, '获取用户列表失败'), closeable: true })
   } finally {
     isLoading.value = false
+    hasLoadedFromRoute.value = true
   }
 }
 
-function resetToFirstPageAndLoad() {
-  if (page.value !== 1) {
-    page.value = 1
+async function loadAndSyncRoute() {
+  await load()
+  syncRouteQueryFromState()
+}
+
+async function applyRouteQuery() {
+  if (!isActivePanel.value) return
+
+  if (!canAccess.value) {
+    users.value = []
+    total.value = 0
+    hasLoadedFromRoute.value = false
     return
   }
 
-  void load()
-}
+  const state = parseRouteState()
+  const hasStateChanged =
+    page.value !== state.page ||
+    size.value !== state.size ||
+    appliedSearch.value !== state.search ||
+    roleFilter.value !== state.role ||
+    statusFilter.value !== state.status
 
-watch([page, size], () => {
-  void load()
-})
+  if (!hasStateChanged && hasLoadedFromRoute.value) {
+    if (searchInput.value !== state.search) {
+      searchInput.value = state.search
+    }
+    syncRouteQueryFromState()
+    return
+  }
+
+  page.value = state.page
+  size.value = state.size
+  appliedSearch.value = state.search
+  searchInput.value = state.search
+  roleFilter.value = state.role
+  statusFilter.value = state.status
+  await loadAndSyncRoute()
+}
 
 watch(
   totalPages,
   (nextTotalPages) => {
-    if (page.value > nextTotalPages) page.value = nextTotalPages
+    if (!isActivePanel.value || page.value <= nextTotalPages) return
+    page.value = nextTotalPages
+    void loadAndSyncRoute()
   },
   { immediate: true }
 )
 
 watch(
-  canAccess,
+  [
+    () => route.query.tab,
+    () => route.query.page,
+    () => route.query.size,
+    () => route.query.search,
+    () => route.query.role,
+    () => route.query.status,
+    canAccess
+  ],
   () => {
-    resetToFirstPageAndLoad()
+    void applyRouteQuery()
   },
   { immediate: true }
 )
 
 function applyFilters() {
   appliedSearch.value = searchInput.value.trim()
-  resetToFirstPageAndLoad()
+  page.value = 1
+  void loadAndSyncRoute()
 }
 
 function handleRoleFilterChange(event: Event) {
@@ -422,7 +551,8 @@ function handleRoleFilterChange(event: Event) {
   if (next === 'all' || next === 'admin' || next === 'user') {
     roleFilter.value = next
     appliedSearch.value = searchInput.value.trim()
-    resetToFirstPageAndLoad()
+    page.value = 1
+    void loadAndSyncRoute()
   }
 }
 
@@ -431,16 +561,18 @@ function handleStatusFilterChange(event: Event) {
   if (next === 'all' || next === 'active' || next === 'disabled') {
     statusFilter.value = next
     appliedSearch.value = searchInput.value.trim()
-    resetToFirstPageAndLoad()
+    page.value = 1
+    void loadAndSyncRoute()
   }
 }
 
 function handleSizeChange(event: Event) {
   const next = Number((event.target as { value?: unknown }).value)
-  if (!Number.isFinite(next) || next <= 0) return
+  if (!Number.isFinite(next) || !(PAGE_SIZE_VALUES as readonly number[]).includes(next)) return
   appliedSearch.value = searchInput.value.trim()
   size.value = next
   page.value = 1
+  void loadAndSyncRoute()
 }
 
 const createDialogRef = ref<DialogElement | null>(null)
@@ -477,6 +609,11 @@ function resetCreateForm() {
   createPassword.value = ''
   createPassword2.value = ''
   isCreating.value = false
+}
+
+function handleCreateDialogClosed(event: Event) {
+  if (event.target !== createDialogRef.value) return
+  resetCreateForm()
 }
 
 function handleCreateRoleChange(event: Event) {
@@ -524,8 +661,11 @@ const canSaveEdit = computed(() => {
   const nextUsername = editUsername.value.trim()
   if (!nextUsername) return false
 
+  const nextEmail = editEmail.value.trim()
+  if (!nextEmail) return false
+
   const hasUsernameChanged = nextUsername !== user.username
-  const hasEmailChanged = editEmail.value.trim() !== (user.email ?? '')
+  const hasEmailChanged = nextEmail !== (user.email ?? '')
   const hasPasswordChanged = editPassword.value.length > 0
   const hasRoleChanged = editRole.value !== user.role
   const hasStatusChanged = editIsActive.value !== user.is_active
@@ -559,6 +699,11 @@ function resetEditForm() {
   editRole.value = 'user'
   editIsActive.value = true
   isSavingEdit.value = false
+}
+
+function handleEditDialogClosed(event: Event) {
+  if (event.target !== editDialogRef.value) return
+  resetEditForm()
 }
 
 function handleEditRoleChange(event: Event) {
@@ -595,6 +740,10 @@ async function saveEdit() {
     if (nextUsername !== user.username) payload.username = nextUsername
 
     const nextEmail = editEmail.value.trim()
+    if (!nextEmail) {
+      snackbar({ message: '邮箱不能为空', closeable: true })
+      return
+    }
     if (nextEmail !== (user.email ?? '')) payload.email = nextEmail
     if (editPassword.value) payload.password = editPassword.value
     if (editRole.value !== user.role) payload.role = editRole.value

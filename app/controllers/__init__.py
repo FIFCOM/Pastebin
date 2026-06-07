@@ -2,6 +2,7 @@
 Controllers层 - 路由控制器
 """
 
+from .admin_controller import router as admin_router
 from .api_key_controller import router as api_key_router
 from .cleanup_controller import router as cleanup_router
 from .collab_room_controller import router as collab_room_router
@@ -16,6 +17,7 @@ from .user_history_controller import router as user_history_router
 
 __all__ = [
     "user_router",
+    "admin_router",
     "health_router",
     "api_key_router",
     "paste_router",

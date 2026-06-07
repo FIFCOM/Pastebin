@@ -60,8 +60,11 @@ export async function listUsers(options: ListUsersOptions = {}): Promise<UserLis
 
 export async function createUser(user: UserCreateRequest): Promise<UserResponse> {
   const passwordHash = await sha256Hex(user.password)
+  const email = user.email.trim()
+  if (!email) throw new Error('邮箱不能为空')
+
   const body: { username?: string; email: string; password: string; role?: 'admin' | 'user' } = {
-    email: user.email.trim(),
+    email,
     password: passwordHash
   }
 
@@ -86,8 +89,11 @@ export async function updateUser(userId: number, update: UserUpdateRequest): Pro
   const username = update.username?.trim()
   if (username) body.username = username
 
-  const email = update.email?.trim()
-  if (email) body.email = email
+  if (update.email !== undefined) {
+    const email = update.email.trim()
+    if (!email) throw new Error('邮箱不能为空')
+    body.email = email
+  }
 
   if (update.password) {
     body.password = await sha256Hex(update.password)
