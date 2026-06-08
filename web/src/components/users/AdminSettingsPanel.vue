@@ -57,30 +57,23 @@
                 <mdui-chip v-if="setting.allow_zero" variant="outlined">0 为不限</mdui-chip>
               </div>
               <div class="user-panel-row-description">{{ setting.description }}</div>
-              <div class="user-panel-meta">
-                <span class="user-panel-meta-item">默认 {{ formatSettingValue(setting.default_value, setting) }}</span>
-                <span v-if="setting.max_value !== null" class="user-panel-meta-item">
-                  范围 {{ setting.min_value.toLocaleString() }} - {{ setting.max_value.toLocaleString() }}
-                </span>
-                <span v-else class="user-panel-meta-item">最小 {{ setting.min_value.toLocaleString() }}</span>
-              </div>
             </div>
 
             <div class="setting-control">
               <mdui-text-field
-                :model-value="drafts[setting.key] ?? ''"
-                :label="setting.unit"
+                :value="drafts[setting.key] ?? ''"
+                :label="displayUnit(setting)"
                 type="number"
                 variant="outlined"
-                inputmode="numeric"
-                :min="String(setting.min_value)"
-                :max="setting.max_value === null ? undefined : String(setting.max_value)"
+                :inputmode="isByteSetting(setting) ? 'decimal' : 'numeric'"
+                :min="settingValueToDraft(setting.min_value, setting)"
+                :max="setting.max_value === null ? undefined : settingValueToDraft(setting.max_value, setting)"
+                :step="isByteSetting(setting) ? '0.000001' : '1'"
                 :disabled="isSaving"
                 :error="Boolean(validationErrors[setting.key])"
                 :error-text="validationErrors[setting.key] ?? ''"
                 @input="handleDraftInput(setting.key, $event)"
               ></mdui-text-field>
-              <div class="setting-value-preview">{{ previewValue(setting) }}</div>
             </div>
           </article>
         </div>
@@ -107,7 +100,6 @@ import {
 } from '../../services/admin'
 import { invalidatePublicConfigCache } from '../../services/config'
 import { extractErrorMessage } from '../../utils/error'
-import { humanSize } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
 import './panel.css'
 
@@ -123,6 +115,9 @@ const drafts = ref<Partial<Record<RuntimeSettingKey, string>>>({})
 const validationErrors = ref<Partial<Record<RuntimeSettingKey, string>>>({})
 const isLoading = ref(false)
 const isSaving = ref(false)
+const BYTES_PER_MB_BIGINT = 1024n * 1024n
+const MB_SCALE_BIGINT = 1_000_000n
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER)
 
 const canAccess = computed(() => currentUser.value?.role === 'admin')
 const settingGroups = computed<SettingGroup[]>(() => {
@@ -140,7 +135,7 @@ const settingGroups = computed<SettingGroup[]>(() => {
 
 const hasValidationErrors = computed(() => Object.values(validationErrors.value).some(Boolean))
 const hasChanges = computed(() =>
-  settings.value.some((setting) => Number.parseInt(drafts.value[setting.key] ?? '', 10) !== setting.value)
+  settings.value.some((setting) => parseDraftValue(setting, drafts.value[setting.key] ?? '') !== setting.value)
 )
 const canSave = computed(() => canAccess.value && hasChanges.value && !hasValidationErrors.value && !isLoading.value && !isSaving.value)
 const canResetDefaults = computed(() => canAccess.value && settings.value.length > 0 && !isLoading.value && !isSaving.value)
@@ -148,22 +143,59 @@ const canResetDefaults = computed(() => canAccess.value && settings.value.length
 function setDrafts(nextSettings: RuntimeSettingItem[]) {
   const nextDrafts: Partial<Record<RuntimeSettingKey, string>> = {}
   for (const setting of nextSettings) {
-    nextDrafts[setting.key] = String(setting.value)
+    nextDrafts[setting.key] = settingValueToDraft(setting.value, setting)
   }
   drafts.value = nextDrafts
   validationErrors.value = {}
 }
 
+function bytesToMbDraft(bytes: number): string {
+  const normalized = BigInt(Math.max(0, Math.trunc(bytes)))
+  const whole = normalized / BYTES_PER_MB_BIGINT
+  const remainder = normalized % BYTES_PER_MB_BIGINT
+  if (remainder === 0n) return whole.toString()
+
+  let scaled = (remainder * MB_SCALE_BIGINT) / BYTES_PER_MB_BIGINT
+  if (scaled === 0n) scaled = 1n
+
+  const decimal = scaled.toString().padStart(6, '0').replace(/0+$/, '')
+  return `${whole.toString()}.${decimal}`
+}
+
+function mbDraftToBytes(rawValue: string): number | null {
+  const trimmed = rawValue.trim()
+  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) return null
+
+  const [wholeRaw = '0', fractionRaw = ''] = trimmed.split('.')
+  const whole = BigInt(wholeRaw)
+  const fraction = BigInt(fractionRaw.padEnd(6, '0'))
+  const fractionBytes = (fraction * BYTES_PER_MB_BIGINT + 500_000n) / MB_SCALE_BIGINT
+  const bytes = whole * BYTES_PER_MB_BIGINT + fractionBytes
+  if (bytes > MAX_SAFE_INTEGER_BIGINT) return null
+  return Number(bytes)
+}
+
+function parseDraftValue(setting: RuntimeSettingItem, rawValue: string): number | null {
+  const trimmed = rawValue.trim()
+  if (!trimmed) return null
+  if (isByteSetting(setting)) return mbDraftToBytes(trimmed)
+  if (!/^\d+$/.test(trimmed)) return null
+  const value = Number.parseInt(trimmed, 10)
+  if (!Number.isSafeInteger(value)) return null
+  return value
+}
+
 function validateSetting(setting: RuntimeSettingItem, rawValue: string): string {
   const trimmed = rawValue.trim()
-  if (!trimmed) return '请输入整数'
-  if (!/^\d+$/.test(trimmed)) return '只能输入非负整数'
+  if (!trimmed) return isByteSetting(setting) ? '请输入 MB 数值' : '请输入整数'
+  if (isByteSetting(setting) && !/^\d+(\.\d{1,6})?$/.test(trimmed)) return '请输入非负数，最多 6 位小数'
+  if (!isByteSetting(setting) && !/^\d+$/.test(trimmed)) return '只能输入非负整数'
 
-  const value = Number.parseInt(trimmed, 10)
-  if (!Number.isSafeInteger(value)) return '数值过大'
-  if (value === 0 && !setting.allow_zero) return `必须大于等于 ${setting.min_value}`
-  if (value < setting.min_value) return `必须大于等于 ${setting.min_value}`
-  if (setting.max_value !== null && value > setting.max_value) return `必须小于等于 ${setting.max_value}`
+  const value = parseDraftValue(setting, rawValue)
+  if (value === null) return '数值过大'
+  if (value === 0 && !setting.allow_zero) return `至少 ${formatSettingValue(setting.min_value, setting)}`
+  if (value < setting.min_value) return `至少 ${formatSettingValue(setting.min_value, setting)}`
+  if (setting.max_value !== null && value > setting.max_value) return '数值过大'
   return ''
 }
 
@@ -189,9 +221,17 @@ function isByteSetting(setting: RuntimeSettingItem): boolean {
   return setting.unit === '字节'
 }
 
+function displayUnit(setting: RuntimeSettingItem): string {
+  return isByteSetting(setting) ? 'MB' : setting.unit
+}
+
+function settingValueToDraft(value: number, setting: RuntimeSettingItem): string {
+  return isByteSetting(setting) ? bytesToMbDraft(value) : String(value)
+}
+
 function formatSettingValue(value: number, setting: RuntimeSettingItem): string {
   if (value === 0 && setting.allow_zero) return '不限制'
-  if (isByteSetting(setting)) return `${humanSize(value)} (${value.toLocaleString()} 字节)`
+  if (isByteSetting(setting)) return `${bytesToMbDraft(value)} MB`
   return `${value.toLocaleString()} ${setting.unit}`
 }
 
@@ -199,12 +239,13 @@ function previewValue(setting: RuntimeSettingItem): string {
   const raw = drafts.value[setting.key] ?? ''
   const error = validateSetting(setting, raw)
   if (error) return '等待有效数值'
-  return formatSettingValue(Number.parseInt(raw, 10), setting)
+  const value = parseDraftValue(setting, raw)
+  return value === null ? '等待有效数值' : formatSettingValue(value, setting)
 }
 
 function isChanged(setting: RuntimeSettingItem): boolean {
   const raw = drafts.value[setting.key] ?? ''
-  const value = Number.parseInt(raw, 10)
+  const value = parseDraftValue(setting, raw)
   return Number.isSafeInteger(value) && value !== setting.value
 }
 
@@ -215,7 +256,7 @@ function groupSummary(items: RuntimeSettingItem[]): string {
 function resetToDefaults() {
   const nextDrafts: Partial<Record<RuntimeSettingKey, string>> = {}
   for (const setting of settings.value) {
-    nextDrafts[setting.key] = String(setting.default_value)
+    nextDrafts[setting.key] = settingValueToDraft(setting.default_value, setting)
   }
   drafts.value = nextDrafts
   validateAll()
@@ -249,7 +290,7 @@ async function save() {
 
   const payload = settings.value.map((setting) => ({
     key: setting.key,
-    value: Number.parseInt(drafts.value[setting.key] ?? '', 10)
+    value: parseDraftValue(setting, drafts.value[setting.key] ?? '') ?? setting.value
   }))
 
   isSaving.value = true
@@ -303,13 +344,6 @@ watch(
 .setting-control {
   display: grid;
   gap: 8px;
-}
-
-.setting-value-preview {
-  min-height: 20px;
-  font-size: 0.84rem;
-  line-height: 1.45;
-  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 @media (max-width: 820px) {
