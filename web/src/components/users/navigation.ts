@@ -6,6 +6,7 @@ export const USER_TAB_VALUES = [
   'admin-overview',
   'admin-users',
   'admin-pastes',
+  'admin-settings',
   'admin-cleanup'
 ] as const
 
@@ -68,6 +69,12 @@ export const USER_NAVIGATION_ITEMS: Record<UserTabValue, UserNavigationItem> = {
     group: '管理',
     icon: 'content_paste'
   },
+  'admin-settings': {
+    value: 'admin-settings',
+    label: '系统配置',
+    group: '管理',
+    icon: 'tune'
+  },
   'admin-cleanup': {
     value: 'admin-cleanup',
     label: '清理任务',
@@ -113,6 +120,7 @@ export function getUserNavigationGroups(canAccessUsers: boolean): UserNavigation
         USER_NAVIGATION_ITEMS['admin-overview'],
         USER_NAVIGATION_ITEMS['admin-users'],
         USER_NAVIGATION_ITEMS['admin-pastes'],
+        USER_NAVIGATION_ITEMS['admin-settings'],
         USER_NAVIGATION_ITEMS['admin-cleanup']
       ]
     })

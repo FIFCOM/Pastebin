@@ -78,6 +78,36 @@ export interface MessageResponse {
   message: string
 }
 
+export type RuntimeSettingKey =
+  | 'MAX_UPLOAD_FILE_SIZE'
+  | 'MAX_PASTE_TOTAL_UPLOAD_SIZE'
+  | 'MAX_CHUNK_SIZE'
+  | 'UPLOAD_EXPIRE_SECONDS'
+  | 'MAX_CONCURRENT_UPLOADS'
+  | 'COLLAB_ROOM_MAX_MEMBERS'
+
+export interface RuntimeSettingItem {
+  key: RuntimeSettingKey
+  value: number
+  default_value: number
+  label: string
+  group: string
+  unit: string
+  description: string
+  allow_zero: boolean
+  min_value: number
+  max_value: number | null
+}
+
+export interface RuntimeSettingsResponse {
+  settings: RuntimeSettingItem[]
+}
+
+export interface RuntimeSettingUpdate {
+  key: RuntimeSettingKey
+  value: number
+}
+
 export async function getAdminOverview(): Promise<AdminOverviewResponse> {
   const response = await apiHttp.get<AdminOverviewResponse>('/users/admin/overview')
   return response.data
@@ -118,5 +148,15 @@ export async function getAdminCleanupStatus(): Promise<AdminCleanupStatusRespons
 
 export async function executeAdminCleanup(tasks: CleanupTaskName[]): Promise<CleanupResponse> {
   const response = await apiHttp.post<CleanupResponse>('/users/admin/cleanup', { tasks })
+  return response.data
+}
+
+export async function getAdminSettings(): Promise<RuntimeSettingsResponse> {
+  const response = await apiHttp.get<RuntimeSettingsResponse>('/users/admin/settings')
+  return response.data
+}
+
+export async function updateAdminSettings(settings: RuntimeSettingUpdate[]): Promise<RuntimeSettingsResponse> {
+  const response = await apiHttp.put<RuntimeSettingsResponse>('/users/admin/settings', { settings })
   return response.data
 }

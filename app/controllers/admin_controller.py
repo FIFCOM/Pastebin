@@ -16,9 +16,14 @@ from app.schemas.admin import (
 )
 from app.schemas.cleanup import CleanupRequest, CleanupResponse
 from app.schemas.common import MessageResponse
+from app.schemas.runtime_settings import (
+    RuntimeSettingsResponse,
+    RuntimeSettingsUpdateRequest,
+)
 from app.schemas.user import UserResponse
 from app.services.admin_service import SUPPORTED_CLEANUP_TASKS, AdminService
 from app.services.cleanup_service import CleanupService
+from app.services.runtime_settings_service import RuntimeSettingsService
 
 router = APIRouter(prefix="/api/users/admin", tags=["管理员后台"])
 
@@ -101,6 +106,39 @@ async def get_admin_cleanup_status(
     """获取管理员清理任务状态。"""
     _require_admin(current_user)
     return AdminService.get_cleanup_status(db)
+
+
+@router.get("/settings", response_model=RuntimeSettingsResponse)
+async def get_admin_settings(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+) -> RuntimeSettingsResponse:
+    """获取管理员可在线修改的运行配置。"""
+    _require_admin(current_user)
+    return RuntimeSettingsResponse(settings=RuntimeSettingsService.list_settings(db))
+
+
+@router.put("/settings", response_model=RuntimeSettingsResponse)
+async def update_admin_settings(
+    payload: RuntimeSettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+) -> RuntimeSettingsResponse:
+    """批量更新管理员运行配置。"""
+    _require_admin(current_user)
+    try:
+        settings = RuntimeSettingsService.update_settings(
+            db,
+            payload.settings,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
+    return RuntimeSettingsResponse(settings=settings)
 
 
 @router.post("/cleanup", response_model=CleanupResponse)

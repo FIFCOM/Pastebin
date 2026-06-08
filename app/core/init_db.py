@@ -3,7 +3,8 @@
 """
 
 import app.models  # noqa: F401
-from app.core.database import Base, engine
+from app.core.database import Base, SessionLocal, engine
+from app.services.runtime_settings_service import RuntimeSettingsService
 from config.config import settings
 
 
@@ -11,6 +12,11 @@ def create_tables():
     """创建所有数据库表"""
     print("正在创建数据库表...")
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        RuntimeSettingsService.ensure_defaults(db)
+    finally:
+        db.close()
     print("数据库表创建完成")
 
 

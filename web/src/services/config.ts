@@ -67,3 +67,12 @@ export async function getPublicConfig(): Promise<PublicConfig> {
     return DEFAULT_CONFIG
   }
 }
+
+export function invalidatePublicConfigCache(): void {
+  cachedConfig = null
+  try {
+    localStorage.removeItem(PUBLIC_CONFIG_STORAGE_KEY)
+  } catch (e) {
+    console.warn('Failed to clear config from localStorage:', e)
+  }
+}

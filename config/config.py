@@ -80,18 +80,8 @@ class Settings:
     # 数据存储配置
     data_dir: str
 
-    # 上传限制
-    max_upload_file_size: int
-    max_paste_total_upload_size: int
-    max_chunk_size: int
-    upload_expire_seconds: int
-    max_concurrent_uploads: int
-
     # 内部服务配置
     internal_token: str
-
-    # 协作房间配置
-    collab_room_max_members: int
 
 
 def load_config() -> Settings:
@@ -132,21 +122,9 @@ def load_config() -> Settings:
         port=_int_env("PORT", 8000),
         # 数据存储配置
         data_dir=os.getenv("DATA_DIR", "./data"),
-        # 上传限制
-        max_upload_file_size=_int_env("MAX_UPLOAD_FILE_SIZE", 100 * 1024 * 1024),
-        max_paste_total_upload_size=_int_env(
-            "MAX_PASTE_TOTAL_UPLOAD_SIZE", 1 * 1024 * 1024 * 1024
-        ),
-        max_chunk_size=_int_env("MAX_CHUNK_SIZE", 2 * 1024 * 1024),
-        upload_expire_seconds=_int_env("UPLOAD_EXPIRE_SECONDS", 3600),
-        max_concurrent_uploads=_int_env("MAX_CONCURRENT_UPLOADS", 2000),
         # 内部服务配置
         internal_token=os.getenv(
             "INTERNAL_TOKEN", "change-this-internal-token-in-production"
-        ),
-        # 协作房间配置
-        collab_room_max_members=min(
-            100, max(2, _int_env("COLLAB_ROOM_MAX_MEMBERS", 20))
         ),
     )
 

@@ -87,7 +87,7 @@ npm run dev
 # 必须先编辑 .env.docker，把 SECRET_KEY / MEMBER_TOKEN_SECRET_KEY / INTERNAL_TOKEN 换成随机长字符串
 cp .env.docker.example .env.docker
 
-# 从源码globalheader构建镜像
+# 从源码构建镜像
 docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
 
 # 启动容器

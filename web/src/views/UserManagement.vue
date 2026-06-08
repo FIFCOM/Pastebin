@@ -18,6 +18,7 @@ import { useAuth } from '../composables/useAuth'
 import AdminCleanupPanel from '../components/users/AdminCleanupPanel.vue'
 import AdminOverviewPanel from '../components/users/AdminOverviewPanel.vue'
 import AdminPastesPanel from '../components/users/AdminPastesPanel.vue'
+import AdminSettingsPanel from '../components/users/AdminSettingsPanel.vue'
 import AdminUsersListPanel from '../components/users/AdminUsersListPanel.vue'
 import UserApiKeysPanel from '../components/users/UserApiKeysPanel.vue'
 import UserProfilePanel from '../components/users/UserProfilePanel.vue'
@@ -45,6 +46,7 @@ const activeComponentMap: Record<UserTabValue, Component> = {
   'admin-overview': AdminOverviewPanel,
   'admin-users': AdminUsersListPanel,
   'admin-pastes': AdminPastesPanel,
+  'admin-settings': AdminSettingsPanel,
   'admin-cleanup': AdminCleanupPanel
 }
 

@@ -39,6 +39,7 @@ from app.schemas.collab_room import (
     build_ws_url,
     calculate_is_online,
 )
+from app.services.runtime_settings_service import RuntimeSettingsService
 from config.config import settings
 
 
@@ -394,7 +395,7 @@ class CollabRoomService:
                 creator_member_id=str(member.id),  # type: ignore
                 pin_code=pin_code,
                 room_key=room_key,
-                max_members=settings.collab_room_max_members,
+                max_members=RuntimeSettingsService.collab_room_max_members(db),
                 member_count=1,
             )
             db.add(room)

@@ -5,6 +5,7 @@ Models层 - 数据库模型定义
 from .api_key import ApiKey
 from .collab_room import CollabRoom, Member, RoomMember, RoomPaste
 from .paste import File, Paste, PasteKey
+from .runtime_setting import RuntimeSetting
 from .user import UsedRefreshToken, User, UserSession, UserSessionKey
 from .user_favorite import UserFavorite
 from .user_history import UserHistory
@@ -18,6 +19,7 @@ __all__ = [
     "Paste",
     "PasteKey",
     "File",
+    "RuntimeSetting",
     "UserFavorite",
     "UserHistory",
     "Member",

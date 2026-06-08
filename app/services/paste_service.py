@@ -44,6 +44,10 @@ from app.schemas.paste import (
     PasteUpdateRequest,
     get_expire_datetime,
 )
+from app.services.runtime_settings_service import (
+    RuntimeSettingsService,
+    UploadRuntimeSettings,
+)
 from config.config import settings
 
 
@@ -87,8 +91,11 @@ class PasteService:
         path.rmdir()
 
     @staticmethod
-    def _paste_total_upload_limit_bytes() -> int:
-        return int(settings.max_paste_total_upload_size)
+    def _paste_total_upload_limit_bytes(
+        db: Session, upload_settings: UploadRuntimeSettings | None = None
+    ) -> int:
+        current_settings = upload_settings or RuntimeSettingsService.upload_settings(db)
+        return current_settings.max_paste_total_upload_size
 
     @staticmethod
     def _paste_used_upload_bytes(db: Session, paste_id: str, now: datetime) -> int:
@@ -115,9 +122,12 @@ class PasteService:
 
     @staticmethod
     def _paste_remaining_upload_bytes(
-        db: Session, paste_id: str, now: datetime
+        db: Session,
+        paste_id: str,
+        now: datetime,
+        upload_settings: UploadRuntimeSettings | None = None,
     ) -> int | None:
-        limit = PasteService._paste_total_upload_limit_bytes()
+        limit = PasteService._paste_total_upload_limit_bytes(db, upload_settings)
         if limit <= 0:
             return None
         used = PasteService._paste_used_upload_bytes(db, paste_id, now)
@@ -161,13 +171,17 @@ class PasteService:
         if paste_encryption_mode != encryption_mode:
             raise ValueError("encryption_mode与Paste不一致")
 
-        max_file_size = int(settings.max_upload_file_size)
+        upload_settings = RuntimeSettingsService.upload_settings(db)
+
+        max_file_size = upload_settings.max_upload_file_size
         if max_file_size > 0 and req.file_size > max_file_size:
             raise ValueError(f"文件过大，最大允许 {max_file_size} 字节")
 
         now = datetime.now(UTC)
 
-        max_paste_total = PasteService._paste_total_upload_limit_bytes()
+        max_paste_total = PasteService._paste_total_upload_limit_bytes(
+            db, upload_settings
+        )
         used_total = 0
         if max_paste_total > 0:
             used_total = PasteService._paste_used_upload_bytes(db, paste_id, now)
@@ -182,15 +196,16 @@ class PasteService:
             .filter(FileUploadSession.expire_at > now)
             .count()
         )
-        if int(settings.max_concurrent_uploads) > 0 and active_sessions >= int(
-            settings.max_concurrent_uploads
+        if (
+            upload_settings.max_concurrent_uploads > 0
+            and active_sessions >= upload_settings.max_concurrent_uploads
         ):
             raise ValueError("当前上传会话过多，请稍后重试")
 
-        requested = int(req.requested_chunk_size or int(settings.max_chunk_size))
+        requested = int(req.requested_chunk_size or upload_settings.max_chunk_size)
         if requested <= 0:
-            requested = int(settings.max_chunk_size)
-        chunk_size = min(requested, int(settings.max_chunk_size))
+            requested = upload_settings.max_chunk_size
+        chunk_size = min(requested, upload_settings.max_chunk_size)
         if req.file_size > 0:
             chunk_size = min(chunk_size, int(req.file_size))
         else:
@@ -225,7 +240,7 @@ class PasteService:
                 raise ValueError(f"file_name格式错误（需为Base64）: {e}") from None
             file_name_encrypted = str(req.file_name)
 
-        expires_at = now + timedelta(seconds=int(settings.upload_expire_seconds))
+        expires_at = now + timedelta(seconds=upload_settings.upload_expire_seconds)
 
         session = FileUploadSession(
             id=upload_id,
@@ -293,8 +308,13 @@ class PasteService:
             raise ValueError("上传会话已过期")
 
         now = datetime.now(UTC)
-        max_paste_total = PasteService._paste_total_upload_limit_bytes()
-        remaining = PasteService._paste_remaining_upload_bytes(db, paste_id, now)
+        upload_settings = RuntimeSettingsService.upload_settings(db)
+        max_paste_total = PasteService._paste_total_upload_limit_bytes(
+            db, upload_settings
+        )
+        remaining = PasteService._paste_remaining_upload_bytes(
+            db, paste_id, now, upload_settings
+        )
 
         total_chunks = int(session.total_chunks)  # type: ignore
         chunk_size = int(session.chunk_size)  # type: ignore
@@ -550,8 +570,13 @@ class PasteService:
             pass
 
         now = datetime.now(UTC)
-        max_paste_total = PasteService._paste_total_upload_limit_bytes()
-        remaining = PasteService._paste_remaining_upload_bytes(db, paste_id, now)
+        upload_settings = RuntimeSettingsService.upload_settings(db)
+        max_paste_total = PasteService._paste_total_upload_limit_bytes(
+            db, upload_settings
+        )
+        remaining = PasteService._paste_remaining_upload_bytes(
+            db, paste_id, now, upload_settings
+        )
         return FileUploadCompleteResponse(
             file_id=upload_id,
             max_total_upload_size=max_paste_total,
@@ -836,7 +861,7 @@ class PasteService:
         db.commit()
         db.refresh(paste)
 
-        max_total_upload_size = PasteService._paste_total_upload_limit_bytes()
+        max_total_upload_size = PasteService._paste_total_upload_limit_bytes(db)
         remaining_upload_size = (
             max_total_upload_size if max_total_upload_size > 0 else None
         )
