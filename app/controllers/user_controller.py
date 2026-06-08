@@ -24,7 +24,10 @@ from app.core.dependencies import (
 from app.core.request_meta import extract_client_ip, extract_user_agent
 from app.schemas.common import MessageResponse
 from app.schemas.user import (
+    ChangeEmailVerificationCodeRequest,
+    EmailVerificationCodeRequest,
     LoginResponse,
+    PasswordResetRequest,
     RefreshTokenResponse,
     SessionResponse,
     TotpSetupResponse,
@@ -38,6 +41,7 @@ from app.schemas.user import (
     UserResponse,
     UserUpdateRequest,
 )
+from app.services.email_verification_service import EmailVerificationService
 from app.services.user_service import UserService
 from config.config import settings
 
@@ -97,6 +101,71 @@ async def register_user(user_data: UserRegisterRequest, db: Session = Depends(ge
     """
     try:
         return UserService.register_user(db, user_data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
+@router.post("/email-verification-codes", response_model=MessageResponse)
+async def send_email_verification_code(
+    payload: EmailVerificationCodeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    发送公开邮箱验证码。
+
+    - **purpose=register**: 注册验证码
+    - **purpose=reset_password**: 找回密码验证码
+    """
+    try:
+        EmailVerificationService.send_public_code(
+            db,
+            email=str(payload.email),
+            purpose=payload.purpose,
+            ip_address=extract_client_ip(request),
+        )
+        return MessageResponse(message="如邮箱可用，验证码已发送")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
+@router.post("/me/email-verification-code", response_model=MessageResponse)
+async def send_change_email_verification_code(
+    payload: ChangeEmailVerificationCodeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+):
+    """发送修改邮箱验证码。"""
+    try:
+        EmailVerificationService.send_change_email_code(
+            db,
+            email=str(payload.email),
+            user_id=current_user.id,
+            ip_address=extract_client_ip(request),
+        )
+        return MessageResponse(message="验证码已发送")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+
+
+@router.post("/password-reset", response_model=MessageResponse)
+async def reset_password(
+    payload: PasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    """通过邮箱验证码重置密码。"""
+    try:
+        UserService.reset_password(db, payload)
+        return MessageResponse(
+            message="密码已重置，历史记录和收藏关联已清空，请使用新密码登录"
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)

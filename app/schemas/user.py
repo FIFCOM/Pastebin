@@ -20,6 +20,9 @@ class UserRegisterRequest(BaseModel):
         max_length=64,
         description="SHA256哈希后的密码(64位十六进制字符串)",
     )
+    verification_code: str | None = Field(
+        default=None, min_length=6, max_length=6, description="邮箱验证码"
+    )
 
     @field_validator("password")
     @classmethod
@@ -27,6 +30,15 @@ class UserRegisterRequest(BaseModel):
         """验证密码是否为有效的SHA256哈希"""
         normalized = normalize_sha256_hex(v)
         return str(normalized)  # 统一转为小写
+
+    @field_validator("verification_code")
+    @classmethod
+    def validate_verification_code(cls, v):
+        if v is None:
+            return None
+        if not v.isdigit():
+            raise ValueError("邮箱验证码必须是6位数字")
+        return v
 
 
 class UserLoginRequest(BaseModel):
@@ -79,6 +91,7 @@ class UserResponse(BaseModel):
     role: Literal["admin", "user"] = "user"
     is_active: bool = True
     totp_enabled: bool = False  # 是否启用TOTP
+    email_verified_at: datetime | None = None
     created_at: datetime
 
     class Config:
@@ -96,6 +109,9 @@ class UserUpdateRequest(BaseModel):
     password: str | None = Field(
         None, min_length=64, max_length=64, description="SHA256哈希后的新密码"
     )
+    email_verification_code: str | None = Field(
+        default=None, min_length=6, max_length=6, description="邮箱验证码"
+    )
     role: Literal["admin", "user"] | None = Field(default=None, description="用户角色")
     is_active: bool | None = Field(default=None, description="用户是否可登录")
 
@@ -104,6 +120,15 @@ class UserUpdateRequest(BaseModel):
     def validate_password_hash(cls, v):
         """验证密码是否为有效的SHA256哈希"""
         return normalize_sha256_hex(v)
+
+    @field_validator("email_verification_code")
+    @classmethod
+    def validate_email_verification_code(cls, v):
+        if v is None:
+            return None
+        if not v.isdigit():
+            raise ValueError("邮箱验证码必须是6位数字")
+        return v
 
 
 class LoginResponse(BaseModel):
@@ -162,6 +187,42 @@ class UserCreateRequest(BaseModel):
         """验证密码是否为有效的SHA256哈希"""
         normalized = normalize_sha256_hex(v)
         return str(normalized)
+
+
+class EmailVerificationCodeRequest(BaseModel):
+    """公开邮箱验证码发送请求"""
+
+    email: EmailStr = Field(..., description="用户邮箱")
+    purpose: Literal["register", "reset_password"] = Field(..., description="验证码用途")
+
+
+class ChangeEmailVerificationCodeRequest(BaseModel):
+    """修改邮箱验证码发送请求"""
+
+    email: EmailStr = Field(..., description="新邮箱")
+
+
+class PasswordResetRequest(BaseModel):
+    """找回密码请求"""
+
+    email: EmailStr = Field(..., description="用户邮箱")
+    password: str = Field(
+        ..., min_length=64, max_length=64, description="SHA256哈希后的新密码"
+    )
+    verification_code: str = Field(..., min_length=6, max_length=6, description="邮箱验证码")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_hash(cls, v):
+        normalized = normalize_sha256_hex(v)
+        return str(normalized)
+
+    @field_validator("verification_code")
+    @classmethod
+    def validate_verification_code(cls, v):
+        if not v.isdigit():
+            raise ValueError("邮箱验证码必须是6位数字")
+        return v
 
 
 class TotpSetupResponse(BaseModel):

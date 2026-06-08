@@ -173,11 +173,12 @@ async function loginWithTotp(
  */
 async function registerAndAutoLogin(
   email: string,
-  password: string
+  password: string,
+  verificationCode?: string
 ): Promise<LoginResponse> {
   isAuthLoading.value = true
   try {
-    await registerUser(email, password)
+    await registerUser(email, password, verificationCode)
     const resp = await loginUser(email, password)
     accessToken.value = resp.access_token
     currentUser.value = resp.user

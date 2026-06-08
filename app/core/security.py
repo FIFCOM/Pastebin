@@ -367,6 +367,18 @@ def prepare_user_keys(password: str) -> tuple[bytes, bytes, bytes]:
     return salt, encryption_key, encrypted_user_key
 
 
+def wrap_user_key_for_password(password: str, user_key: bytes) -> tuple[bytes, bytes]:
+    """
+    使用新密码重新包裹已有用户密钥。
+
+    用于已登录用户修改密码，避免重新生成 user_key 导致历史/收藏密钥不可解密。
+    """
+    salt = generate_salt()
+    master_key = derive_master_key(password, salt)
+    encrypted_user_key = encrypt_with_key(user_key, master_key)
+    return salt, encrypted_user_key
+
+
 def recover_user_key(password: str, salt: bytes, encrypted_user_key: bytes) -> bytes:
     """
     恢复用户密钥（登录时使用）

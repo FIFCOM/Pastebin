@@ -7,6 +7,7 @@ export interface UserResponse {
   role: 'admin' | 'user'
   is_active: boolean
   totp_enabled: boolean
+  email_verified_at: string | null
   created_at: string
 }
 
@@ -26,13 +27,47 @@ export async function sha256Hex(plain: string): Promise<string> {
     .join('')
 }
 
-export async function registerUser(email: string, password: string): Promise<UserResponse> {
+export async function registerUser(
+  email: string,
+  password: string,
+  verificationCode?: string
+): Promise<UserResponse> {
   const passwordHash = await sha256Hex(password)
-  const response = await authHttp.post('/users/register', {
+  const body: {
+    email: string
+    password: string
+    verification_code?: string
+  } = {
     email,
     password: passwordHash
-  })
+  }
+  const code = verificationCode?.trim()
+  if (code) body.verification_code = code
+  const response = await authHttp.post('/users/register', body)
   return response.data
+}
+
+export async function sendEmailVerificationCode(
+  email: string,
+  purpose: 'register' | 'reset_password'
+): Promise<void> {
+  await authHttp.post('/users/email-verification-codes', {
+    email: email.trim(),
+    purpose
+  })
+}
+
+export async function resetPassword(
+  email: string,
+  password: string,
+  verificationCode: string
+): Promise<void> {
+  const passwordHash = await sha256Hex(password)
+  await authHttp.post('/users/password-reset', {
+    email: email.trim(),
+    password: passwordHash,
+    verification_code: verificationCode.trim()
+  })
 }
 
 export async function loginUser(

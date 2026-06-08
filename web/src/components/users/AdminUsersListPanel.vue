@@ -252,15 +252,6 @@
           :disabled="isSavingEdit"
         ></mdui-text-field>
 
-        <mdui-text-field
-          v-model="editPassword"
-          label="重置密码（可选）"
-          placeholder="留空表示不修改"
-          type="password"
-          variant="outlined"
-          :disabled="isSavingEdit"
-        ></mdui-text-field>
-
         <mdui-select
           label="角色"
           variant="outlined"
@@ -648,7 +639,6 @@ const editDialogRef = ref<DialogElement | null>(null)
 const editingUser = ref<UserResponse | null>(null)
 const editUsername = ref('')
 const editEmail = ref('')
-const editPassword = ref('')
 const editRole = ref<'admin' | 'user'>('user')
 const editIsActive = ref(true)
 const isSavingEdit = ref(false)
@@ -666,18 +656,16 @@ const canSaveEdit = computed(() => {
 
   const hasUsernameChanged = nextUsername !== user.username
   const hasEmailChanged = nextEmail !== (user.email ?? '')
-  const hasPasswordChanged = editPassword.value.length > 0
   const hasRoleChanged = editRole.value !== user.role
   const hasStatusChanged = editIsActive.value !== user.is_active
 
-  return hasUsernameChanged || hasEmailChanged || hasPasswordChanged || hasRoleChanged || hasStatusChanged
+  return hasUsernameChanged || hasEmailChanged || hasRoleChanged || hasStatusChanged
 })
 
 function openEditDialog(user: UserResponse) {
   editingUser.value = user
   editUsername.value = user.username
   editEmail.value = user.email ?? ''
-  editPassword.value = ''
   editRole.value = user.role
   editIsActive.value = user.is_active
   if (editDialogRef.value) {
@@ -695,7 +683,6 @@ function resetEditForm() {
   editingUser.value = null
   editUsername.value = ''
   editEmail.value = ''
-  editPassword.value = ''
   editRole.value = 'user'
   editIsActive.value = true
   isSavingEdit.value = false
@@ -727,7 +714,6 @@ async function saveEdit() {
     const payload: {
       username?: string
       email?: string
-      password?: string
       role?: 'admin' | 'user'
       is_active?: boolean
     } = {}
@@ -745,7 +731,6 @@ async function saveEdit() {
       return
     }
     if (nextEmail !== (user.email ?? '')) payload.email = nextEmail
-    if (editPassword.value) payload.password = editPassword.value
     if (editRole.value !== user.role) payload.role = editRole.value
     if (editIsActive.value !== user.is_active) payload.is_active = editIsActive.value
 

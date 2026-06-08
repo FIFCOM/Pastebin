@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.services.email_settings_service import EmailSettingsService
 from app.services.runtime_settings_service import RuntimeSettingsService
 
 router = APIRouter(prefix="/api/config", tags=["配置"])
@@ -16,6 +17,7 @@ class PublicConfig(BaseModel):
     """客户端公开配置"""
     max_upload_file_size: int
     max_chunk_size: int
+    email_verification_enabled: bool = False
 
 
 @router.get("", response_model=PublicConfig)
@@ -29,4 +31,5 @@ async def get_public_config(db: Session = Depends(get_db)):
     return PublicConfig(
         max_upload_file_size=upload_settings.max_upload_file_size,
         max_chunk_size=upload_settings.max_chunk_size,
+        email_verification_enabled=EmailSettingsService.is_enabled(db),
     )

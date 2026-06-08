@@ -4,7 +4,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,11 +25,15 @@ from app.core.security import (
     str_to_bytes,
     verify_password,
     verify_totp_code,
+    wrap_user_key_for_password,
 )
 from app.core.time_utils import coerce_utc, is_expired
 from app.models.user import UsedRefreshToken, User, UserSession, UserSessionKey
+from app.models.user_favorite import UserFavorite
+from app.models.user_history import UserHistory
 from app.schemas.user import (
     LoginResponse,
+    PasswordResetRequest,
     SessionResponse,
     TotpSetupResponse,
     TotpStatusResponse,
@@ -42,11 +46,25 @@ from app.schemas.user import (
     UserResponse,
     UserUpdateRequest,
 )
+from app.services.email_settings_service import EmailSettingsService
+from app.services.email_verification_service import EmailVerificationService
 from config.config import settings
 
 
 class UserService:
     """用户服务类"""
+
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        return email.strip().lower()
+
+    @staticmethod
+    def _find_user_by_email(db: Session, email: str) -> User | None:
+        return (
+            db.query(User)
+            .filter(func.lower(User.email) == UserService._normalize_email(email))
+            .first()
+        )
 
     @staticmethod
     def _is_user_active(user: User) -> bool:
@@ -112,10 +130,25 @@ class UserService:
         Raises:
             ValueError: 当邮箱已存在时
         """
+        normalized_email = UserService._normalize_email(str(user_data.email))
+
         # 检查邮箱是否已存在
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        existing_user = UserService._find_user_by_email(db, normalized_email)
         if existing_user:
             raise ValueError("邮箱已存在")
+
+        now = datetime.now(UTC)
+        email_verification_enabled = EmailSettingsService.is_enabled(db)
+        if email_verification_enabled:
+            if not user_data.verification_code:
+                raise ValueError("请先验证邮箱")
+            EmailVerificationService.consume_code(
+                db,
+                email=normalized_email,
+                purpose="register",
+                code=user_data.verification_code,
+                user_id=None,
+            )
 
         # 生成用户名
         while True:
@@ -134,10 +167,11 @@ class UserService:
         # 创建用户
         user = User(
             username=username,
-            email=user_data.email,
+            email=normalized_email,
             password_hash=password_hash,
             salt=bytes_to_str(salt),
             encrypted_user_key=bytes_to_str(encrypted_user_key),
+            email_verified_at=now if email_verification_enabled else None,
             role="user",
             is_active=True,
         )
@@ -163,7 +197,7 @@ class UserService:
         Returns:
             认证成功的用户或None
         """
-        user = db.query(User).filter(User.email == login_data.email).first()
+        user = UserService._find_user_by_email(db, str(login_data.email))
         if not user:
             return None
 
@@ -199,7 +233,7 @@ class UserService:
         user = UserService.authenticate_user(db, login_data)
         if not user:
             existing_user = (
-                db.query(User).filter(User.email == login_data.email).first()
+                UserService._find_user_by_email(db, str(login_data.email))
             )
             if existing_user and not UserService._is_user_active(existing_user):
                 raise ValueError("账户已被禁用")
@@ -249,7 +283,7 @@ class UserService:
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> UserResponse | None:
         """根据邮箱获取用户"""
-        user = db.query(User).filter(User.email == email).first()
+        user = UserService._find_user_by_email(db, email)
         return UserResponse.model_validate(user) if user else None  # type: ignore
 
     @staticmethod
@@ -292,6 +326,9 @@ class UserService:
         ):
             raise ValueError("无权限修改角色或状态")
 
+        if actor_is_admin and not is_self and user_data.password:
+            raise ValueError("管理员不能重置用户密码")
+
         next_username: str | None = None
         if user_data.username is not None:
             next_username = user_data.username.strip()
@@ -303,18 +340,20 @@ class UserService:
         if email_was_provided:
             if user_data.email is None:
                 raise ValueError("邮箱不能为空")
-            next_email = str(user_data.email).strip()
+            next_email = UserService._normalize_email(str(user_data.email))
             if not next_email:
                 raise ValueError("邮箱不能为空")
 
         wants_email_or_password_change = (
             email_was_provided and next_email != user.email
         ) or bool(user_data.password)
+        current_password_verified = False
         if is_self and wants_email_or_password_change:
             if not user_data.current_password:
                 raise ValueError("修改邮箱或密码需要输入当前密码")
             if not verify_password(user_data.current_password, str(user.password_hash)):  # type: ignore[arg-type]
                 raise ValueError("当前密码错误")
+            current_password_verified = True
 
         if next_username is not None and next_username != user.username:
             existing_user = (
@@ -327,19 +366,48 @@ class UserService:
             user.username = next_username  # type: ignore[assignment]
 
         if email_was_provided and next_email != user.email:
-            existing_user = (
-                db.query(User)
-                .filter(and_(User.email == next_email, User.id != user_id))
-                .first()
-            )
+            existing_user = UserService._find_user_by_email(db, next_email)
             if existing_user:
-                raise ValueError("邮箱已被其他用户使用")
+                if int(existing_user.id) != user_id:  # type: ignore[arg-type]
+                    raise ValueError("邮箱已被其他用户使用")
+            email_verified = actor_is_admin
+            if is_self and EmailSettingsService.is_enabled(db):
+                if not user_data.email_verification_code:
+                    raise ValueError("请先验证新邮箱")
+                EmailVerificationService.consume_code(
+                    db,
+                    email=next_email,
+                    purpose="change_email",
+                    code=user_data.email_verification_code,
+                    user_id=user_id,
+                )
+                email_verified = True
             user.email = next_email  # type: ignore[assignment]
+            user.email_verified_at = (
+                datetime.now(UTC) if email_verified else None
+            )  # type: ignore[assignment]
 
         if user_data.password:
-            salt, _encryption_key, encrypted_user_key = prepare_user_keys(
-                user_data.password
-            )
+            if is_self and current_password_verified and user_data.current_password:
+                try:
+                    current_salt = str_to_bytes(str(user.salt))
+                    current_encrypted_user_key = str_to_bytes(
+                        str(user.encrypted_user_key)
+                    )
+                    user_key = recover_user_key(
+                        user_data.current_password,
+                        current_salt,
+                        current_encrypted_user_key,
+                    )
+                    salt, encrypted_user_key = wrap_user_key_for_password(
+                        user_data.password, user_key
+                    )
+                except Exception as e:
+                    raise ValueError(f"用户密钥重加密失败: {str(e)}") from e
+            else:
+                salt, _encryption_key, encrypted_user_key = prepare_user_keys(
+                    user_data.password
+                )
             password_hash = hash_password(user_data.password)
 
             user.password_hash = password_hash  # type: ignore[assignment]
@@ -483,8 +551,10 @@ class UserService:
                 if not db.query(User).filter(User.username == username).first():
                     break
 
+        normalized_email = UserService._normalize_email(str(user_data.email))
+
         # 检查邮箱
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        existing_user = UserService._find_user_by_email(db, normalized_email)
         if existing_user:
             raise ValueError("邮箱已存在")
 
@@ -497,10 +567,11 @@ class UserService:
         # 创建用户
         user = User(
             username=username,
-            email=user_data.email,
+            email=normalized_email,
             password_hash=password_hash,  # type: ignore
             salt=bytes_to_str(salt),  # type: ignore
             encrypted_user_key=bytes_to_str(encrypted_user_key),  # type: ignore
+            email_verified_at=datetime.now(UTC),
             role=user_data.role,
             is_active=True,
         )
@@ -509,6 +580,56 @@ class UserService:
         db.commit()
         db.refresh(user)
 
+        return UserResponse.model_validate(user)  # type: ignore
+
+    @staticmethod
+    def reset_password(
+        db: Session, reset_data: PasswordResetRequest
+    ) -> UserResponse:
+        """
+        通过邮箱验证码重置密码。
+
+        忘记密码时无法恢复旧 user_key，因此重置会生成新的用户密钥，
+        并清空依赖旧 user_key 的用户历史和收藏关联。
+        """
+        if not EmailSettingsService.is_enabled(db):
+            raise ValueError("邮箱验证码功能未启用")
+
+        normalized_email = UserService._normalize_email(str(reset_data.email))
+        user = UserService._find_user_by_email(db, normalized_email)
+        if not user:
+            raise ValueError("验证码无效或已过期")
+        if not UserService._is_user_active(user):
+            raise ValueError("账户已被禁用")
+
+        EmailVerificationService.consume_code(
+            db,
+            email=normalized_email,
+            purpose="reset_password",
+            code=reset_data.verification_code,
+            user_id=None,
+        )
+
+        salt, _encryption_key, encrypted_user_key = prepare_user_keys(
+            reset_data.password
+        )
+        user.password_hash = hash_password(reset_data.password)  # type: ignore[assignment]
+        user.salt = bytes_to_str(salt)  # type: ignore[assignment]
+        user.encrypted_user_key = bytes_to_str(encrypted_user_key)  # type: ignore[assignment]
+        user.email_verified_at = datetime.now(UTC)  # type: ignore[assignment]
+
+        db.query(UserHistory).filter(UserHistory.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(UserFavorite).filter(UserFavorite.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete(
+            synchronize_session=False
+        )
+
+        db.commit()
+        db.refresh(user)
         return UserResponse.model_validate(user)  # type: ignore
 
     @staticmethod
@@ -736,7 +857,7 @@ class UserService:
         Returns:
             认证成功的用户或None
         """
-        user = db.query(User).filter(User.email == login_data.email).first()
+        user = UserService._find_user_by_email(db, str(login_data.email))
         if not user:
             return None
 
@@ -777,9 +898,7 @@ class UserService:
         """
         user = UserService.authenticate_user_with_totp(db, login_data)
         if not user:
-            existing_user = (
-                db.query(User).filter(User.email == login_data.email).first()
-            )
+            existing_user = UserService._find_user_by_email(db, str(login_data.email))
             if existing_user and not UserService._is_user_active(existing_user):
                 raise ValueError("账户已被禁用")
             raise ValueError("邮箱、密码或TOTP代码错误")

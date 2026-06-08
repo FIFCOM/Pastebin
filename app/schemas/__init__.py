@@ -38,13 +38,20 @@ from .common import (
     MessageResponse,
     PaginationParams,
 )
+from .email_settings import (
+    EmailVerificationSettingsResponse,
+    EmailVerificationSettingsUpdateRequest,
+)
 from .runtime_settings import (
     RuntimeSettingItem,
     RuntimeSettingsResponse,
     RuntimeSettingsUpdateRequest,
 )
 from .user import (
+    ChangeEmailVerificationCodeRequest,
+    EmailVerificationCodeRequest,
     LoginResponse,
+    PasswordResetRequest,
     SessionResponse,
     UserCreateRequest,
     UserListResponse,
@@ -93,6 +100,9 @@ __all__ = [
     "SessionResponse",
     "UserListResponse",
     "UserCreateRequest",
+    "EmailVerificationCodeRequest",
+    "ChangeEmailVerificationCodeRequest",
+    "PasswordResetRequest",
     # 通用
     "MessageResponse",
     "ErrorResponse",
@@ -101,4 +111,6 @@ __all__ = [
     "RuntimeSettingItem",
     "RuntimeSettingsResponse",
     "RuntimeSettingsUpdateRequest",
+    "EmailVerificationSettingsResponse",
+    "EmailVerificationSettingsUpdateRequest",
 ]

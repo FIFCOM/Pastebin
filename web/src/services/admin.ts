@@ -108,6 +108,37 @@ export interface RuntimeSettingUpdate {
   value: number
 }
 
+export type SmtpSecurity = 'none' | 'starttls' | 'ssl'
+
+export interface EmailVerificationSettingsResponse {
+  enabled: boolean
+  smtp_host: string | null
+  smtp_port: number
+  smtp_security: SmtpSecurity
+  smtp_username: string | null
+  smtp_password_configured: boolean
+  smtp_from_email: string | null
+  smtp_from_name: string
+  code_ttl_minutes: number
+  resend_interval_seconds: number
+  max_attempts: number
+}
+
+export interface EmailVerificationSettingsUpdateRequest {
+  enabled: boolean
+  smtp_host: string | null
+  smtp_port: number
+  smtp_security: SmtpSecurity
+  smtp_username: string | null
+  smtp_password?: string | null
+  clear_smtp_password: boolean
+  smtp_from_email: string | null
+  smtp_from_name: string
+  code_ttl_minutes: number
+  resend_interval_seconds: number
+  max_attempts: number
+}
+
 export async function getAdminOverview(): Promise<AdminOverviewResponse> {
   const response = await apiHttp.get<AdminOverviewResponse>('/users/admin/overview')
   return response.data
@@ -158,5 +189,17 @@ export async function getAdminSettings(): Promise<RuntimeSettingsResponse> {
 
 export async function updateAdminSettings(settings: RuntimeSettingUpdate[]): Promise<RuntimeSettingsResponse> {
   const response = await apiHttp.put<RuntimeSettingsResponse>('/users/admin/settings', { settings })
+  return response.data
+}
+
+export async function getAdminEmailSettings(): Promise<EmailVerificationSettingsResponse> {
+  const response = await apiHttp.get<EmailVerificationSettingsResponse>('/users/admin/email-settings')
+  return response.data
+}
+
+export async function updateAdminEmailSettings(
+  settings: EmailVerificationSettingsUpdateRequest
+): Promise<EmailVerificationSettingsResponse> {
+  const response = await apiHttp.put<EmailVerificationSettingsResponse>('/users/admin/email-settings', settings)
   return response.data
 }

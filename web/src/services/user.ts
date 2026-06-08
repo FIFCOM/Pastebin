@@ -33,6 +33,7 @@ export interface UserUpdateRequest {
   email?: string
   password?: string
   current_password?: string
+  email_verification_code?: string
   role?: 'admin' | 'user'
   is_active?: boolean
 }
@@ -82,6 +83,7 @@ export async function updateUser(userId: number, update: UserUpdateRequest): Pro
     email?: string
     password?: string
     current_password?: string
+    email_verification_code?: string
     role?: 'admin' | 'user'
     is_active?: boolean
   } = {}
@@ -101,6 +103,11 @@ export async function updateUser(userId: number, update: UserUpdateRequest): Pro
 
   if (update.current_password) {
     body.current_password = await sha256Hex(update.current_password)
+  }
+
+  const emailVerificationCode = update.email_verification_code?.trim()
+  if (emailVerificationCode) {
+    body.email_verification_code = emailVerificationCode
   }
 
   if (update.role) {
@@ -149,6 +156,12 @@ export async function revokeOtherSessions(userId: number): Promise<MessageRespon
 export async function cleanupExpiredSessions(): Promise<MessageResponse> {
   const response = await apiHttp.post<MessageResponse>('/users/cleanup-sessions')
   return response.data
+}
+
+export async function sendChangeEmailVerificationCode(email: string): Promise<void> {
+  await apiHttp.post('/users/me/email-verification-code', {
+    email: email.trim()
+  })
 }
 
 export interface TotpStatusResponse {

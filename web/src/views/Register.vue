@@ -16,6 +16,28 @@
             :disabled="isSubmitting"
           ></mdui-text-field>
 
+          <div v-if="emailVerificationEnabled" class="verification-row">
+            <mdui-text-field
+              v-model="verificationCode"
+              label="邮箱验证码"
+              placeholder="6 位数字"
+              type="text"
+              variant="outlined"
+              maxlength="6"
+              :disabled="isSubmitting"
+            ></mdui-text-field>
+            <mdui-button
+              class="verification-button"
+              type="button"
+              variant="tonal"
+              :disabled="!canSendCode || isSendingCode || resendSeconds > 0"
+              :loading="isSendingCode"
+              @click="sendRegisterCode"
+            >
+              {{ resendSeconds > 0 ? `${resendSeconds}s` : '发送验证码' }}
+            </mdui-button>
+          </div>
+
           <mdui-text-field
             v-model="password"
             label="密码"
@@ -69,6 +91,8 @@ import 'mdui/components/card.js'
 
 import { useAuth } from '../composables/useAuth'
 import { registerHeaderActions, unregisterHeaderActions } from '../composables/useHeaderActions'
+import { sendEmailVerificationCode } from '../services/auth'
+import { getPublicConfig } from '../services/config'
 
 const route = useRoute()
 const router = useRouter()
@@ -78,16 +102,65 @@ const HEADER_OWNER_ID = 'register-page'
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const verificationCode = ref('')
+const emailVerificationEnabled = ref(false)
 const isSubmitting = ref(false)
+const isSendingCode = ref(false)
 const errorMessage = ref('')
+const resendSeconds = ref(0)
+let resendTimer: number | undefined
 
 const canSubmit = computed(() => {
   return (
     email.value.trim().length > 0 &&
     password.value.length > 0 &&
-    confirmPassword.value.length > 0
+    confirmPassword.value.length > 0 &&
+    (!emailVerificationEnabled.value || /^\d{6}$/.test(verificationCode.value.trim()))
   )
 })
+
+const canSendCode = computed(() => {
+  return email.value.trim().length > 0 && !isSubmitting.value
+})
+
+function startResendCountdown() {
+  resendSeconds.value = 60
+  if (resendTimer !== undefined) window.clearInterval(resendTimer)
+  resendTimer = window.setInterval(() => {
+    resendSeconds.value = Math.max(0, resendSeconds.value - 1)
+    if (resendSeconds.value === 0 && resendTimer !== undefined) {
+      window.clearInterval(resendTimer)
+      resendTimer = undefined
+    }
+  }, 1000)
+}
+
+async function loadEmailVerificationConfig() {
+  try {
+    const config = await getPublicConfig()
+    emailVerificationEnabled.value = config.email_verification_enabled
+  } catch {
+    emailVerificationEnabled.value = false
+  }
+}
+
+async function sendRegisterCode() {
+  if (!canSendCode.value || isSendingCode.value || resendSeconds.value > 0) return
+
+  isSendingCode.value = true
+  errorMessage.value = ''
+  try {
+    await sendEmailVerificationCode(email.value.trim(), 'register')
+    startResendCountdown()
+    snackbar({ message: '验证码已发送，请检查邮箱', closeable: true })
+  } catch (e: any) {
+    const msg = e?.response?.data?.detail || (e instanceof Error ? e.message : '发送验证码失败')
+    errorMessage.value = msg
+    snackbar({ message: msg, closeable: true })
+  } finally {
+    isSendingCode.value = false
+  }
+}
 
 function validateForm(): boolean {
   if (!email.value.trim()) {
@@ -106,6 +179,10 @@ function validateForm(): boolean {
     // 后端只要求 SHA256 长度，这里做一个最基本的前端长度提示
     errorMessage.value = '建议密码长度不少于 6 位'
     // 仍然允许提交，只是提示
+  }
+  if (emailVerificationEnabled.value && !/^\d{6}$/.test(verificationCode.value.trim())) {
+    errorMessage.value = '请输入6位邮箱验证码'
+    return false
   }
   return true
 }
@@ -129,7 +206,11 @@ async function handleSubmit() {
   isSubmitting.value = true
 
   try {
-    await registerAndAutoLogin(email.value.trim(), password.value)
+    await registerAndAutoLogin(
+      email.value.trim(),
+      password.value,
+      emailVerificationEnabled.value ? verificationCode.value.trim() : undefined
+    )
     snackbar({ message: '注册并登录成功' })
 
     const redirect = (route.query.redirect as string | undefined) || '/'
@@ -157,6 +238,7 @@ function goLogin() {
 }
 
 onMounted(() => {
+  void loadEmailVerificationConfig()
   registerHeaderActions(HEADER_OWNER_ID, [
     {
       id: 'register-new-paste',
@@ -170,6 +252,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (resendTimer !== undefined) window.clearInterval(resendTimer)
   unregisterHeaderActions(HEADER_OWNER_ID)
 })
 </script>
@@ -222,6 +305,18 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.verification-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.verification-button {
+  min-width: 112px;
+  margin-top: 4px;
+}
+
 .error-message {
   font-size: 13px;
   color: rgb(var(--mdui-color-error));
@@ -240,5 +335,11 @@ onBeforeUnmount(() => {
 
 .auth-footer a:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .verification-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

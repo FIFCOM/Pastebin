@@ -4,6 +4,7 @@
 
 import app.models  # noqa: F401
 from app.core.database import Base, SessionLocal, engine
+from app.services.email_settings_service import EmailSettingsService
 from app.services.runtime_settings_service import RuntimeSettingsService
 from config.config import settings
 
@@ -15,6 +16,7 @@ def create_tables():
     db = SessionLocal()
     try:
         RuntimeSettingsService.ensure_defaults(db)
+        EmailSettingsService.ensure_default(db)
     finally:
         db.close()
     print("数据库表创建完成")

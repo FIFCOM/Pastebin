@@ -155,6 +155,27 @@
           :disabled="isSavingEmail"
         ></mdui-text-field>
 
+        <div v-if="emailVerificationEnabled" class="verification-row">
+          <mdui-text-field
+            v-model="emailVerificationCode"
+            label="邮箱验证码"
+            placeholder="6 位数字"
+            type="text"
+            variant="outlined"
+            maxlength="6"
+            :disabled="isSavingEmail"
+          ></mdui-text-field>
+          <mdui-button
+            class="verification-button"
+            variant="tonal"
+            :disabled="!canSendEmailCode || isSendingEmailCode || emailResendSeconds > 0"
+            :loading="isSendingEmailCode"
+            @click="sendEmailCode"
+          >
+            {{ emailResendSeconds > 0 ? `${emailResendSeconds}s` : '发送验证码' }}
+          </mdui-button>
+        </div>
+
         <div v-if="emailErrorMessage" class="error-message">{{ emailErrorMessage }}</div>
       </div>
 
@@ -174,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
 import 'mdui/components/button-icon.js'
@@ -182,7 +203,8 @@ import 'mdui/components/dialog.js'
 import 'mdui/components/text-field.js'
 
 import { useAuth } from '../../composables/useAuth'
-import { updateUser } from '../../services/user'
+import { getPublicConfig } from '../../services/config'
+import { sendChangeEmailVerificationCode, updateUser } from '../../services/user'
 import { extractErrorMessage } from '../../utils/error'
 import { formatDateTime } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
@@ -206,8 +228,13 @@ const isSavingUsername = ref(false)
 const emailDialogRef = ref<DialogElement | null>(null)
 const emailDraft = ref('')
 const emailCurrentPassword = ref('')
+const emailVerificationCode = ref('')
+const emailVerificationEnabled = ref(false)
 const emailErrorMessage = ref('')
 const isSavingEmail = ref(false)
+const isSendingEmailCode = ref(false)
+const emailResendSeconds = ref(0)
+let emailResendTimer: number | undefined
 
 watch(
   currentUser,
@@ -215,6 +242,7 @@ watch(
     usernameDraft.value = user?.username ?? ''
     emailDraft.value = user?.email ?? ''
     emailCurrentPassword.value = ''
+    emailVerificationCode.value = ''
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
@@ -251,9 +279,54 @@ const canSaveEmail = computed(() => {
     currentUser.value &&
       email &&
       email !== (currentUser.value.email ?? '') &&
-      emailCurrentPassword.value.trim()
+      emailCurrentPassword.value.trim() &&
+      (!emailVerificationEnabled.value || /^\d{6}$/.test(emailVerificationCode.value.trim()))
   )
 })
+
+const canSendEmailCode = computed(() => {
+  const email = emailDraft.value.trim()
+  return Boolean(currentUser.value && email && email !== (currentUser.value.email ?? '') && !isSavingEmail.value)
+})
+
+async function loadEmailVerificationConfig() {
+  try {
+    const config = await getPublicConfig()
+    emailVerificationEnabled.value = config.email_verification_enabled
+  } catch {
+    emailVerificationEnabled.value = false
+  }
+}
+
+function startEmailResendCountdown() {
+  emailResendSeconds.value = 60
+  if (emailResendTimer !== undefined) window.clearInterval(emailResendTimer)
+  emailResendTimer = window.setInterval(() => {
+    emailResendSeconds.value = Math.max(0, emailResendSeconds.value - 1)
+    if (emailResendSeconds.value === 0 && emailResendTimer !== undefined) {
+      window.clearInterval(emailResendTimer)
+      emailResendTimer = undefined
+    }
+  }, 1000)
+}
+
+async function sendEmailCode() {
+  if (!canSendEmailCode.value || isSendingEmailCode.value || emailResendSeconds.value > 0) return
+
+  isSendingEmailCode.value = true
+  emailErrorMessage.value = ''
+  try {
+    await sendChangeEmailVerificationCode(emailDraft.value.trim())
+    startEmailResendCountdown()
+    snackbar({ message: '验证码已发送，请检查新邮箱', closeable: true })
+  } catch (error: unknown) {
+    const msg = extractErrorMessage(error, '发送验证码失败')
+    emailErrorMessage.value = msg
+    snackbar({ message: msg, closeable: true })
+  } finally {
+    isSendingEmailCode.value = false
+  }
+}
 
 function openUsernameDialog() {
   if (!currentUser.value) return
@@ -280,6 +353,7 @@ function openEmailDialog() {
   if (!currentUser.value) return
   emailDraft.value = currentUser.value.email ?? ''
   emailCurrentPassword.value = ''
+  emailVerificationCode.value = ''
   emailErrorMessage.value = ''
   if (emailDialogRef.value) {
     emailDialogRef.value.open = true
@@ -297,6 +371,7 @@ function resetEmailDialog() {
   isSavingEmail.value = false
   emailDraft.value = currentUser.value?.email ?? ''
   emailCurrentPassword.value = ''
+  emailVerificationCode.value = ''
 }
 
 async function saveUsername() {
@@ -334,7 +409,8 @@ async function saveEmail() {
   try {
     const updated = await updateUser(currentUser.value.id, {
       email: nextEmail,
-      current_password: emailCurrentPassword.value.trim()
+      current_password: emailCurrentPassword.value.trim(),
+      email_verification_code: emailVerificationEnabled.value ? emailVerificationCode.value.trim() : undefined
     })
     currentUser.value = updated
     snackbar({ message: '邮箱已更新' })
@@ -367,6 +443,14 @@ async function savePassword() {
     isSavingPassword.value = false
   }
 }
+
+onMounted(() => {
+  void loadEmailVerificationConfig()
+})
+
+onBeforeUnmount(() => {
+  if (emailResendTimer !== undefined) window.clearInterval(emailResendTimer)
+})
 </script>
 
 <style scoped>
@@ -457,6 +541,18 @@ async function savePassword() {
   gap: 12px;
 }
 
+.verification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.verification-button {
+  min-width: 112px;
+  margin-top: 4px;
+}
+
 .form-footer,
 .dialog-actions {
   display: flex;
@@ -479,6 +575,7 @@ async function savePassword() {
 @media (max-width: 960px) {
   .profile-hero,
   .password-grid,
+  .verification-row,
   .form-footer {
     grid-template-columns: 1fr;
     flex-direction: column;

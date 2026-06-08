@@ -16,6 +16,10 @@ from app.schemas.admin import (
 )
 from app.schemas.cleanup import CleanupRequest, CleanupResponse
 from app.schemas.common import MessageResponse
+from app.schemas.email_settings import (
+    EmailVerificationSettingsResponse,
+    EmailVerificationSettingsUpdateRequest,
+)
 from app.schemas.runtime_settings import (
     RuntimeSettingsResponse,
     RuntimeSettingsUpdateRequest,
@@ -23,6 +27,7 @@ from app.schemas.runtime_settings import (
 from app.schemas.user import UserResponse
 from app.services.admin_service import SUPPORTED_CLEANUP_TASKS, AdminService
 from app.services.cleanup_service import CleanupService
+from app.services.email_settings_service import EmailSettingsService
 from app.services.runtime_settings_service import RuntimeSettingsService
 
 router = APIRouter(prefix="/api/users/admin", tags=["管理员后台"])
@@ -139,6 +144,38 @@ async def update_admin_settings(
             detail=str(e),
         ) from None
     return RuntimeSettingsResponse(settings=settings)
+
+
+@router.get("/email-settings", response_model=EmailVerificationSettingsResponse)
+async def get_admin_email_settings(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+) -> EmailVerificationSettingsResponse:
+    """获取邮箱验证码与 SMTP 配置。"""
+    _require_admin(current_user)
+    return EmailSettingsService.get_settings_response(db)
+
+
+@router.put("/email-settings", response_model=EmailVerificationSettingsResponse)
+async def update_admin_email_settings(
+    payload: EmailVerificationSettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_by_access_token),
+) -> EmailVerificationSettingsResponse:
+    """更新邮箱验证码与 SMTP 配置。"""
+    _require_admin(current_user)
+    try:
+        return EmailSettingsService.update_settings(
+            db,
+            payload,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
 
 
 @router.post("/cleanup", response_model=CleanupResponse)
