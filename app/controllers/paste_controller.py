@@ -20,7 +20,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.core.time_utils import is_expired
 from app.schemas.common import MessageResponse
 from app.schemas.paste import (
@@ -954,7 +954,7 @@ async def get_file_meta(
 
 
 @router.get("/{paste_id}/files/{file_id}")
-async def get_file(
+def get_file(
     paste_id: str,
     file_id: str,
     access_key: str | None = Query(None, description="访问密钥（可选）"),
@@ -963,7 +963,6 @@ async def get_file(
     range_header: str | None = Header(
         None, alias="Range", description="HTTP Range头（bytes=...）"
     ),
-    db: Session = Depends(get_db),
 ):
     """
     获取文件
@@ -973,6 +972,10 @@ async def get_file(
 
     返回文件流，Content-Disposition: attachment; filename="filename"
     """
+    # 这个接口返回 StreamingResponse，响应体可能在路由函数返回后继续传输很久。
+    # 这里手动管理 session，确保完成权限校验和文件元数据读取后尽快释放数据库连接。
+    # 返回流之前需要把后续迭代器会用到的 ORM 字段转换成普通值，避免关闭 session 后再触发懒加载。
+    db = SessionLocal()
     try:
         from app.models.paste import File, Paste
         from config.config import settings
@@ -1254,6 +1257,8 @@ async def get_file(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"文件读取失败: {str(e)}",
         ) from None
+    finally:
+        db.close()
 
 
 @router.put("/{paste_id}", response_model=MessageResponse)

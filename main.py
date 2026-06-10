@@ -33,6 +33,7 @@ from config.config import settings, validate_config
 PROJECT_ROOT = Path(__file__).resolve().parent
 FRONTEND_DIST_DIR = PROJECT_ROOT / "web" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
+UVICORN_LOG_CONFIG_FILE = PROJECT_ROOT / "config" / "uvicorn_logging.json"
 
 
 @asynccontextmanager
@@ -169,6 +170,7 @@ def run_server():
         reload=settings.debug,
         reload_includes=["*.py", ".env"],
         log_level="debug" if settings.debug else "info",
+        log_config=str(UVICORN_LOG_CONFIG_FILE),
     )
 
 
