@@ -3,24 +3,21 @@
     <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
 
     <div v-else class="user-panel-stack">
-      <div class="user-panel-split">
-        <section class="user-panel-section user-panel-section--soft">
-          <div class="user-panel-section-header">
-            <div class="user-panel-section-heading">
-              <div class="user-panel-section-eyebrow">状态</div>
-              <div class="user-panel-section-title">两步验证状态</div>
-              <div class="user-panel-section-copy">
-                {{ status?.enabled ? '当前账号登录时需要输入验证码。' : '启用后登录时需要额外输入验证码。' }}
-              </div>
+      <section class="user-panel-section user-panel-section--soft totp-overview">
+        <div class="totp-status-summary" :data-enabled="status?.enabled ? 'true' : 'false'">
+          <span class="totp-status-icon">
+            <mdui-icon :name="status?.enabled ? 'verified_user' : 'security'"></mdui-icon>
+          </span>
+          <div class="totp-status-text">
+            <div class="totp-status-label">两步验证</div>
+            <div class="totp-status-value">{{ status?.enabled ? '已启用' : '未启用' }}</div>
+            <div class="totp-status-copy">
+              {{ status?.enabled ? '登录需验证码' : '登录仅需密码' }}
             </div>
-
-            <mdui-chip :variant="status?.enabled ? 'filled' : 'outlined'">
-              {{ status?.enabled ? '已启用' : '未启用' }}
-            </mdui-chip>
           </div>
-        </section>
+        </div>
 
-        <section class="user-panel-section user-panel-section--soft">
+        <div class="totp-overview-main">
           <div class="user-panel-section-header">
             <div class="user-panel-section-heading">
               <div class="user-panel-section-eyebrow">设置</div>
@@ -30,42 +27,45 @@
                 <a class="setup-link" href="https://support.google.com/accounts/answer/1066447" target="_blank" rel="noreferrer">Google Authenticator</a>
                 、
                 <a class="setup-link" href="https://support.1password.com/one-time-passwords/" target="_blank" rel="noreferrer">1Password</a>
-                等软件扫描下方二维码；若无法扫描，请手动复制下方设置密钥并添加到验证器中。
+                等软件扫描二维码绑定；无法扫描时可手动复制密钥。
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="totp-action-row">
+        <div class="totp-action-row">
+          <mdui-button
+            v-if="!status?.enabled"
+            variant="filled"
+            :disabled="isSettingUp"
+            :loading="isSettingUp"
+            @click="setup"
+          >
+            <mdui-icon slot="icon" name="qr_code"></mdui-icon>
+            启用
+          </mdui-button>
+          <template v-else>
             <mdui-button
-              v-if="!status?.enabled"
-              variant="filled"
+              variant="tonal"
               :disabled="isSettingUp"
               :loading="isSettingUp"
               @click="setup"
             >
-              启用
+              <mdui-icon slot="icon" name="autorenew"></mdui-icon>
+              重新生成
             </mdui-button>
-            <template v-else>
-              <mdui-button
-                variant="tonal"
-                :disabled="isSettingUp"
-                :loading="isSettingUp"
-                @click="setup"
-              >
-                重新生成
-              </mdui-button>
-              <mdui-button
-                variant="text"
-                :disabled="isDisabling"
-                :loading="isDisabling"
-                @click="disable"
-              >
-                禁用
-              </mdui-button>
-            </template>
-          </div>
-        </section>
-      </div>
+            <mdui-button
+              variant="text"
+              :disabled="isDisabling"
+              :loading="isDisabling"
+              @click="disable"
+            >
+              <mdui-icon slot="icon" name="block"></mdui-icon>
+              禁用
+            </mdui-button>
+          </template>
+        </div>
+      </section>
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
@@ -124,7 +124,7 @@ import { computed, onMounted, ref } from 'vue'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/chip.js'
+import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/text-field.js'
 
@@ -247,10 +247,72 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.totp-overview {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 18px 24px;
+}
+
+.totp-status-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 178px;
+  padding-right: 24px;
+  border-right: 1px solid rgb(var(--mdui-color-outline-variant) / 0.7);
+}
+
+.totp-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  color: rgb(var(--mdui-color-on-primary-container));
+  background: rgb(var(--mdui-color-primary-container));
+}
+
+.totp-status-summary[data-enabled='false'] .totp-status-icon {
+  color: rgb(var(--mdui-color-on-surface-variant));
+  background: rgb(var(--mdui-color-surface-container-high));
+}
+
+.totp-status-text {
+  min-width: 0;
+}
+
+.totp-status-label {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.totp-status-value {
+  margin-top: 3px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.totp-status-copy {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.totp-overview-main {
+  min-width: 0;
+}
+
 .totp-action-row {
-  margin-top: 16px;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -316,6 +378,22 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .totp-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .totp-status-summary {
+    min-width: 0;
+    padding-right: 0;
+    padding-bottom: 14px;
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--mdui-color-outline-variant) / 0.7);
+  }
+
+  .totp-action-row {
+    justify-content: flex-start;
+  }
+
   .setup-grid {
     grid-template-columns: 1fr;
   }

@@ -1,6 +1,11 @@
 {
   "version": 1,
   "disable_existing_loggers": false,
+  "filters": {
+    "exclude_health_check_access": {
+      "()": "app.core.logging_filters.ExcludeHealthCheckAccessFilter"
+    }
+  },
   "formatters": {
     "default": {
       "()": "uvicorn.logging.DefaultFormatter",
@@ -24,6 +29,9 @@
     "access": {
       "formatter": "access",
       "class": "logging.StreamHandler",
+      "filters": [
+        "exclude_health_check_access"
+      ],
       "stream": "ext://sys.stdout"
     }
   },

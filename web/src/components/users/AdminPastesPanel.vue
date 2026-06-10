@@ -130,10 +130,10 @@
               <div class="user-panel-meta">
                 <span class="user-panel-meta-item">读取 {{ viewCountText(paste) }}</span>
                 <span class="user-panel-meta-item">文件 {{ paste.file_count }} 个 / {{ humanSize(paste.file_total_size) }}</span>
-                <span class="user-panel-meta-item">创建 {{ formatDateTime(paste.created_at) }}</span>
-                <span class="user-panel-meta-item">更新 {{ formatDateTime(paste.updated_at) }}</span>
-                <span class="user-panel-meta-item">发布 {{ formatDateTime(paste.published_at) }}</span>
-                <span class="user-panel-meta-item">过期 {{ formatDateTime(paste.expire_at, '永不过期') }}</span>
+                <span class="user-panel-meta-item">创建于 {{ formatDateTime(paste.created_at) }}</span>
+                <span class="user-panel-meta-item">更新于 {{ formatDateTime(paste.updated_at) }}</span>
+                <span class="user-panel-meta-item">发布于 {{ formatDateTime(paste.published_at) }}</span>
+                <span class="user-panel-meta-item">{{ expireText(paste.expire_at) }}</span>
               </div>
             </div>
 
@@ -486,6 +486,10 @@ function encryptionLabel(mode: AdminPasteEncryptionMode): string {
 
 function viewCountText(paste: AdminPasteListItem): string {
   return paste.max_views === -1 ? String(paste.view_count) : `${paste.view_count} / ${paste.max_views}`
+}
+
+function expireText(expireAt: string | null): string {
+  return expireAt ? `将于 ${formatDateTime(expireAt)} 过期` : '永不过期'
 }
 
 async function copyPasteId(pasteId: string) {
