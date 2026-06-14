@@ -95,27 +95,20 @@
           <div class="join-body">
             <h3 id="join-room-title">输入房间码加入房间</h3>
 
-            <div class="pin-inputs" @paste="handleJoinPaste">
-              <label
-                v-for="(_, index) in PIN_LENGTH"
-                :key="index"
-                class="pin-slot"
-                :data-filled="joinPinDigits[index] ? 'true' : 'false'"
-              >
-                <span class="sr-only">房间码第 {{ index + 1 }} 位</span>
-                <input
-                  :ref="(el) => handleJoinInputRef(el, index)"
-                  :value="joinPinDigits[index]"
-                  inputmode="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  maxlength="1"
-                  aria-label="房间码输入框"
-                  @input="handleJoinInput(index, $event)"
-                  @keydown="handleJoinKeydown(index, $event)"
-                />
-              </label>
-            </div>
+            <CodeSlotsInput
+              ref="joinPinInputRef"
+              v-model="joinPin"
+              class="pin-inputs"
+              :length="PIN_LENGTH"
+              label-prefix="房间码"
+              aria-label="房间码输入框"
+              inputmode="text"
+              autocomplete="off"
+              :spellcheck="false"
+              :normalizer="normalizePin"
+              :clear-previous-on-backspace="false"
+              @update:model-value="joinError = ''"
+            />
 
             <p
               class="join-hint"
@@ -153,11 +146,13 @@ import 'mdui/components/dialog.js'
 import 'mdui/components/icon.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import QrCode from '../common/QrCode.vue'
+import CodeSlotsInput from '../common/CodeSlotsInput.vue'
 import { useCollabDialogState } from '../../composables/useCollabDialogState'
 import { useRoomSession, type ActiveRoomSession } from '../../composables/useRoomSession'
 import { getRoomInfoByPin, type RoomInfoResponse } from '../../services/rooms'
 
 type DialogElement = HTMLElement & { open: boolean }
+type CodeSlotsInputExpose = InstanceType<typeof CodeSlotsInput>
 
 const PIN_LENGTH = 6
 const PIN_ALLOWED_CHARS = new Set('ABCDEFGHJKMNPQRSTUVWXYZ0123456789'.split(''))
@@ -168,8 +163,8 @@ const PIN_CHAR_REPLACEMENTS: Record<string, string> = {
 }
 
 const dialogRef = ref<DialogElement | null>(null)
-const joinPinDigits = ref<string[]>(Array.from({ length: PIN_LENGTH }, () => ''))
-const joinInputRefs = ref<Array<HTMLInputElement | null>>(Array.from({ length: PIN_LENGTH }, () => null))
+const joinPinValue = ref('')
+const joinPinInputRef = ref<CodeSlotsInputExpose | null>(null)
 const isCreatingRoom = ref(false)
 const isLeaving = ref(false)
 const isJoiningManual = ref(false)
@@ -203,7 +198,12 @@ const {
   clearActiveRoom
 } = useRoomSession()
 
-const joinPin = computed(() => joinPinDigits.value.join(''))
+const joinPin = computed({
+  get: () => joinPinValue.value,
+  set: (value: string) => {
+    joinPinValue.value = normalizePin(value)
+  }
+})
 const isInviteMode = computed(() => Boolean(pendingInvitePin.value))
 const canJoin = computed(() => /^[A-Z0-9]{6}$/.test(joinPin.value) && !isJoiningManual.value)
 const displayedRoom = computed(() => activeRoom.value ?? (isClosingAfterLeave.value ? closingRoomSnapshot.value : null))
@@ -235,36 +235,13 @@ function formatJoinError(error: unknown): string {
   return '加入房间失败，请稍后重试'
 }
 
-function handleJoinInputRef(element: Element | { $el?: Element | null } | null, index: number): void {
-  if (element && '$el' in element) {
-    const target = element.$el
-    joinInputRefs.value[index] = target instanceof HTMLInputElement ? target : null
-    return
-  }
-  joinInputRefs.value[index] = element instanceof HTMLInputElement ? element : null
-}
-
 function focusJoinInput(index: number): void {
-  const input = joinInputRefs.value[index]
-  if (!input) return
-  input.focus()
-  input.select()
+  joinPinInputRef.value?.focus(index)
 }
 
 function resetJoinPin(): void {
-  joinPinDigits.value = Array.from({ length: PIN_LENGTH }, () => '')
+  joinPinValue.value = ''
   joinError.value = ''
-}
-
-function applyPin(pin: string, focusLastFilled: boolean = true): void {
-  const normalized = normalizePin(pin)
-  const nextDigits = Array.from({ length: PIN_LENGTH }, (_, index) => normalized[index] || '')
-  joinPinDigits.value = nextDigits
-
-  const nextIndex = Math.min(normalized.length, PIN_LENGTH - 1)
-  if (focusLastFilled) {
-    void nextTick(() => focusJoinInput(nextIndex))
-  }
 }
 
 function syncQrCodeSize(matchesCompact: boolean): void {
@@ -433,56 +410,6 @@ async function handleLeaveRoom(): Promise<void> {
   } finally {
     isLeaving.value = false
   }
-}
-
-function handleJoinInput(index: number, event: Event): void {
-  joinError.value = ''
-  const target = event.target as HTMLInputElement | null
-  const normalized = normalizePin(target?.value || '')
-
-  if (!normalized) {
-    joinPinDigits.value = joinPinDigits.value.map((digit, digitIndex) => (digitIndex === index ? '' : digit))
-    return
-  }
-
-  if (normalized.length > 1) {
-    const prefix = joinPinDigits.value.slice(0, index).join('')
-    applyPin(`${prefix}${normalized}`)
-    return
-  }
-
-  joinPinDigits.value = joinPinDigits.value.map((digit, digitIndex) =>
-    digitIndex === index ? normalized : digit
-  )
-
-  if (index < PIN_LENGTH - 1) {
-    void nextTick(() => focusJoinInput(index + 1))
-  }
-}
-
-function handleJoinKeydown(index: number, event: KeyboardEvent): void {
-  if (event.key === 'Backspace' && !joinPinDigits.value[index] && index > 0) {
-    void nextTick(() => focusJoinInput(index - 1))
-    return
-  }
-
-  if (event.key === 'ArrowLeft' && index > 0) {
-    event.preventDefault()
-    focusJoinInput(index - 1)
-    return
-  }
-
-  if (event.key === 'ArrowRight' && index < PIN_LENGTH - 1) {
-    event.preventDefault()
-    focusJoinInput(index + 1)
-  }
-}
-
-function handleJoinPaste(event: ClipboardEvent): void {
-  const pasted = normalizePin(event.clipboardData?.getData('text') || '')
-  if (!pasted) return
-  event.preventDefault()
-  applyPin(pasted)
 }
 
 function handleCloseDialog(): void {
@@ -791,48 +718,7 @@ onBeforeUnmount(() => {
 }
 
 .pin-inputs {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.pin-slot {
-  display: grid;
-  place-items: center;
-  width: 50px;
-  height: 54px;
-  border-radius: 15px;
-  background: rgb(var(--mdui-color-surface-container-high));
-  box-shadow: inset 0 0 0 1px rgb(var(--mdui-color-outline-variant) / 0.9);
-  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
-}
-
-.pin-slot[data-filled='true'] {
-  background: rgb(var(--mdui-color-primary-container) / 0.5);
-  box-shadow: inset 0 0 0 1px rgb(var(--mdui-color-primary) / 0.24);
-}
-
-.pin-slot:focus-within {
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 0 0 2px rgb(var(--mdui-color-primary)),
-    0 0 0 1px rgb(var(--mdui-color-primary) / 0.16);
-  background: rgb(var(--mdui-color-primary-container));
-}
-
-.pin-slot input {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: rgb(var(--mdui-color-on-surface));
-  font-size: 1.45rem;
-  font-weight: 600;
-  text-align: center;
-  text-transform: uppercase;
-  outline: none;
+  max-width: 100%;
 }
 
 .join-hint {
@@ -854,18 +740,6 @@ onBeforeUnmount(() => {
 
 .dialog-actions mdui-button {
   width: 100%;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 @media (max-width: 640px) {
@@ -931,20 +805,6 @@ onBeforeUnmount(() => {
     font-size: 1.8rem;
     letter-spacing: 0.12em;
     text-indent: 0.12em;
-  }
-
-  .pin-inputs {
-    gap: 5px;
-  }
-
-  .pin-slot {
-    width: 39px;
-    height: 43px;
-    border-radius: 12px;
-  }
-
-  .pin-slot input {
-    font-size: 1.08rem;
   }
 
   .dialog-actions {

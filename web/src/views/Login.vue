@@ -1,7 +1,53 @@
 <template>
   <div class="auth-page">
     <div class="auth-card-wrapper">
-      <mdui-card class="auth-card">
+      <mdui-card v-if="!isResetMode && requireTotp" class="auth-card totp-card">
+        <h1 class="auth-title">两步验证</h1>
+        <p class="auth-subtitle">输入身份验证器中的 6 位验证码。</p>
+
+        <form class="auth-form totp-form" @submit.prevent="handleSubmit">
+          <CodeSlotsInput
+            ref="totpInputRef"
+            v-model="totpCode"
+            class="totp-inputs"
+            :length="TOTP_LENGTH"
+            size="compact"
+            label-prefix="验证码"
+            aria-label="两步验证码输入框"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            pattern="[0-9]*"
+            paste-mode="replace"
+            :disabled="isSubmitting"
+            :normalizer="normalizeTotpCode"
+            @complete="handleTotpComplete"
+            @enter="handleSubmit"
+          />
+
+          <div v-if="errorMessage" class="error-message">
+            {{ errorMessage }}
+          </div>
+
+          <mdui-button
+            class="submit-button verifying-button"
+            type="submit"
+            variant="filled"
+            :disabled="!canSubmit || isSubmitting"
+          >
+            <mdui-circular-progress
+              v-if="isSubmitting"
+              class="button-spinner"
+            ></mdui-circular-progress>
+            <span>{{ isSubmitting ? '正在验证' : '验证并登录' }}</span>
+          </mdui-button>
+        </form>
+
+        <div class="auth-footer">
+          <a href="" @click.prevent="clearTotpChallenge">返回登录</a>
+        </div>
+      </mdui-card>
+
+      <mdui-card v-else class="auth-card">
         <h1 class="auth-title">{{ isResetMode ? '重置密码' : '登录' }}</h1>
         <p class="auth-subtitle">{{ isResetMode ? '通过邮箱验证码设置新密码' : '使用邮箱和密码登录 Material Bin' }}</p>
 
@@ -26,18 +72,6 @@
             @keydown.enter="handleSubmit"
           ></mdui-text-field>
 
-          <mdui-text-field
-            v-if="requireTotp"
-            v-model="totpCode"
-            label="验证码"
-            placeholder="6 位数字"
-            type="text"
-            variant="outlined"
-            maxlength="6"
-            :disabled="isSubmitting"
-            @keydown.enter="handleSubmit"
-          ></mdui-text-field>
-
           <div v-if="errorMessage" class="error-message">
             {{ errorMessage }}
           </div>
@@ -49,7 +83,7 @@
             :disabled="!canSubmit || isSubmitting"
             :loading="isSubmitting"
           >
-            {{ requireTotp ? '验证并登录' : '登录' }}
+            登录
           </mdui-button>
         </form>
 
@@ -152,27 +186,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
 import 'mdui/components/card.js'
 import 'mdui/components/checkbox.js'
+import 'mdui/components/circular-progress.js'
 
 import { useAuth } from '../composables/useAuth'
 import { registerHeaderActions, unregisterHeaderActions } from '../composables/useHeaderActions'
 import { resetPassword, sendEmailVerificationCode } from '../services/auth'
 import { getPublicConfig } from '../services/config'
+import CodeSlotsInput from '../components/common/CodeSlotsInput.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { login, loginWithTotp } = useAuth()
 const HEADER_OWNER_ID = 'login-page'
+const TOTP_LENGTH = 6
+type CodeSlotsInputExpose = InstanceType<typeof CodeSlotsInput>
 
 const email = ref('')
 const password = ref('')
 const totpCode = ref('')
+const totpInputRef = ref<CodeSlotsInputExpose | null>(null)
+const pendingTotpEmail = ref('')
+const pendingTotpPassword = ref('')
 const requireTotp = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
@@ -189,6 +230,7 @@ const isSendingResetCode = ref(false)
 const resetErrorMessage = ref('')
 const resetResendSeconds = ref(0)
 let resetTimer: number | undefined
+let lastAutoSubmittedTotpCode = ''
 
 const canSubmit = computed(() => {
   if (email.value.trim().length === 0) return false
@@ -214,10 +256,54 @@ const canResetPassword = computed(() => {
 })
 
 watch(email, () => {
-  requireTotp.value = false
-  totpCode.value = ''
+  if (requireTotp.value) {
+    if (isCurrentTotpCredential()) return
+    clearTotpChallenge()
+  }
   errorMessage.value = ''
 })
+
+watch(password, () => {
+  if (requireTotp.value) {
+    if (isCurrentTotpCredential()) return
+    clearTotpChallenge()
+  }
+  errorMessage.value = ''
+})
+
+function isCurrentTotpCredential(): boolean {
+  return email.value.trim() === pendingTotpEmail.value && password.value === pendingTotpPassword.value
+}
+
+function clearTotpChallenge(): void {
+  requireTotp.value = false
+  pendingTotpEmail.value = ''
+  pendingTotpPassword.value = ''
+  errorMessage.value = ''
+  resetTotpDigits()
+}
+
+function normalizeTotpCode(raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, TOTP_LENGTH)
+}
+
+function focusTotpInput(index: number): void {
+  totpInputRef.value?.focus(index)
+}
+
+function resetTotpDigits(): void {
+  totpCode.value = ''
+  lastAutoSubmittedTotpCode = ''
+}
+
+function handleTotpComplete(code: string): void {
+  const normalized = normalizeTotpCode(code)
+  if (normalized.length !== TOTP_LENGTH) return
+  if (isSubmitting.value || lastAutoSubmittedTotpCode === normalized) return
+
+  lastAutoSubmittedTotpCode = normalized
+  void handleSubmit()
+}
 
 async function loadEmailVerificationConfig() {
   try {
@@ -304,14 +390,19 @@ async function handleSubmit() {
     return
   }
 
+  const submittedEmail = email.value.trim()
+  const submittedPassword = password.value
   isSubmitting.value = true
   errorMessage.value = ''
+  if (!requireTotp.value) {
+    lastAutoSubmittedTotpCode = ''
+  }
 
   try {
     if (requireTotp.value) {
-      await loginWithTotp(email.value.trim(), password.value, totpCode.value.trim())
+      await loginWithTotp(submittedEmail, submittedPassword, totpCode.value.trim())
     } else {
-      await login(email.value.trim(), password.value)
+      await login(submittedEmail, submittedPassword)
     }
     snackbar({ message: '登录成功' })
 
@@ -321,11 +412,12 @@ async function handleSubmit() {
     const detail = e?.response?.data?.detail
 
     if (!requireTotp.value && typeof detail === 'string' && detail.includes('两步验证')) {
+      pendingTotpEmail.value = submittedEmail
+      pendingTotpPassword.value = submittedPassword
       requireTotp.value = true
-      totpCode.value = ''
-      const msg = '此账户启用了两步验证，请输入 6 位验证码'
-      errorMessage.value = msg
-      snackbar({ message: msg, closeable: true })
+      resetTotpDigits()
+      errorMessage.value = ''
+      void nextTick(() => focusTotpInput(0))
       return
     }
 
@@ -339,6 +431,7 @@ async function handleSubmit() {
     }
 
     errorMessage.value = msg
+    lastAutoSubmittedTotpCode = ''
     snackbar({ message: msg, closeable: true })
   } finally {
     isSubmitting.value = false
@@ -418,6 +511,37 @@ onBeforeUnmount(() => {
 .submit-button {
   margin-top: 4px;
   width: 100%;
+}
+
+.totp-card {
+  text-align: center;
+}
+
+.totp-card .auth-title,
+.totp-card .auth-subtitle {
+  text-align: center;
+}
+
+.totp-form {
+  align-items: stretch;
+  gap: 18px;
+}
+
+.totp-inputs {
+  margin: 6px 0 2px;
+}
+
+.verifying-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.button-spinner {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
 }
 
 .verification-row {
