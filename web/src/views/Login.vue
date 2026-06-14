@@ -168,11 +168,12 @@
 
         <div class="auth-footer">
           <template v-if="!isResetMode">
-            还没有账号？
-            <a href="" @click.prevent="goRegister">立即注册</a>
+            <span class="auth-footer-primary">
+              还没有账号？
+              <a href="" @click.prevent="goRegister">立即注册</a>
+            </span>
             <template v-if="emailVerificationEnabled">
-              <span class="footer-separator">·</span>
-              <a href="" @click.prevent="openResetMode">忘记密码</a>
+              <a class="auth-footer-secondary" href="" @click.prevent="openResetMode">忘记密码</a>
             </template>
           </template>
           <template v-else>
@@ -573,7 +574,19 @@ onBeforeUnmount(() => {
 
 .auth-footer {
   margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   font-size: 13px;
+}
+
+.auth-footer-primary {
+  min-width: 0;
+}
+
+.auth-footer-secondary {
+  flex: 0 0 auto;
 }
 
 .auth-footer a {
@@ -586,14 +599,13 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
-.footer-separator {
-  margin: 0 6px;
-  color: rgb(var(--mdui-color-on-surface-variant));
-}
-
 @media (max-width: 520px) {
   .verification-row {
     grid-template-columns: 1fr;
+  }
+
+  .auth-footer {
+    align-items: flex-start;
   }
 }
 </style>

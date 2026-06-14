@@ -149,6 +149,7 @@
         :page="page"
         :total-pages="totalPages"
         :loading="isLoading"
+        :show-jump="true"
         @change-page="handlePageChange"
       />
     </div>

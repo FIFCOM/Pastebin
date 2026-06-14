@@ -50,16 +50,6 @@
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
-      <div class="user-panel-section user-panel-section--soft">
-        <div class="user-panel-section-header">
-          <div class="user-panel-section-heading">
-            <div class="user-panel-section-eyebrow">Cleanup</div>
-            <div class="user-panel-section-title">待清理摘要</div>
-            <div class="user-panel-section-copy">当前共有 {{ formatNumber(totalPending) }} 条记录可由清理任务处理。</div>
-          </div>
-        </div>
-      </div>
-
       <div v-if="!isLoading && !overview" class="user-panel-empty-state" role="status">
         <div class="user-panel-empty-state-icon" aria-hidden="true">
           <mdui-icon name="dashboard"></mdui-icon>
@@ -69,23 +59,6 @@
           <div class="user-panel-empty-state-copy">刷新后仍不可用时，请检查管理员接口或登录状态。</div>
         </div>
       </div>
-
-      <div v-else-if="overview" class="user-panel-row-list">
-        <article v-for="task in cleanupTasks" :key="task" class="user-panel-row">
-          <div class="user-panel-row-main">
-            <div class="user-panel-row-title-row">
-              <div class="admin-task-icon" aria-hidden="true">
-                <mdui-icon :name="taskMeta(task).icon"></mdui-icon>
-              </div>
-              <div class="user-panel-row-title">{{ taskMeta(task).label }}</div>
-              <mdui-chip :variant="cleanupCount(task) > 0 ? 'filled' : 'outlined'">
-                {{ cleanupCount(task) }} 条
-              </mdui-chip>
-            </div>
-            <div class="user-panel-row-description">{{ taskMeta(task).description }}</div>
-          </div>
-        </article>
-      </div>
     </div>
   </UserPanelCard>
 </template>
@@ -94,16 +67,14 @@
 import { computed, ref, watch } from 'vue'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/chip.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 
 import { useAuth } from '../../composables/useAuth'
-import { getAdminOverview, type AdminOverviewResponse, type CleanupTaskName } from '../../services/admin'
+import { getAdminOverview, type AdminOverviewResponse } from '../../services/admin'
 import { extractErrorMessage } from '../../utils/error'
 import { humanSize } from '../../utils/format'
 import UserPanelCard from './UserPanelCard.vue'
-import { CLEANUP_TASK_META, CLEANUP_TASK_ORDER } from './adminTasks'
 import './panel.css'
 
 const { currentUser } = useAuth()
@@ -112,22 +83,9 @@ const overview = ref<AdminOverviewResponse | null>(null)
 const isLoading = ref(false)
 
 const canAccess = computed(() => currentUser.value?.role === 'admin')
-const cleanupTasks = computed(() => CLEANUP_TASK_ORDER)
-const totalPending = computed(() => {
-  if (!overview.value) return 0
-  return cleanupTasks.value.reduce((sum, task) => sum + cleanupCount(task), 0)
-})
 
 function formatNumber(value: number | null | undefined): string {
   return Number(value ?? 0).toLocaleString()
-}
-
-function cleanupCount(task: CleanupTaskName): number {
-  return overview.value?.cleanup_counts[task] ?? 0
-}
-
-function taskMeta(task: CleanupTaskName) {
-  return CLEANUP_TASK_META[task]
 }
 
 async function load() {
@@ -158,17 +116,6 @@ watch(
 <style scoped>
 .admin-overview-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.admin-task-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
-  background: rgb(var(--mdui-color-surface-container-high));
-  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 @media (max-width: 960px) {

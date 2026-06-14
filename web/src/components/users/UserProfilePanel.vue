@@ -48,60 +48,64 @@
         </div>
       </div>
 
-      <section class="user-panel-section">
-        <div class="user-panel-section-header">
-          <div class="user-panel-section-heading">
-            <div class="user-panel-section-eyebrow">安全</div>
-            <div class="user-panel-section-title">修改密码</div>
-            <div class="user-panel-section-copy">更新当前登录密码；保存后不会影响现有页面的数据流和账户信息展示。</div>
-          </div>
-        </div>
+      <mdui-button class="profile-security-button" variant="filled" @click="openPasswordDialog">
+        修改密码
+      </mdui-button>
+    </div>
 
-        <form class="edit-form" @submit.prevent="savePassword">
+    <mdui-dialog
+      ref="passwordDialogRef"
+      :close-on-esc="!isSavingPassword"
+      :close-on-overlay-click="!isSavingPassword"
+      @closed="resetPasswordDialog"
+    >
+      <span slot="headline">修改密码</span>
+
+      <form class="dialog-form" @submit.prevent="savePassword" @keydown.enter.prevent="savePassword">
+        <mdui-text-field
+          v-model="currentPassword"
+          label="当前密码"
+          placeholder="输入当前密码"
+          type="password"
+          variant="outlined"
+          :disabled="isSavingPassword"
+        ></mdui-text-field>
+
+        <div class="password-grid">
           <mdui-text-field
-            v-model="currentPassword"
-            label="当前密码"
-            placeholder="输入当前密码"
+            v-model="newPassword"
+            label="新密码"
+            placeholder="请输入新密码"
             type="password"
             variant="outlined"
             :disabled="isSavingPassword"
           ></mdui-text-field>
 
-          <div class="password-grid">
-            <mdui-text-field
-              v-model="newPassword"
-              label="新密码"
-              placeholder="请输入新密码"
-              type="password"
-              variant="outlined"
-              :disabled="isSavingPassword"
-            ></mdui-text-field>
+          <mdui-text-field
+            v-model="confirmPassword"
+            label="确认新密码"
+            placeholder="请再次输入新密码"
+            type="password"
+            variant="outlined"
+            :disabled="isSavingPassword"
+          ></mdui-text-field>
+        </div>
 
-            <mdui-text-field
-              v-model="confirmPassword"
-              label="确认新密码"
-              placeholder="请再次输入新密码"
-              type="password"
-              variant="outlined"
-              :disabled="isSavingPassword"
-            ></mdui-text-field>
-          </div>
+        <div v-if="passwordErrorMessage" class="error-message">{{ passwordErrorMessage }}</div>
+      </form>
 
-          <div class="form-footer">
-            <div v-if="passwordErrorMessage" class="error-message">{{ passwordErrorMessage }}</div>
-
-            <mdui-button
-              type="submit"
-              variant="filled"
-              :disabled="!canSavePassword || isSavingPassword"
-              :loading="isSavingPassword"
-            >
-              保存密码
-            </mdui-button>
-          </div>
-        </form>
-      </section>
-    </div>
+      <div slot="action" class="dialog-actions">
+        <mdui-button variant="text" :disabled="isSavingPassword" @click="closePasswordDialog">取消</mdui-button>
+        <mdui-button
+          variant="filled"
+          :disabled="!canSavePassword || isSavingPassword"
+          :loading="isSavingPassword"
+          @click="savePassword"
+        >
+          保存密码
+        </mdui-button>
+      </div>
+    </mdui-dialog>
 
     <mdui-dialog ref="usernameDialogRef" close-on-esc close-on-overlay-click @closed="resetUsernameDialog">
       <span slot="headline">修改用户名</span>
@@ -219,6 +223,7 @@ const passwordErrorMessage = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
+const passwordDialogRef = ref<DialogElement | null>(null)
 
 const usernameDialogRef = ref<DialogElement | null>(null)
 const usernameDraft = ref('')
@@ -374,6 +379,32 @@ function resetEmailDialog() {
   emailVerificationCode.value = ''
 }
 
+function openPasswordDialog() {
+  if (!currentUser.value) return
+  currentPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  passwordErrorMessage.value = ''
+  if (passwordDialogRef.value) {
+    passwordDialogRef.value.open = true
+  }
+}
+
+function closePasswordDialog() {
+  if (isSavingPassword.value) return
+  if (passwordDialogRef.value) {
+    passwordDialogRef.value.open = false
+  }
+}
+
+function resetPasswordDialog() {
+  if (isSavingPassword.value) return
+  passwordErrorMessage.value = ''
+  currentPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+}
+
 async function saveUsername() {
   if (!currentUser.value || !canSaveUsername.value || isSavingUsername.value) return
 
@@ -437,6 +468,9 @@ async function savePassword() {
     newPassword.value = ''
     confirmPassword.value = ''
     snackbar({ message: '密码已更新' })
+    if (passwordDialogRef.value) {
+      passwordDialogRef.value.open = false
+    }
   } catch (error: unknown) {
     passwordErrorMessage.value = extractErrorMessage(error, '保存失败')
   } finally {
@@ -527,12 +561,15 @@ onBeforeUnmount(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.edit-form,
 .dialog-form {
   margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.profile-security-button {
+  align-self: flex-end;
 }
 
 .password-grid {
@@ -553,7 +590,6 @@ onBeforeUnmount(() => {
   margin-top: 4px;
 }
 
-.form-footer,
 .dialog-actions {
   display: flex;
   align-items: flex-end;
@@ -575,8 +611,7 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .profile-hero,
   .password-grid,
-  .verification-row,
-  .form-footer {
+  .verification-row {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
@@ -584,6 +619,11 @@ onBeforeUnmount(() => {
 
   .dialog-actions {
     justify-content: flex-end;
+  }
+
+  .profile-security-button {
+    align-self: stretch;
+    width: 100%;
   }
 
   .profile-hero {
