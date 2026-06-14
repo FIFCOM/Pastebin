@@ -129,6 +129,10 @@
             :disabled="isResetSubmitting"
           ></mdui-text-field>
 
+          <div v-if="resetPasswordStrengthHint" class="password-hint">
+            {{ resetPasswordStrengthHint }}
+          </div>
+
           <mdui-text-field
             v-model="resetConfirmPassword"
             label="确认新密码"
@@ -219,6 +223,7 @@ const requireTotp = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 const emailVerificationEnabled = ref(false)
+const emailVerificationResendIntervalSeconds = ref(60)
 
 const isResetMode = ref(false)
 const resetEmail = ref('')
@@ -255,6 +260,8 @@ const canResetPassword = computed(() => {
     resetDataLossConfirmed.value
   )
 })
+
+const resetPasswordStrengthHint = computed(() => weakPasswordHint(resetNewPassword.value))
 
 watch(email, () => {
   if (requireTotp.value) {
@@ -310,13 +317,15 @@ async function loadEmailVerificationConfig() {
   try {
     const config = await getPublicConfig()
     emailVerificationEnabled.value = config.email_verification_enabled
+    emailVerificationResendIntervalSeconds.value = config.email_verification_resend_interval_seconds
   } catch {
     emailVerificationEnabled.value = false
+    emailVerificationResendIntervalSeconds.value = 60
   }
 }
 
 function startResetCountdown() {
-  resetResendSeconds.value = 60
+  resetResendSeconds.value = emailVerificationResendIntervalSeconds.value
   if (resetTimer !== undefined) window.clearInterval(resetTimer)
   resetTimer = window.setInterval(() => {
     resetResendSeconds.value = Math.max(0, resetResendSeconds.value - 1)
@@ -348,6 +357,17 @@ function handleResetConfirmChange(event: Event) {
   resetDataLossConfirmed.value = Boolean(target?.checked)
 }
 
+function weakPasswordHint(value: string): string {
+  if (!value) return ''
+  const hasLetter = /[A-Za-z]/.test(value)
+  const hasDigit = /\d/.test(value)
+  const hasSymbol = /[^A-Za-z0-9]/.test(value)
+  const variety = [hasLetter, hasDigit, hasSymbol].filter(Boolean).length
+  if (value.length < 8) return '当前密码偏短，建议至少 8 位。'
+  if (variety < 2) return '当前密码较容易被猜到，建议混合字母、数字或符号。'
+  return ''
+}
+
 async function sendResetCode() {
   if (!canSendResetCode.value || isSendingResetCode.value || resetResendSeconds.value > 0) return
 
@@ -356,7 +376,7 @@ async function sendResetCode() {
   try {
     await sendEmailVerificationCode(resetEmail.value.trim(), 'reset_password')
     startResetCountdown()
-    snackbar({ message: '验证码已发送，请检查邮箱', closeable: true })
+    snackbar({ message: '如邮箱可用，验证码已发送', closeable: true })
   } catch (e: any) {
     const msg = e?.response?.data?.detail || (e instanceof Error ? e.message : '发送验证码失败')
     resetErrorMessage.value = msg
@@ -565,6 +585,13 @@ onBeforeUnmount(() => {
   color: rgb(var(--mdui-color-on-error-container));
   font-size: 13px;
   line-height: 1.55;
+}
+
+.password-hint {
+  margin-top: -8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .error-message {

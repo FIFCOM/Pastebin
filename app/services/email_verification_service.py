@@ -3,11 +3,13 @@
 """
 
 import hmac
+import logging
 import secrets
 import smtplib
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -21,6 +23,16 @@ from app.services.email_settings_service import EmailSettingsService
 from config.config import settings
 
 EmailVerificationPurpose = Literal["register", "reset_password", "change_email"]
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EmailVerificationDispatch:
+    """待后台发送的邮箱验证码。"""
+
+    record_id: int
+    code: str
 
 
 class EmailVerificationService:
@@ -201,29 +213,213 @@ class EmailVerificationService:
         db.commit()
 
     @staticmethod
+    def _create_dispatchable_code(
+        db: Session,
+        *,
+        row: EmailVerificationSetting,
+        email: str,
+        purpose: Literal["register", "reset_password"],
+        ip_address: str | None,
+    ) -> EmailVerificationDispatch:
+        normalized_email = EmailVerificationService.normalize_email(email)
+        now = datetime.now(UTC)
+
+        latest = EmailVerificationService._latest_unconsumed(
+            db, email=normalized_email, purpose=purpose, user_id=None
+        )
+        if latest is not None:
+            created_at = latest.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            elapsed = (now - created_at).total_seconds()
+            if elapsed < int(row.resend_interval_seconds or 60):
+                raise ValueError("验证码发送过于频繁，请稍后再试")
+
+        (
+            db.query(EmailVerificationCode)
+            .filter(
+                EmailVerificationCode.email == normalized_email,
+                EmailVerificationCode.purpose == purpose,
+                EmailVerificationCode.user_id.is_(None),
+                EmailVerificationCode.consumed_at.is_(None),
+            )
+            .update({EmailVerificationCode.consumed_at: now})
+        )
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        nonce = secrets.token_urlsafe(24)
+        record = EmailVerificationCode(
+            email=normalized_email,
+            purpose=purpose,
+            user_id=None,
+            code_hash=EmailVerificationService._code_hash(
+                normalized_email, purpose, nonce, code
+            ),
+            nonce=nonce,
+            attempts=0,
+            ip_address=ip_address,
+            expires_at=now + timedelta(minutes=int(row.code_ttl_minutes or 10)),
+        )
+        db.add(record)
+        db.flush()
+
+        record_id = getattr(record, "id", None)
+        if not isinstance(record_id, int):
+            db.rollback()
+            raise ValueError("验证码记录创建失败")
+
+        db.commit()
+        return EmailVerificationDispatch(record_id=record_id, code=code)
+
+    @staticmethod
+    def send_prepared_code(record_id: int, code: str) -> None:
+        """后台发送已创建的公开邮箱验证码。"""
+        from app.core.database import SessionLocal
+
+        with SessionLocal() as db:
+            now = datetime.now(UTC)
+            record = (
+                db.query(EmailVerificationCode)
+                .filter(EmailVerificationCode.id == record_id)
+                .first()
+            )
+            if record is None or record.consumed_at is not None:
+                return
+
+            expires_at = record.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if expires_at < now:
+                record.consumed_at = now  # type: ignore[assignment]
+                db.commit()
+                return
+
+            purpose_text = str(record.purpose)
+            if purpose_text not in ("register", "reset_password"):
+                record.consumed_at = now  # type: ignore[assignment]
+                db.commit()
+                return
+
+            try:
+                row = EmailSettingsService.get_settings(db)
+                EmailVerificationService._assert_enabled(row)
+                EmailVerificationService._assert_smtp_ready(row)
+                EmailVerificationService._send_mail(
+                    row,
+                    to_email=str(record.email),
+                    purpose=cast(EmailVerificationPurpose, purpose_text),
+                    code=code,
+                )
+            except Exception:
+                logger.exception(
+                    "公开邮箱验证码后台发送失败 record_id=%s purpose=%s",
+                    record_id,
+                    purpose_text,
+                )
+                try:
+                    record.consumed_at = now  # type: ignore[assignment]
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    logger.exception(
+                        "公开邮箱验证码后台发送失败后作废记录失败 record_id=%s",
+                        record_id,
+                    )
+
+    @staticmethod
+    def _reserve_public_send_interval(
+        db: Session,
+        *,
+        row: EmailVerificationSetting,
+        email: str,
+        purpose: Literal["register", "reset_password"],
+        ip_address: str | None,
+    ) -> None:
+        """
+        记录一次公开验证码请求，但不发送邮件。
+
+        用于邮箱不适用当前用途的场景，保持响应和重发间隔一致，
+        避免通过重复请求枚举注册邮箱。
+        """
+        normalized_email = EmailVerificationService.normalize_email(email)
+        now = datetime.now(UTC)
+
+        latest = EmailVerificationService._latest_unconsumed(
+            db, email=normalized_email, purpose=purpose, user_id=None
+        )
+        if latest is not None:
+            created_at = latest.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            elapsed = (now - created_at).total_seconds()
+            if elapsed < int(row.resend_interval_seconds or 60):
+                raise ValueError("验证码发送过于频繁，请稍后再试")
+
+        (
+            db.query(EmailVerificationCode)
+            .filter(
+                EmailVerificationCode.email == normalized_email,
+                EmailVerificationCode.purpose == purpose,
+                EmailVerificationCode.user_id.is_(None),
+                EmailVerificationCode.consumed_at.is_(None),
+            )
+            .update({EmailVerificationCode.consumed_at: now})
+        )
+
+        nonce = secrets.token_urlsafe(24)
+        phantom_code = secrets.token_urlsafe(18)
+        record = EmailVerificationCode(
+            email=normalized_email,
+            purpose=purpose,
+            user_id=None,
+            code_hash=EmailVerificationService._code_hash(
+                normalized_email, purpose, nonce, phantom_code
+            ),
+            nonce=nonce,
+            attempts=0,
+            ip_address=ip_address,
+            expires_at=now,
+        )
+        db.add(record)
+        db.commit()
+
+    @staticmethod
     def send_public_code(
         db: Session,
         *,
         email: str,
         purpose: Literal["register", "reset_password"],
         ip_address: str | None = None,
-    ) -> None:
+    ) -> EmailVerificationDispatch | None:
         row = EmailSettingsService.get_settings(db)
         EmailVerificationService._assert_enabled(row)
         EmailVerificationService._assert_smtp_ready(row)
 
         user = EmailVerificationService._find_user_by_email(db, email)
         if purpose == "register" and user is not None:
+            EmailVerificationService._reserve_public_send_interval(
+                db,
+                row=row,
+                email=email,
+                purpose=purpose,
+                ip_address=ip_address,
+            )
             return
         if purpose == "reset_password" and user is None:
+            EmailVerificationService._reserve_public_send_interval(
+                db,
+                row=row,
+                email=email,
+                purpose=purpose,
+                ip_address=ip_address,
+            )
             return
 
-        EmailVerificationService._send_code(
+        return EmailVerificationService._create_dispatchable_code(
             db,
             row=row,
             email=email,
             purpose=purpose,
-            user_id=None,
             ip_address=ip_address,
         )
 

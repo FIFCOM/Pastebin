@@ -104,6 +104,7 @@ const password = ref('')
 const confirmPassword = ref('')
 const verificationCode = ref('')
 const emailVerificationEnabled = ref(false)
+const emailVerificationResendIntervalSeconds = ref(60)
 const isSubmitting = ref(false)
 const isSendingCode = ref(false)
 const errorMessage = ref('')
@@ -124,7 +125,7 @@ const canSendCode = computed(() => {
 })
 
 function startResendCountdown() {
-  resendSeconds.value = 60
+  resendSeconds.value = emailVerificationResendIntervalSeconds.value
   if (resendTimer !== undefined) window.clearInterval(resendTimer)
   resendTimer = window.setInterval(() => {
     resendSeconds.value = Math.max(0, resendSeconds.value - 1)
@@ -139,8 +140,10 @@ async function loadEmailVerificationConfig() {
   try {
     const config = await getPublicConfig()
     emailVerificationEnabled.value = config.email_verification_enabled
+    emailVerificationResendIntervalSeconds.value = config.email_verification_resend_interval_seconds
   } catch {
     emailVerificationEnabled.value = false
+    emailVerificationResendIntervalSeconds.value = 60
   }
 }
 
@@ -152,7 +155,7 @@ async function sendRegisterCode() {
   try {
     await sendEmailVerificationCode(email.value.trim(), 'register')
     startResendCountdown()
-    snackbar({ message: '验证码已发送，请检查邮箱', closeable: true })
+    snackbar({ message: '如邮箱可用，验证码已发送', closeable: true })
   } catch (e: any) {
     const msg = e?.response?.data?.detail || (e instanceof Error ? e.message : '发送验证码失败')
     errorMessage.value = msg

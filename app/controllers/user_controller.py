@@ -6,6 +6,7 @@ from typing import Literal
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Cookie,
     Depends,
     HTTPException,
@@ -111,6 +112,7 @@ async def register_user(user_data: UserRegisterRequest, db: Session = Depends(ge
 async def send_email_verification_code(
     payload: EmailVerificationCodeRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
@@ -120,12 +122,18 @@ async def send_email_verification_code(
     - **purpose=reset_password**: 找回密码验证码
     """
     try:
-        EmailVerificationService.send_public_code(
+        dispatch = EmailVerificationService.send_public_code(
             db,
             email=str(payload.email),
             purpose=payload.purpose,
             ip_address=extract_client_ip(request),
         )
+        if dispatch is not None:
+            background_tasks.add_task(
+                EmailVerificationService.send_prepared_code,
+                dispatch.record_id,
+                dispatch.code,
+            )
         return MessageResponse(message="如邮箱可用，验证码已发送")
     except ValueError as e:
         raise HTTPException(

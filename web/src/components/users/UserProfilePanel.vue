@@ -235,6 +235,7 @@ const emailDraft = ref('')
 const emailCurrentPassword = ref('')
 const emailVerificationCode = ref('')
 const emailVerificationEnabled = ref(false)
+const emailVerificationResendIntervalSeconds = ref(60)
 const emailErrorMessage = ref('')
 const isSavingEmail = ref(false)
 const isSendingEmailCode = ref(false)
@@ -298,13 +299,15 @@ async function loadEmailVerificationConfig() {
   try {
     const config = await getPublicConfig()
     emailVerificationEnabled.value = config.email_verification_enabled
+    emailVerificationResendIntervalSeconds.value = config.email_verification_resend_interval_seconds
   } catch {
     emailVerificationEnabled.value = false
+    emailVerificationResendIntervalSeconds.value = 60
   }
 }
 
 function startEmailResendCountdown() {
-  emailResendSeconds.value = 60
+  emailResendSeconds.value = emailVerificationResendIntervalSeconds.value
   if (emailResendTimer !== undefined) window.clearInterval(emailResendTimer)
   emailResendTimer = window.setInterval(() => {
     emailResendSeconds.value = Math.max(0, emailResendSeconds.value - 1)

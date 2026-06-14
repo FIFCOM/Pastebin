@@ -46,6 +46,9 @@ export default defineConfig(({ mode }) => {
       include: ['vditor']
     },
     build: {
+      // Markdown 预览中的 KaTeX / Mermaid 已经按需拆到异步 chunk。
+      // 这两个功能包自身略高于 Vite 默认 500 KiB 阈值，放宽告警避免构建噪声。
+      chunkSizeWarningLimit: 700,
       rollupOptions: {
         output: {
           manualChunks(id) {
