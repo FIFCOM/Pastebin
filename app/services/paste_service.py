@@ -812,7 +812,11 @@ class PasteService:
 
     @staticmethod
     def create_paste(
-        db: Session, paste_data: PasteCreateRequest
+        db: Session,
+        paste_data: PasteCreateRequest,
+        *,
+        creator_user_id: int | None = None,
+        creator_ip: str | None = None,
     ) -> PasteCreateResponse:
         """
         创建新Paste（草稿状态）
@@ -842,6 +846,10 @@ class PasteService:
         # 设置草稿24小时过期
         expire_at = datetime.now(UTC) + timedelta(hours=24)
 
+        normalized_creator_ip = None
+        if creator_ip and creator_ip.strip():
+            normalized_creator_ip = creator_ip.strip()[:64]
+
         # 创建Paste记录
         paste = Paste(
             id=paste_id,
@@ -849,6 +857,9 @@ class PasteService:
             encryption_mode=paste_data.encryption_mode,
             admin_key=admin_key,
             expire_at=expire_at,
+            creator_type="user" if creator_user_id is not None else "guest",
+            creator_user_id=creator_user_id,
+            creator_ip=normalized_creator_ip,
         )
 
         # 如果是服务端加密模式，生成并保存加密密钥

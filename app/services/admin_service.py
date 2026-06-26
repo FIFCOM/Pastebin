@@ -108,14 +108,27 @@ class AdminService:
             .subquery()
         )
 
-        query = db.query(Paste, file_stats.c.file_count, file_stats.c.file_total_size)
+        query = db.query(
+            Paste,
+            file_stats.c.file_count,
+            file_stats.c.file_total_size,
+            User.username.label("creator_username"),
+        )
         query = query.outerjoin(file_stats, Paste.id == file_stats.c.paste_id)
+        query = query.outerjoin(User, Paste.creator_user_id == User.id)
 
         if search:
-            search_pattern = f"%{search.strip()}%"
-            query = query.filter(
-                or_(Paste.id.ilike(search_pattern), Paste.title.ilike(search_pattern))
-            )
+            search_text = search.strip()
+            search_pattern = f"%{search_text}%"
+            search_filters = [
+                Paste.id.ilike(search_pattern),
+                Paste.title.ilike(search_pattern),
+                User.username.ilike(search_pattern),
+                Paste.creator_ip.ilike(search_pattern),
+            ]
+            if search_text.isdigit():
+                search_filters.append(Paste.creator_user_id == int(search_text))
+            query = query.filter(or_(*search_filters))
 
         if status:
             query = query.filter(Paste.status == status)
@@ -135,7 +148,7 @@ class AdminService:
         )
 
         items: list[AdminPasteListItem] = []
-        for paste, file_count, file_total_size in rows:
+        for paste, file_count, file_total_size, creator_username in rows:
             items.append(
                 AdminPasteListItem(
                     id=str(paste.id),
@@ -143,6 +156,12 @@ class AdminService:
                     status=str(paste.status),  # type: ignore[arg-type]
                     type=str(paste.type or "txt"),  # type: ignore[arg-type]
                     encryption_mode=str(paste.encryption_mode or "client"),  # type: ignore[arg-type]
+                    creator_type=str(paste.creator_type or "guest"),  # type: ignore[arg-type]
+                    creator_user_id=paste.creator_user_id,  # type: ignore[arg-type]
+                    creator_username=(
+                        str(creator_username) if creator_username else None
+                    ),
+                    creator_ip=str(paste.creator_ip) if paste.creator_ip else None,
                     view_count=int(paste.view_count or 0),
                     max_views=int(paste.max_views or -1),
                     file_count=int(file_count or 0),

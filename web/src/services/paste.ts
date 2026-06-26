@@ -1,4 +1,4 @@
-import { createInstallAwareHttpClient } from './http'
+import { apiHttp, createInstallAwareHttpClient } from './http'
 
 const apiClient = createInstallAwareHttpClient()
 
@@ -103,9 +103,18 @@ export interface PasteUpdateRequest {
   access_key?: string | null
 }
 
-export async function createPaste(encryptionMode: 'client' | 'server' = 'client'): Promise<CreatePasteResponse> {
-  const response = await apiClient.post('/pastes', {
+export interface CreatePasteOptions {
+  authorization?: string
+}
+
+export async function createPaste(
+  encryptionMode: 'client' | 'server' = 'client',
+  options: CreatePasteOptions = {}
+): Promise<CreatePasteResponse> {
+  const response = await apiHttp.post('/pastes', {
     encryption_mode: encryptionMode
+  }, {
+    headers: options.authorization ? { Authorization: options.authorization } : undefined
   })
   return response.data
 }

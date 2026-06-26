@@ -171,6 +171,26 @@ async def get_optional_user(
         return None
 
 
+async def get_optional_user_strict(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    db: Session = Depends(get_db),
+) -> UserResponse | None:
+    """
+    获取可选的当前用户。
+
+    与 get_optional_user 不同，此依赖只在缺少 Authorization 时返回 None；
+    如果客户端传入了无效凭据，则保留 401 错误，避免静默降级为匿名身份。
+    """
+    if credentials is None:
+        authorization = request.headers.get("authorization", "").strip()
+        if authorization:
+            raise _auth_error("无效的认证凭据")
+        return None
+
+    return await get_current_user(request, credentials, db)
+
+
 async def get_current_user_with_key(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),

@@ -23,7 +23,7 @@
           <mdui-text-field
             v-model="searchInput"
             class="search-input"
-            label="搜索标题或 Paste ID"
+            label="搜索标题、Paste ID、创建者或 IP"
             variant="outlined"
             clearable
             :disabled="isLoading"
@@ -110,31 +110,68 @@
         <div class="user-panel-list-header">
           <div>
             <div class="user-panel-list-title">共 {{ total }} 条 Paste</div>
-            <div class="user-panel-list-copy">可复制 ID 或删除 Paste；删除会同步清理关联文件。</div>
+            <div class="user-panel-list-copy">展示创建归属、来源 IP 和存储元数据；删除会同步清理关联文件。</div>
           </div>
         </div>
 
         <div class="user-panel-row-list">
           <article v-for="paste in pastes" :key="paste.id" class="user-panel-row paste-row">
-            <div class="user-panel-row-main">
-              <div class="user-panel-row-title-row">
-                <div class="user-panel-row-title">{{ paste.title || '未命名 Paste' }}</div>
-                <code class="paste-id">{{ paste.id }}</code>
-                <mdui-chip :variant="paste.status === 'draft' ? 'outlined' : 'filled'">
-                  {{ statusLabel(paste.status) }}
-                </mdui-chip>
-                <mdui-chip variant="outlined">{{ typeLabel(paste.type) }}</mdui-chip>
-                <mdui-chip variant="outlined">{{ encryptionLabel(paste.encryption_mode) }}</mdui-chip>
+            <div class="paste-row-content">
+              <div class="paste-row-top">
+                <div class="paste-identity">
+                  <div class="paste-title-line">
+                    <div class="user-panel-row-title">{{ paste.title || '未命名 Paste' }}</div>
+                    <code class="paste-title-pill">{{ paste.id }}</code>
+                    <span class="paste-title-pill">{{ typeLabel(paste.type) }}</span>
+                  </div>
+
+                  <div class="paste-owner-line">
+                    <span class="paste-owner-item">
+                      <mdui-icon name="person"></mdui-icon>
+                      {{ creatorText(paste) }}
+                    </span>
+                    <span class="paste-owner-item">
+                      <mdui-icon name="dns"></mdui-icon>
+                      {{ creatorIpText(paste) }}
+                    </span>
+                    <span
+                      class="paste-owner-item"
+                      :title="encryptionLabel(paste.encryption_mode)"
+                      :aria-label="encryptionLabel(paste.encryption_mode)"
+                    >
+                      <mdui-icon :name="encryptionIcon(paste.encryption_mode)"></mdui-icon>
+                      {{ encryptionShortLabel(paste.encryption_mode) }}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div class="user-panel-meta">
-                <span class="user-panel-meta-item">读取 {{ viewCountText(paste) }}</span>
-                <span class="user-panel-meta-item">文件 {{ paste.file_count }} 个 / {{ humanSize(paste.file_total_size) }}</span>
-                <span class="user-panel-meta-item">创建于 {{ formatDateTime(paste.created_at) }}</span>
-                <span class="user-panel-meta-item">更新于 {{ formatDateTime(paste.updated_at) }}</span>
-                <span class="user-panel-meta-item">发布于 {{ formatDateTime(paste.published_at) }}</span>
-                <span class="user-panel-meta-item">{{ expireText(paste.expire_at) }}</span>
-              </div>
+              <dl class="paste-detail-grid">
+                <div class="paste-detail-item">
+                  <dt>读取</dt>
+                  <dd>{{ viewCountText(paste) }}</dd>
+                </div>
+                <div class="paste-detail-item">
+                  <dt>文件</dt>
+                  <dd>{{ paste.file_count }} 个 / {{ humanSize(paste.file_total_size) }}</dd>
+                </div>
+                <div class="paste-detail-item">
+                  <dt>创建</dt>
+                  <dd>{{ formatDateTime(paste.created_at) }}</dd>
+                </div>
+                <div class="paste-detail-item">
+                  <dt>更新</dt>
+                  <dd>{{ formatDateTime(paste.updated_at) }}</dd>
+                </div>
+                <div class="paste-detail-item">
+                  <dt>发布</dt>
+                  <dd>{{ formatDateTime(paste.published_at) }}</dd>
+                </div>
+                <div class="paste-detail-item">
+                  <dt>过期</dt>
+                  <dd>{{ expireText(paste.expire_at) }}</dd>
+                </div>
+              </dl>
             </div>
 
             <div class="user-panel-row-actions">
@@ -172,7 +209,6 @@ import type { LocationQueryRaw } from 'vue-router'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
-import 'mdui/components/chip.js'
 import 'mdui/components/icon.js'
 import 'mdui/components/linear-progress.js'
 import 'mdui/components/menu-item.js'
@@ -471,26 +507,41 @@ function handlePageChange(nextPage: number) {
   void loadAndSyncRoute()
 }
 
-function statusLabel(status: AdminPasteStatus): string {
-  if (status === 'draft') return '草稿'
-  if (status === 'published') return '已发布'
-  return '已编辑'
-}
-
 function typeLabel(type: AdminPasteType): string {
-  return type === 'md' ? 'Markdown' : 'TXT'
+  return type === 'md' ? 'MD' : 'TXT'
 }
 
 function encryptionLabel(mode: AdminPasteEncryptionMode): string {
   return mode === 'server' ? '服务端加密' : '客户端加密'
 }
 
+function encryptionShortLabel(mode: AdminPasteEncryptionMode): string {
+  return mode === 'server' ? '服务端' : '客户端'
+}
+
+function encryptionIcon(mode: AdminPasteEncryptionMode): string {
+  return mode === 'server' ? 'admin_panel_settings' : 'lock'
+}
+
 function viewCountText(paste: AdminPasteListItem): string {
   return paste.max_views === -1 ? String(paste.view_count) : `${paste.view_count} / ${paste.max_views}`
 }
 
+function creatorText(paste: AdminPasteListItem): string {
+  if (paste.creator_type === 'guest') return 'Guest'
+  if (paste.creator_username) {
+    return paste.creator_user_id === null ? paste.creator_username : `${paste.creator_username} #${paste.creator_user_id}`
+  }
+  if (paste.creator_user_id !== null) return `已删除用户 #${paste.creator_user_id}`
+  return '已删除用户'
+}
+
+function creatorIpText(paste: AdminPasteListItem): string {
+  return paste.creator_ip ? `IP ${paste.creator_ip}` : 'IP 未记录'
+}
+
 function expireText(expireAt: string | null): string {
-  return expireAt ? `将于 ${formatDateTime(expireAt)} 过期` : '永不过期'
+  return expireAt ? formatDateTime(expireAt) : '永不过期'
 }
 
 async function copyPasteId(pasteId: string) {
@@ -559,12 +610,104 @@ async function removePaste(paste: AdminPasteListItem) {
   margin-inline-start: auto;
 }
 
-.paste-id {
-  padding: 3px 8px;
+.paste-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.paste-row-content {
+  min-width: 0;
+}
+
+.paste-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.paste-identity {
+  min-width: 0;
+}
+
+.paste-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.paste-title-pill {
+  min-height: 26px;
+  min-width: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
   border-radius: 999px;
   background: rgb(var(--mdui-color-surface-container-high));
   color: rgb(var(--mdui-color-on-surface-variant));
-  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.paste-owner-line {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.paste-owner-item {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: 0.84rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.paste-owner-item mdui-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  color: rgb(var(--mdui-color-primary));
+  flex: 0 0 auto;
+}
+
+.paste-detail-grid {
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant) / 0.7);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 10px 18px;
+}
+
+.paste-detail-item {
+  min-width: 0;
+}
+
+.paste-detail-item dt {
+  margin: 0 0 2px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.paste-detail-item dd {
+  margin: 0;
+  color: rgb(var(--mdui-color-on-surface));
+  font-size: 0.86rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 960px) {
@@ -576,6 +719,23 @@ async function removePaste(paste: AdminPasteListItem) {
 
   .search-trigger {
     margin-inline-start: 0;
+  }
+
+  .paste-row {
+    grid-template-columns: 1fr;
+  }
+
+  .paste-row-top {
+    flex-direction: column;
+  }
+
+  .paste-title-line .user-panel-row-title {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .user-panel-row-actions {
+    justify-content: flex-start;
   }
 }
 </style>

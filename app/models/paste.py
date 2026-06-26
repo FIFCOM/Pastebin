@@ -35,6 +35,11 @@ class Paste(Base):
     title = Column(String(255))
     type = Column(Enum("txt", "md"), default="txt")  # paste类型，默认为txt，可选md
     content_path = Column(String(500))  # 加密内容文件路径
+    creator_type = Column(Enum("guest", "user"), default="guest", nullable=False)
+    creator_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    creator_ip = Column(String(64), nullable=True)
 
     # 加密相关
     encryption_mode = Column(Enum("client", "server"), default="client")
@@ -67,6 +72,9 @@ class Paste(Base):
         Index("idx_paste_status", "status"),  # 状态索引，用于频繁查询
         Index("idx_paste_expire_at", "expire_at"),  # 过期时间索引，用于清理任务
         Index("idx_paste_created_at", "created_at"),  # 创建时间索引，用于排序
+        Index("idx_paste_creator_type", "creator_type"),  # 创建者类型索引
+        Index("idx_paste_creator_user_id", "creator_user_id"),  # 创建者用户索引
+        Index("idx_paste_creator_ip", "creator_ip"),  # 创建IP索引
         Index(
             "idx_paste_status_expire", "status", "expire_at"
         ),  # 复合索引，用于状态+过期时间的复合查询

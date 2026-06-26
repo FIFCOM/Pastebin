@@ -21,6 +21,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
+from app.core.dependencies import get_optional_user_strict
+from app.core.request_meta import extract_client_ip
 from app.core.time_utils import is_expired
 from app.schemas.common import MessageResponse
 from app.schemas.paste import (
@@ -40,6 +42,7 @@ from app.schemas.paste import (
     PasteResponse,
     PasteUpdateRequest,
 )
+from app.schemas.user import UserResponse
 from app.services.paste_service import PasteService
 
 # 创建路由器
@@ -249,14 +252,24 @@ def _try_get_admin_key_from_header(x_paste_admin_key: str | None) -> str | None:
 @router.post(
     "", response_model=PasteCreateResponse, status_code=status.HTTP_201_CREATED
 )
-async def create_paste(paste_data: PasteCreateRequest, db: Session = Depends(get_db)):
+async def create_paste(
+    request: Request,
+    paste_data: PasteCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse | None = Depends(get_optional_user_strict),
+):
     """
     创建新Paste（草稿状态）
 
     - **encryption_mode**: 加密模式，client（客户端加密）或server（服务端加密）
     """
     try:
-        return PasteService.create_paste(db, paste_data)
+        return PasteService.create_paste(
+            db,
+            paste_data,
+            creator_user_id=current_user.id if current_user else None,
+            creator_ip=extract_client_ip(request),
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)

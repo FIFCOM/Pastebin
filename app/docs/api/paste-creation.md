@@ -24,6 +24,12 @@ POST /api/pastes/{paste_id}/publish       发布
 X-Paste-Admin-Key: your_admin_key
 ```
 
+创建草稿可以匿名调用，也可以携带用户API Key。携带用户凭据的请求可用于获取更高的速率限制：
+
+```http
+Authorization: Bearer pk_your_api_key
+```
+
 ---
 
 ## 核心概念
@@ -38,6 +44,18 @@ Paste 的唯一标识，后续接口都需要使用。
 
 - 由 `POST /api/pastes` 返回
 - 丢失后无法再修改、删除或发布该 Paste
+
+### 可选用户凭据
+
+`POST /api/pastes` 不强制登录。未携带 `Authorization` 时会以匿名方式创建 Paste。
+
+如果你有API Key，可以在创建草稿时携带：
+
+```http
+Authorization: Bearer pk_your_api_key
+```
+
+携带用户凭据的创建请求可用于获取更高的速率限制。用户凭据只用于创建草稿时的身份识别，不替代 `admin_key`；后续写入、发布、更新和删除仍需 `X-Paste-Admin-Key`。
 
 ### encryption_mode
 
@@ -61,6 +79,17 @@ Paste 的唯一标识，后续接口都需要使用。
 ```bash
 curl -X POST '{BASE_URL}/api/pastes' \
   -H 'Content-Type: application/json' \
+  -d '{
+    "encryption_mode": "server"
+  }'
+```
+
+如果需要使用用户身份创建，可额外携带 `Authorization`：
+
+```bash
+curl -X POST '{BASE_URL}/api/pastes' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer pk_your_api_key' \
   -d '{
     "encryption_mode": "server"
   }'

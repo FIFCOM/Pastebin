@@ -21,6 +21,7 @@ export interface AdminOverviewResponse {
 export type AdminPasteStatus = 'draft' | 'published' | 'edited'
 export type AdminPasteType = 'txt' | 'md'
 export type AdminPasteEncryptionMode = 'client' | 'server'
+export type AdminPasteCreatorType = 'guest' | 'user'
 
 export interface AdminPasteListItem {
   id: string
@@ -28,6 +29,10 @@ export interface AdminPasteListItem {
   status: AdminPasteStatus
   type: AdminPasteType
   encryption_mode: AdminPasteEncryptionMode
+  creator_type: AdminPasteCreatorType
+  creator_user_id: number | null
+  creator_username: string | null
+  creator_ip: string | null
   view_count: number
   max_views: number
   file_count: number

@@ -39,6 +39,10 @@ class AdminPasteListItem(BaseModel):
     status: Literal["draft", "published", "edited"]
     type: Literal["txt", "md"]
     encryption_mode: Literal["client", "server"]
+    creator_type: Literal["guest", "user"]
+    creator_user_id: int | None
+    creator_username: str | None
+    creator_ip: str | None
     view_count: int
     max_views: int
     file_count: int
