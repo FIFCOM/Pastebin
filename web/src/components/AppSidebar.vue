@@ -62,7 +62,6 @@
                   :active="item.active ?? false"
                   :disabled="item.disabled ?? false"
                   :headline="item.label"
-                  :icon="item.icon"
                   @click="handleSidebarItemClick(item)"
                 ></mdui-list-item>
               </div>

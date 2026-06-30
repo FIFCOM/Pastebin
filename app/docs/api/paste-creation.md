@@ -253,7 +253,7 @@ X-Encryption-Key: your_encryption_key
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `title` | string | 是 | 标题，最长 255 字符，不能为空 |
+| `title` | string 或 null | 否 | 标题，最长 255 字符；为空或缺省时后端自动生成 `未命名的Paste ({paste_id})` |
 | `type` | string | 否 | `txt` 或 `md`，默认 `txt` |
 | `expire_time` | string | 是 | `7d`、`30d`、`1y` 或 `never` |
 | `max_views` | integer | 是 | 最大查看次数。`-1` 表示不限制，`1` 表示阅后即焚 |

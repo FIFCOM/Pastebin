@@ -82,7 +82,7 @@ export interface CreatePasteResponse {
 }
 
 export interface PublishSettings {
-  title: string
+  title?: string | null
   type: 'txt' | 'md'
   expire_time: '7d' | '30d' | '1y' | 'never'
   max_views: number

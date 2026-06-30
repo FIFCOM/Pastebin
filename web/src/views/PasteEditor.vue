@@ -10,7 +10,7 @@
               ref="titleInputRef"
               v-model="title"
               label="标题"
-              placeholder="请输入Paste标题"
+              placeholder="未命名的Paste"
               clearable
               variant="outlined"
               class="title-input"
@@ -150,7 +150,6 @@ import PublishPanel from '../components/editors/PublishPanel.vue'
 import CollabWorkspaceDialog from '../components/collab/CollabWorkspaceDialog.vue'
 import { isImageFileName } from '../composables/useFile'
 import {
-  generateRandomId,
   generateEncryptionKey,
   decryptContent,
   encryptContent,
@@ -210,7 +209,7 @@ const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
 const EDIT_CONTEXT_TTL_MS = 10 * 60 * 1000
 
 // 数据定义
-const title = ref(`未命名的Paste.ID-${generateRandomId()}`)
+const title = ref('')
 const contentType = ref<'txt' | 'md'>('txt')
 const plainContent = ref('')
 const markdownContent = ref('')
@@ -235,8 +234,6 @@ const accessKey = ref('')
 
 // 计算属性：是否可以提交
 const canSubmit = computed(() => {
-  if (!title.value.trim()) return false
-  
   if (contentType.value === 'txt') {
     return plainContent.value.trim().length > 0
   } else {
@@ -269,6 +266,8 @@ const publishCollabButtonLabel = computed(() => {
   if (shouldPromptShare.value && currentPasteId.value && encryptionKey.value) return '去共享'
   return '共享'
 })
+
+const buildDefaultPasteTitle = (pasteId: string): string => `未命名的Paste (${pasteId})`
 
 // 文件上传
 const showUploader = ref(false)
@@ -394,9 +393,7 @@ async function preloadExistingPasteForEdit(
       getPasteContent(pasteId, undefined, adminKey)
     ])
 
-    if (typeof pasteData.title === 'string' && pasteData.title.trim()) {
-      title.value = pasteData.title.trim()
-    }
+    title.value = pasteData.title?.trim() || ''
     contentType.value = pasteData.type === 'md' ? 'md' : 'txt'
     maxViews.value = Number.isFinite(pasteData.max_views) ? pasteData.max_views : -1
 
@@ -632,7 +629,7 @@ const handleSubmit = async () => {
     content = markdownContent.value.trim()
   }
   
-  if (!title.value.trim() || !content) {
+  if (!content) {
     return
   }
 
@@ -640,7 +637,7 @@ const handleSubmit = async () => {
 
   try {
     const wasEditing = isEditingExisting.value
-    const finalTitle = title.value.trim()
+    let finalTitle = title.value.trim()
     // 1. 确保 Paste 已创建（可能已通过文件上传创建）
     const ensured = await ensurePasteCreated()
     if (!ensured || !pasteKey.value) return
@@ -660,6 +657,10 @@ const handleSubmit = async () => {
         max_views: maxViews.value,
         access_key: accessKey.value || undefined
       })
+      if (!finalTitle) {
+        finalTitle = buildDefaultPasteTitle(currentPasteId.value)
+        title.value = finalTitle
+      }
     } else {
       // 已发布/已编辑的 Paste：更新标题和类型，避免误覆盖高级设置。
       await updatePaste(currentPasteId.value, currentAdminKey.value, {
@@ -712,7 +713,7 @@ const handleEditExisting = () => {
 
 // 重置表单
 const resetForm = () => {
-  title.value = `未命名的Paste.ID-${generateRandomId()}`
+  title.value = ''
   plainContent.value = ''
   markdownContent.value = ''
   currentPasteId.value = ''

@@ -13,24 +13,19 @@ const FILE_CHUNK_IV_PREFIX_LENGTH = 8
 const AES_GCM_OVERHEAD_BYTES = AES_GCM_IV_LENGTH + AES_GCM_TAG_LENGTH
 const FILE_CHUNK_AAD_PREFIX = 'mb:filechunk:v1'
 
-/**
- * 生成随机字符串（用于UI展示等非安全场景）
- *
- * 注意：请勿将其作为任何安全相关标识（token/key/id）。
- */
-export function generateRandomId(len: number = 8) : string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  if (len <= 0) return ''
+type WebCryptoBytes = Uint8Array<ArrayBuffer>
 
-  const bytes = new Uint8Array(len)
+function randomBytes(length: number): WebCryptoBytes {
+  const bytes: WebCryptoBytes = new Uint8Array(length)
   crypto.getRandomValues(bytes)
+  return bytes
+}
 
-  let result = ''
-  for (let i = 0; i < len; i++) {
-    const b = bytes[i] ?? 0
-    result += chars.charAt(b % chars.length)
+function toWebCryptoBytes(bytes: Uint8Array): WebCryptoBytes {
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes as WebCryptoBytes
   }
-  return result
+  return new Uint8Array(bytes)
 }
 
 /**
@@ -42,9 +37,7 @@ export async function generateEncryptionKey(length: number = DEFAULT_KEY_LENGTH_
     throw new Error(`无效的密钥长度: ${length}（必须为 16/24/32 字节）`)
   }
 
-  const key = new Uint8Array(length)
-  crypto.getRandomValues(key)
-  return key
+  return randomBytes(length)
 }
 
 function assertAesGcmKeyLength(key: Uint8Array): void {
@@ -145,11 +138,12 @@ export async function encryptWithKey(
   assertAesGcmKeyLength(key)
 
   // 如果是字符串，转换为字节数组
-  const dataBytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
+  const dataBytes =
+    typeof data === 'string' ? new TextEncoder().encode(data) : toWebCryptoBytes(data)
+  const keyBytes = toWebCryptoBytes(key)
 
   // 生成随机IV (12字节用于GCM) 或使用外部IV
-  const iv = options?.iv ? options.iv : new Uint8Array(AES_GCM_IV_LENGTH)
-  if (!options?.iv) crypto.getRandomValues(iv)
+  const iv = options?.iv ? toWebCryptoBytes(options.iv) : randomBytes(AES_GCM_IV_LENGTH)
   if (iv.byteLength !== AES_GCM_IV_LENGTH) {
     throw new Error(`IV长度错误: ${iv.byteLength}（必须为 ${AES_GCM_IV_LENGTH} 字节）`)
   }
@@ -157,7 +151,7 @@ export async function encryptWithKey(
   // 导入密钥
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key as unknown as BufferSource,
+    keyBytes,
     { name: 'AES-GCM' },
     false,
     ['encrypt']
@@ -165,17 +159,17 @@ export async function encryptWithKey(
 
   const algorithm: AesGcmParams = {
     name: 'AES-GCM',
-    iv: iv as unknown as BufferSource
+    iv
   }
   if (options?.aad) {
-    algorithm.additionalData = options.aad as unknown as BufferSource
+    algorithm.additionalData = toWebCryptoBytes(options.aad)
   }
 
   // 加密数据
   const encrypted = await crypto.subtle.encrypt(
     algorithm,
     cryptoKey,
-    dataBytes as unknown as BufferSource
+    dataBytes
   )
 
   // 组合 IV + 密文
@@ -206,13 +200,14 @@ export async function decryptWithKey(
   }
 
   // 提取IV和密文
-  const iv = encryptedData.slice(0, AES_GCM_IV_LENGTH)
-  const ciphertext = encryptedData.slice(AES_GCM_IV_LENGTH)
+  const iv = toWebCryptoBytes(encryptedData.slice(0, AES_GCM_IV_LENGTH))
+  const ciphertext = toWebCryptoBytes(encryptedData.slice(AES_GCM_IV_LENGTH))
+  const keyBytes = toWebCryptoBytes(key)
 
   // 导入密钥
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key as unknown as BufferSource,
+    keyBytes,
     { name: 'AES-GCM' },
     false,
     ['decrypt']
@@ -220,17 +215,17 @@ export async function decryptWithKey(
 
   const algorithm: AesGcmParams = {
     name: 'AES-GCM',
-    iv: iv as unknown as BufferSource
+    iv
   }
   if (options?.aad) {
-    algorithm.additionalData = options.aad as unknown as BufferSource
+    algorithm.additionalData = toWebCryptoBytes(options.aad)
   }
 
   // 解密数据
   const decrypted = await crypto.subtle.decrypt(
     algorithm,
     cryptoKey,
-    ciphertext as unknown as BufferSource
+    ciphertext
   )
 
   return new Uint8Array(decrypted)

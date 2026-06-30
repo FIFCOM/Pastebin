@@ -1060,10 +1060,9 @@ class PasteService:
 
         settings_data = publish_data.settings
 
-        # 设置标题
-        if not settings_data.title or not settings_data.title.strip():
-            raise ValueError("Paste标题不能为空")
-        paste.title = settings_data.title  # type: ignore
+        # 设置标题；未填写时使用真实 Paste ID 生成稳定默认标题。
+        title = settings_data.title.strip() if settings_data.title else ""
+        paste.title = title or f"未命名的Paste ({paste_id})"  # type: ignore
 
         # 设置Paste类型
         paste.type = settings_data.type  # type: ignore

@@ -54,10 +54,14 @@
         <form v-if="!isResetMode" class="auth-form" @submit.prevent="handleSubmit">
           <mdui-text-field
             v-model="email"
+            name="username"
             label="邮箱"
             placeholder="请输入邮箱"
             variant="outlined"
-            type="text"
+            type="email"
+            autocomplete="username"
+            inputmode="email"
+            autocapitalize="none"
             clearable
             :disabled="isSubmitting"
           ></mdui-text-field>

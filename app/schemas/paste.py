@@ -212,7 +212,9 @@ class PastePublishRequest(BaseModel):
 class PastePublishSettings(BaseModel):
     """Paste发布设置"""
 
-    title: str = Field(..., max_length=255, description="Paste标题")
+    title: str | None = Field(
+        default=None, max_length=255, description="Paste标题；为空时由后端自动生成"
+    )
     type: str = Field(
         "txt", pattern="^(txt|md)$", description="Paste类型：txt或md，默认为txt"
     )
