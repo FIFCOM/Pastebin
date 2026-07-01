@@ -8,10 +8,10 @@ type ActualTheme = 'light' | 'dark'
 // 预设主题色列表，供全局复用
 export const presetColors = [
   '#0061a4',
-  '#ffb300',
-  '#f4511e',
-  '#0b8043',
-  '#ab47bc'
+  '#ffce22',
+  '#006874',
+  '#006e1c',
+  '#9f86ff'
 ] as const
 
 type ThemeColor = (typeof presetColors)[number] | string

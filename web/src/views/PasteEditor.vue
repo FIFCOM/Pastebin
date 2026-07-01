@@ -166,7 +166,7 @@ import {
   updatePaste
 } from '../services/paste'
 import { useAuth } from '../composables/useAuth'
-import { useCollabDialogState } from '../composables/useCollabDialogState'
+import { useCollabDialogState, type WorkspaceDialogIntent } from '../composables/useCollabDialogState'
 import { buildUnreadPasteKey, useCollabUnreadPastes } from '../composables/useCollabUnreadPastes'
 import { useRoomPresenceSync } from '../composables/useRoomPresenceSync'
 import { useRoomSession } from '../composables/useRoomSession'
@@ -183,11 +183,12 @@ const { openJoinDialog, openWorkspaceDialog, isWorkspaceDialogOpen } = useCollab
 const { activeRoom } = useRoomSession()
 const { markUnreadPaste } = useCollabUnreadPastes()
 const isIncomingSharePromptOpen = ref(false)
+const isOpeningCollabDialog = ref(false)
 const lastIncomingSharePromptKey = ref('')
 const HEADER_OWNER_ID = 'paste-editor-page'
 const EDITOR_ROOM_ACTION_ID = 'paste-editor-room'
 
-useRoomPresenceSync({
+const { refreshRoomCount } = useRoomPresenceSync({
   onMemberJoined: () => {
     if (currentPasteId.value && encryptionKey.value) {
       shouldPromptShare.value = true
@@ -472,21 +473,33 @@ const handleSubmitClick = async () => {
   snackbar({ message: '内容不能为空', closeable: true })
 }
 
-function handleOpenCollabEntry(): void {
-  if (!activeRoom.value) {
-    return
-  }
+async function openCollabDialogForCurrentRoom(intent: WorkspaceDialogIntent = 'overview'): Promise<void> {
+  if (isOpeningCollabDialog.value) return
 
-  openWorkspaceDialog(shouldPromptShare.value ? 'share' : 'overview')
+  isOpeningCollabDialog.value = true
+  try {
+    if (activeRoom.value) {
+      await refreshRoomCount()
+    }
+
+    const room = activeRoom.value
+    if (!room || (room.memberCount ?? 1) <= 1) {
+      openJoinDialog()
+      return
+    }
+
+    openWorkspaceDialog(intent)
+  } finally {
+    isOpeningCollabDialog.value = false
+  }
+}
+
+function handleOpenCollabEntry(): void {
+  void openCollabDialogForCurrentRoom(shouldPromptShare.value ? 'share' : 'overview')
 }
 
 function handleHeaderRoomAction(): void {
-  if (!activeRoom.value) {
-    openJoinDialog()
-    return
-  }
-
-  openWorkspaceDialog(shouldPromptShare.value ? 'share' : 'overview')
+  void openCollabDialogForCurrentRoom(shouldPromptShare.value ? 'share' : 'overview')
 }
 
 function handleCurrentPasteShared(): void {
@@ -738,6 +751,7 @@ onMounted(() => {
       icon: 'groups',
       kind: 'icon',
       active: () => Boolean(activeRoom.value),
+      disabled: () => isOpeningCollabDialog.value,
       onClick: handleHeaderRoomAction
     },
     {

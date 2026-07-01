@@ -358,7 +358,7 @@ const manualShareInput = ref('')
 const manualShareError = ref('')
 
 const { currentUser } = useAuth()
-const { isWorkspaceDialogOpen, workspaceDialogIntent, closeWorkspaceDialog } = useCollabDialogState()
+const { isWorkspaceDialogOpen, workspaceDialogIntent, closeWorkspaceDialog, openJoinDialog } = useCollabDialogState()
 const { activeRoom, memberIdentity, roomKeyBytes, syncRoomInfo, leaveActiveRoom, clearActiveRoom } = useRoomSession()
 const { selfMemberId, subscribe } = useRoomRealtime()
 const { hasUnreadPastes, useRoomUnreadKeys, clearUnreadPastes, clearRoomUnreadState, markUnreadPaste } = useCollabUnreadPastes()
@@ -785,6 +785,9 @@ async function refreshRoomInfo(): Promise<void> {
   try {
     const info = await getRoomInfoByPin(session.pinCode)
     syncRoomInfo(info, session.pinCode)
+    if (isWorkspaceDialogOpen.value && info.member_count <= 1) {
+      openJoinDialog()
+    }
   } catch (error) {
     if (isRoomMissingError(error)) {
       resolveMissingRoom()

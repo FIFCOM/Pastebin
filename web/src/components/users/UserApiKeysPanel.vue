@@ -15,7 +15,7 @@
     <div v-if="!currentUser" class="user-panel-empty-hint">请先登录。</div>
 
     <div v-else class="user-panel-stack">
-      <div class="user-panel-summary-grid">
+      <div class="user-panel-summary-grid api-keys-summary-grid">
         <div class="user-panel-stat">
           <div class="user-panel-stat-label">可用 Key</div>
           <div class="user-panel-stat-value">{{ activeCount }}</div>
@@ -31,6 +31,22 @@
           <div class="user-panel-stat-value">{{ neverUsedCount }}</div>
         </div>
       </div>
+
+      <section class="api-docs-callout" aria-labelledby="api-docs-callout-title">
+        <div class="api-docs-callout-icon" aria-hidden="true">
+          <mdui-icon name="article"></mdui-icon>
+        </div>
+        <div class="api-docs-callout-body">
+          <div id="api-docs-callout-title" class="api-docs-callout-title">API 文档</div>
+          <div class="api-docs-callout-copy">
+            需要用脚本创建 Paste、上传文件或接入协作令牌时，从这里查看认证方式、请求参数和返回示例。
+          </div>
+        </div>
+        <mdui-button variant="tonal" @click="openApiDocs">
+          <mdui-icon slot="icon" name="article"></mdui-icon>
+          查看文档
+        </mdui-button>
+      </section>
 
       <mdui-linear-progress v-if="isLoading"></mdui-linear-progress>
 
@@ -158,6 +174,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { confirm } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/button.js'
@@ -168,6 +185,7 @@ import 'mdui/components/linear-progress.js'
 import 'mdui/components/text-field.js'
 
 import PaginationFooter from '../common/PaginationFooter.vue'
+import { DOCS_OVERVIEW_PATH } from '../../content/api-docs'
 import { useAuth } from '../../composables/useAuth'
 import {
   cleanupExpiredApiKeys,
@@ -187,6 +205,7 @@ type DialogElement = HTMLElement & { open: boolean }
 const PAGE_SIZE = 8
 
 const { currentUser } = useAuth()
+const router = useRouter()
 
 const apiKeys = ref<ApiKeyResponse[]>([])
 const isLoading = ref(false)
@@ -219,6 +238,10 @@ watch(totalPages, (nextTotalPages) => {
 
 function handlePageChange(nextPage: number) {
   page.value = nextPage
+}
+
+function openApiDocs() {
+  void router.push(DOCS_OVERVIEW_PATH)
 }
 
 function keyPreview(preview: string | null | undefined): string {
@@ -356,6 +379,46 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.api-docs-callout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgb(var(--mdui-color-outline-variant) / 0.58);
+  border-radius: 20px;
+  background: rgb(var(--mdui-color-surface-container-low));
+}
+
+.api-docs-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
+}
+
+.api-docs-callout-body {
+  min-width: 0;
+}
+
+.api-docs-callout-title {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.api-docs-callout-copy {
+  margin-top: 4px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
 .api-key-preview-text {
   margin-top: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -383,5 +446,38 @@ onMounted(() => {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .user-panel-summary-grid.api-keys-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .api-keys-summary-grid .user-panel-stat {
+    min-width: 0;
+    padding: 12px 10px;
+  }
+
+  .api-keys-summary-grid .user-panel-stat-label {
+    overflow: hidden;
+    font-size: 0.72rem;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .api-keys-summary-grid .user-panel-stat-value {
+    margin-top: 6px;
+  }
+
+  .api-docs-callout {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .api-docs-callout mdui-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 </style>

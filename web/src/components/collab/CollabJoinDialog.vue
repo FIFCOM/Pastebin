@@ -187,7 +187,7 @@ function handleCompactChange(event: MediaQueryListEvent): void {
 
 const route = useRoute()
 const router = useRouter()
-const { isJoinDialogOpen, pendingInvitePin, closeJoinDialog, clearPendingInvitePin } = useCollabDialogState()
+const { isJoinDialogOpen, pendingInvitePin, closeJoinDialog, openWorkspaceDialog, clearPendingInvitePin } = useCollabDialogState()
 const {
   activeRoom,
   ensureMemberIdentity,
@@ -208,6 +208,7 @@ const isInviteMode = computed(() => Boolean(pendingInvitePin.value))
 const canJoin = computed(() => /^[A-Z0-9]{6}$/.test(joinPin.value) && !isJoiningManual.value)
 const displayedRoom = computed(() => activeRoom.value ?? (isClosingAfterLeave.value ? closingRoomSnapshot.value : null))
 const spacedPinCode = computed(() => (displayedRoom.value?.pinCode || '').split('').join(' '))
+const activeRoomHasGuests = computed(() => (activeRoom.value?.memberCount ?? 1) > 1)
 
 function normalizePin(raw: string): string {
   return raw
@@ -416,6 +417,15 @@ function handleCloseDialog(): void {
   closeJoinDialog()
 }
 
+function openWorkspaceIfActiveRoomHasGuests(): boolean {
+  if (!isJoinDialogOpen.value || isInviteMode.value || !activeRoomHasGuests.value || isClosingAfterLeave.value) {
+    return false
+  }
+
+  openWorkspaceDialog('overview')
+  return true
+}
+
 async function handleDismissInvite(): Promise<void> {
   clearPendingInvitePin()
   closeJoinDialog()
@@ -476,10 +486,17 @@ watch(
           if (hasActiveRoom) {
             hasActiveRoom = await validateActiveRoom()
           }
+          if (openWorkspaceIfActiveRoomHasGuests()) {
+            return
+          }
           if (!hasActiveRoom) {
             await handleCreateRoom({ silentSuccess: true })
           }
+          if (openWorkspaceIfActiveRoomHasGuests()) {
+            return
+          }
           await nextTick()
+          if (!isJoinDialogOpen.value || isInviteMode.value) return
           focusJoinInput(0)
         })()
       }
@@ -493,6 +510,13 @@ watch(
   () => {
     if (!isJoinDialogOpen.value) return
     void loadInviteRoomInfo()
+  }
+)
+
+watch(
+  activeRoomHasGuests,
+  () => {
+    openWorkspaceIfActiveRoomHasGuests()
   }
 )
 

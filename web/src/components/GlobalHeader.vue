@@ -1,8 +1,9 @@
 <template>
   <mdui-top-app-bar ref="topAppBarRef">
     <mdui-top-app-bar-title>
-      <div class="brand-group">
+      <div :class="['brand-group', { 'brand-group--standalone': !showSidebarButton }]">
         <mdui-button-icon
+          v-if="showSidebarButton"
           class="menu-button"
           aria-label="打开侧边栏"
           @click="handleMenuClick"
@@ -73,14 +74,14 @@
         >
           <mdui-icon-account-circle />
         </mdui-button-icon>
-        <mdui-menu>
-          <mdui-menu-item disabled>
-            已登录为：{{ currentUser?.username }}
+        <mdui-menu class="user-menu">
+          <mdui-menu-item class="user-menu-item" disabled>
+            你好！{{ currentUser?.username }}
           </mdui-menu-item>
-          <mdui-menu-item @click="goUserManagement">
+          <mdui-menu-item class="user-menu-item" @click="goUserManagement">
             用户管理
           </mdui-menu-item>
-          <mdui-menu-item @click="handleLogout">
+          <mdui-menu-item class="user-menu-item" @click="handleLogout">
             退出登录
           </mdui-menu-item>
         </mdui-menu>
@@ -94,7 +95,7 @@
 import '@mdui/icons/menu.js'
 import '@mdui/icons/account-circle.js'
 
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import 'mdui/components/dropdown.js'
@@ -107,6 +108,7 @@ import 'mdui/components/icon.js'
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
 import { activeHeaderActions, type ActiveHeaderAction } from '../composables/useHeaderActions'
+import { isDocsPath } from '../content/api-docs'
 
 const { isLoggedIn, currentUser, logout } = useAuth()
 const { toggleAppSidebar } = useAppSidebarState()
@@ -114,6 +116,7 @@ const { toggleAppSidebar } = useAppSidebarState()
 const router = useRouter()
 const route = useRoute()
 const topAppBarRef = ref<HTMLElement | null>(null)
+const showSidebarButton = computed(() => route.path === '/users' || isDocsPath(route.path))
 
 let headerOffsetAnimationFrame = 0
 let headerResizeObserver: ResizeObserver | null = null
@@ -239,6 +242,10 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+.brand-group--standalone {
+  padding-left: 8px;
+}
+
 .menu-button {
   flex-shrink: 0;
 }
@@ -316,6 +323,23 @@ onBeforeUnmount(() => {
   justify-content: center;
   margin-right: 4px;
   --mdui-icon-size: 22px;
+}
+
+.user-menu {
+  padding: 8px;
+}
+
+.user-menu-item {
+  border-radius: var(--mdui-shape-corner-extra-large);
+  overflow: hidden;
+}
+
+.user-menu-item + .user-menu-item {
+  margin-top: 4px;
+}
+
+.user-menu-item::part(container) {
+  border-radius: var(--mdui-shape-corner-extra-large);
 }
 
 @media (max-width: 640px) {

@@ -1,9 +1,9 @@
 <template>
   <div class="app-shell">
-    <mdui-layout class="app-layout" full-height>
+    <mdui-layout :class="['app-layout', { 'app-layout--sidebar-route': isAppSidebarRoute }]" full-height>
       <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
-      <AppSidebar v-if="!isInstallRoute"></AppSidebar>
-      <mdui-layout-main class="app-main">
+      <AppSidebar v-if="!isInstallRoute && isAppSidebarRoute"></AppSidebar>
+      <mdui-layout-main ref="appMainRef" class="app-main">
         <div class="app-main-shell">
           <router-view />
         </div>
@@ -18,7 +18,7 @@
 import 'mdui/mdui.css'
 import 'mdui'
 
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 import CollabJoinDialog from './components/collab/CollabJoinDialog.vue'
@@ -30,6 +30,8 @@ import { isDocsPath } from './content/api-docs'
 const route = useRoute()
 const { isAppSidebarOpen, setAppSidebarOpen, closeAppSidebar } = useAppSidebarState()
 const isInstallRoute = computed(() => route.path === '/install' || route.path.startsWith('/install/'))
+const isAppSidebarRoute = computed(() => isSidebarPath(route.path))
+const appMainRef = ref<HTMLElement | null>(null)
 
 let usersSidebarMediaQuery: MediaQueryList | null = null
 let isDocumentScrollLocked = false
@@ -50,22 +52,44 @@ function shouldOpenUsersSidebarByDefault(): boolean {
   return window.matchMedia('(min-width: 960px)').matches
 }
 
+function isSidebarPath(path: string): boolean {
+  return path === '/users' || isDocsPath(path)
+}
+
+function resetAppMainHorizontalPadding(): void {
+  const appMain = appMainRef.value
+  if (!appMain) return
+
+  appMain.style.paddingLeft = ''
+  appMain.style.paddingRight = ''
+}
+
+function scheduleAppMainHorizontalPaddingReset(): void {
+  void nextTick(() => {
+    if (!isSidebarPath(route.path)) {
+      resetAppMainHorizontalPadding()
+    }
+  })
+}
+
 function syncAppSidebarForRoute(path: string): void {
   if (path === '/install' || path.startsWith('/install/')) {
     closeAppSidebar()
+    scheduleAppMainHorizontalPaddingReset()
     return
   }
 
-  if (path === '/users' || isDocsPath(path)) {
+  if (isSidebarPath(path)) {
     setAppSidebarOpen(shouldOpenUsersSidebarByDefault())
     return
   }
 
   closeAppSidebar()
+  scheduleAppMainHorizontalPaddingReset()
 }
 
 function handleUsersSidebarBreakpointChange(event: MediaQueryListEvent): void {
-  if (route.path === '/users' || isDocsPath(route.path)) {
+  if (isSidebarPath(route.path)) {
     setAppSidebarOpen(event.matches)
   }
 
@@ -179,6 +203,11 @@ onBeforeUnmount(() => {
 .app-main {
   width: 100%;
   min-height: 0;
+}
+
+.app-layout:not(.app-layout--sidebar-route) .app-main {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 .app-main-shell {

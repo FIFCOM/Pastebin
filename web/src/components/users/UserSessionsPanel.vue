@@ -191,7 +191,7 @@ async function revoke(sessionId: string, isCurrent: boolean) {
       description: isCurrent
         ? '确认撤销当前会话？你将需要重新登录。'
         : '确认撤销该会话？撤销后该设备将需要重新登录。',
-      confirmText: '撤销',
+      confirmText: '确认撤销',
       cancelText: '取消',
       closeOnEsc: true,
       closeOnOverlayClick: true
@@ -219,7 +219,7 @@ async function revokeOthers() {
     await confirm({
       headline: '撤销其他会话',
       description: '将保留当前设备登录，其他设备全部退出。是否继续？',
-      confirmText: '撤销',
+      confirmText: '确认撤销',
       cancelText: '取消',
       closeOnEsc: true,
       closeOnOverlayClick: true

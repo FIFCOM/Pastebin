@@ -104,7 +104,7 @@ import 'mdui/components/list-item.js'
 import { useAuth } from '../composables/useAuth'
 import { useAppSidebarState } from '../composables/useAppSidebarState'
 import { getUserNavigationGroups, normalizeUserTab, type UserTabValue } from './users/navigation'
-import { API_DOCS_SECTIONS, DOCS_OVERVIEW_PATH, getDocsSectionPath, isDocsPath } from '../content/api-docs'
+import { API_DOCS_SECTIONS, getDocsSectionPath, isDocsPath } from '../content/api-docs'
 
 type SidebarSectionItem = {
   key: string
@@ -128,45 +128,6 @@ type SidebarRenderSection = SidebarSection & {
   isCollapsible: boolean
   singleItem: SidebarSectionItem | null
 }
-
-const DEFAULT_SECTIONS: SidebarSection[] = [
-  {
-    value: 'docs',
-    label: '文档',
-    icon: 'description',
-    items: [
-      {
-        key: 'api-docs',
-        label: 'API文档',
-        icon: 'article',
-        path: DOCS_OVERVIEW_PATH,
-        testid: 'api-docs-sidebar-entry'
-      }
-    ]
-  }
-  // Temporarily hide placeholder entries in the homepage sidebar.
-  // {
-  //   value: 'about',
-  //   label: '关于',
-  //   icon: 'info',
-  //   items: [
-  //     {
-  //       key: 'privacy-policy',
-  //       label: '隐私政策',
-  //       icon: 'policy',
-  //       description: '占位入口，暂不实现跳转',
-  //       disabled: true
-  //     },
-  //     {
-  //       key: 'about-material-bin',
-  //       label: '关于Material Bin',
-  //       icon: 'info',
-  //       description: '占位入口，暂不实现跳转',
-  //       disabled: true
-  //     }
-  //   ]
-  // }
-]
 
 const DOCS_GROUP_ICON_BY_LABEL: Record<string, string> = {
   入门: 'menu_book',
@@ -230,7 +191,7 @@ const sidebarSections = computed<SidebarSection[]>(() => {
   }
 
   if (!isUsersRoute.value) {
-    return DEFAULT_SECTIONS
+    return []
   }
 
   return userNavigationGroups.value.map((group) => ({

@@ -22,7 +22,9 @@
         <div class="mode-buttons">
           <mdui-segmented-button-group
             selects="single"
+            required
             :value="themeMode"
+            @click.capture="preventSelectedModeDeselect"
             @change="handleModeGroupChange"
           >
             <mdui-segmented-button value="auto">
@@ -76,6 +78,8 @@ import 'mdui/components/segmented-button.js'
 
 import { useTheme, presetColors } from '../composables/useTheme'
 
+type ThemeMode = 'auto' | 'light' | 'dark'
+
 const themeDialogRef = ref<HTMLDialogElement | null>(null)
 
 const {
@@ -99,17 +103,40 @@ const closeThemeDialog = () => {
   }
 }
 
-const changeMode = (mode: 'auto' | 'light' | 'dark') => {
+const isThemeMode = (value: string | undefined): value is ThemeMode => {
+  return value === 'auto' || value === 'light' || value === 'dark'
+}
+
+const changeMode = (mode: ThemeMode) => {
   setThemeMode(mode)
 }
 
-const handleModeGroupChange = (event: Event) => {
-  const target = event.target as HTMLDivElement & { value?: string }
-  const value = (target as any).value as string
+const preventSelectedModeDeselect = (event: MouseEvent) => {
+  const selectedButton = event
+    .composedPath()
+    .find((target) => {
+      const element = target as HTMLElement
+      return element.tagName === 'MDUI-SEGMENTED-BUTTON' && element.getAttribute('value') === themeMode.value
+    })
 
-  if (value === 'auto' || value === 'light' || value === 'dark') {
-    changeMode(value)
+  if (!selectedButton) {
+    return
   }
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const handleModeGroupChange = (event: Event) => {
+  const group = event.currentTarget as HTMLElement & { value?: string }
+  const value = group.value
+
+  if (isThemeMode(value)) {
+    changeMode(value)
+    return
+  }
+
+  group.value = themeMode.value
 }
 
 const changeColor = (color: string) => {
