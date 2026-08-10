@@ -20,6 +20,7 @@ import type { FailedFile, UploadedFile, UploadingFile } from '../components/uplo
 
 export type ProcessFilesOpts = { autoInsert?: boolean; source?: 'paste' | 'select' | 'drop' }
 export type AutoInsertPayload = { fileId: string; name: string; size: number }
+type UploadOutcome = 'success' | 'failed' | 'cancelled'
 
 const HASH_DEDUPE_MAX_BYTES = 10 * 1024 * 1024 // 10MB
 const UPLOAD_SPEED_UPDATE_MIN_INTERVAL_SEC = 0.1
@@ -252,10 +253,24 @@ export function useFileUploader(params: {
     return `${formatBytes(used)} / ${formatBytes(max)}`
   })
 
+  function showUploadSummary(results: UploadOutcome[]) {
+    const uploadedCount = results.filter((result) => result === 'success').length
+    const failedCount = results.filter((result) => result === 'failed').length
+    if (uploadedCount === 0 && failedCount === 0) return
+
+    snackbar({
+      message:
+        failedCount > 0
+          ? `已上传 ${uploadedCount} 个文件，${failedCount} 个文件失败`
+          : `已上传 ${uploadedCount} 个文件`,
+      closeable: failedCount > 0
+    })
+  }
+
   async function startUpload(
     file: File,
     options?: { id?: string; resumeUploadId?: string; autoInsert?: boolean; fingerprint?: string }
-  ) {
+  ): Promise<UploadOutcome> {
     const id = options?.id ?? crypto.randomUUID()
     const abortController = new AbortController()
     const uploadingFile: UploadingFile = {
@@ -440,10 +455,10 @@ export function useFileUploader(params: {
         fingerprint: uploadingFile.fingerprint ?? `file:${fileFingerprint(file)}`
       })
 
-      snackbar({ message: `${file.name} 上传成功` })
       if (options?.autoInsert && params.onAutoInsert && !didAutoInsert) {
         params.onAutoInsert({ fileId: completeRes.file_id, name: file.name, size: file.size })
       }
+      return 'success'
     } catch (error) {
       const isCancelled =
         cancelledUploads.has(id) ||
@@ -467,7 +482,7 @@ export function useFileUploader(params: {
           }
         }
         cancelledUploads.delete(id)
-        return
+        return 'cancelled'
       }
 
       console.error('Upload failed:', error)
@@ -481,6 +496,7 @@ export function useFileUploader(params: {
         uploadId: uploadingFile.uploadId,
         fingerprint: uploadingFile.fingerprint
       })
+      return 'failed'
     } finally {
       releaseSlot?.()
     }
@@ -548,13 +564,16 @@ export function useFileUploader(params: {
       }
     }
 
-    for (const file of dedupedFiles) {
-      startUpload(file, {
-        autoInsert: opts?.autoInsert,
-        fingerprint: fingerprintsByFile.get(file),
-        resumeUploadId: undefined
-      })
-    }
+    const results = await Promise.all(
+      dedupedFiles.map((file) =>
+        startUpload(file, {
+          autoInsert: opts?.autoInsert,
+          fingerprint: fingerprintsByFile.get(file),
+          resumeUploadId: undefined
+        })
+      )
+    )
+    showUploadSummary(results)
   }
 
   async function cancelUpload(id: string) {
@@ -605,9 +624,14 @@ export function useFileUploader(params: {
     }
   }
 
-  function retryUpload(file: FailedFile) {
+  async function retryUpload(file: FailedFile) {
     failedFiles.value = failedFiles.value.filter((f) => f.id !== file.id)
-    startUpload(file.file, { id: file.id, resumeUploadId: file.uploadId, fingerprint: file.fingerprint })
+    const result = await startUpload(file.file, {
+      id: file.id,
+      resumeUploadId: file.uploadId,
+      fingerprint: file.fingerprint
+    })
+    showUploadSummary([result])
   }
 
   function dismissFailed(id: string) {
