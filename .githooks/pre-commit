@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+mapfile -t managed_paths < <(python3 .githooks/versioning.py paths)
+
+if ! git diff --quiet -- "${managed_paths[@]}"; then
+    echo "Version-managed files contain unstaged changes." >&2
+    echo "Stage or restore those changes before committing:" >&2
+    printf '  %s\n' "${managed_paths[@]}" >&2
+    exit 1
+fi
+
+if git rev-parse --verify --quiet HEAD >/dev/null; then
+    previous_version=$(python3 .githooks/versioning.py at-ref HEAD)
+else
+    previous_version=0.0.0
+fi
+
+if staged_version=$(git show :VERSION 2>/dev/null); then
+    staged_version=${staged_version//$'\n'/}
+else
+    staged_version=$previous_version
+fi
+
+if [[ ${MATERIALBIN_KEEP_VERSION:-0} == 1 ]]; then
+    selected_version=$staged_version
+else
+    selected_version=$(
+        python3 .githooks/versioning.py select-commit \
+            "$previous_version" "$staged_version"
+    )
+fi
+
+python3 .githooks/versioning.py set "$selected_version" >/dev/null
+git add -- "${managed_paths[@]}"
+python3 .githooks/versioning.py check >/dev/null
+
+echo "Material Bin version: $selected_version"

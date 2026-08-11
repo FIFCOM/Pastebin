@@ -156,9 +156,6 @@ Desktop.ini
 .tmp/
 .temp/
 
-# uv specific
-uv.lock
-
 # FastAPI / Uvicorn
 .uvicorn.pid
 
@@ -203,4 +200,3 @@ local/
 
 data/
 /docs/
-AGENT.md
