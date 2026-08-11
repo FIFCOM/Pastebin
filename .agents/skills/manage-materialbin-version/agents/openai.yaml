@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Material Bin Versions"
+  short_description: "Bump, validate, and release Material Bin versions"
+  default_prompt: "Use $manage-materialbin-version to bump or release the Material Bin version safely."

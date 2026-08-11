@@ -98,7 +98,7 @@ def load_config() -> Settings:
     return Settings(
         # 应用设置
         app_name=os.getenv("APP_NAME", "Material Bin User Auth API"),
-        version=os.getenv("VERSION", "1.0.0"),
+        version=os.getenv("VERSION", "1.0.1"),
         debug=_bool_env("DEBUG", True),
         # 数据库设置
         database_url=os.getenv("DATABASE_URL", "sqlite:///./material_bin.db"),
