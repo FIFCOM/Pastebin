@@ -1,6 +1,6 @@
 services:
   materialbin:
-    image: "${MATERIALBIN_IMAGE:-ghcr.io/fifcom/materialbin:latest}"
+    image: "${MATERIALBIN_IMAGE:-${MATERIALBIN_IMAGE_REPOSITORY:-ghcr.io/fifcom/materialbin}:${MATERIALBIN_IMAGE_TAG:-latest}}"
     container_name: materialbin
     restart: unless-stopped
     ports:
@@ -29,7 +29,7 @@ services:
       start_period: 20s
 
   materialbin-cleanup:
-    image: "${MATERIALBIN_IMAGE:-ghcr.io/fifcom/materialbin:latest}"
+    image: "${MATERIALBIN_IMAGE:-${MATERIALBIN_IMAGE_REPOSITORY:-ghcr.io/fifcom/materialbin}:${MATERIALBIN_IMAGE_TAG:-latest}}"
     container_name: materialbin-cleanup
     restart: unless-stopped
     depends_on:

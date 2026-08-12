@@ -95,6 +95,13 @@ TEXT_RULES = (
         re.compile(r'(?m)^(\s*APP_VERSION: "\$\{APP_VERSION:-)[^}]+(\}"\s*)$'),
     ),
     TextRule(
+        "Compose version image tag",
+        "compose.build.yaml",
+        re.compile(
+            r'(?m)^(\s*- "\$\{MATERIALBIN_IMAGE_REPOSITORY:-[^}]+\}:\$\{APP_VERSION:-)[^}]+(\}"\s*)$'
+        ),
+    ),
+    TextRule(
         "frontend package version",
         "web/package.json",
         re.compile(r'(?m)^(  "version": ")[^"]+(",\s*)$'),

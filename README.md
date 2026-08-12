@@ -87,7 +87,7 @@ npm run dev
 # 必须先编辑 .env.docker，把 SECRET_KEY / MEMBER_TOKEN_SECRET_KEY / INTERNAL_TOKEN 换成随机长字符串
 cp .env.docker.example .env.docker
 
-# 从源码构建镜像
+# 从源码构建镜像（同时标记为 latest 和当前版本）
 docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
 
 # 启动容器
@@ -155,12 +155,16 @@ docker compose --env-file .env.docker -f compose.yaml -f compose.mysql.yaml up -
 镜像与数据卷：
 
 ```env
-MATERIALBIN_IMAGE=ghcr.io/fifcom/materialbin:latest
+MATERIALBIN_IMAGE_REPOSITORY=ghcr.io/fifcom/materialbin
+MATERIALBIN_IMAGE_TAG=latest
 MATERIALBIN_DATA_VOLUME=materialbin_data
 MATERIALBIN_DEBUG=false
 ```
 
-`MATERIALBIN_IMAGE` 可切换到指定版本标签；`MATERIALBIN_DATA_VOLUME` 推荐保持默认 named volume。如果设置成 `./docker-data` 这样的宿主目录绑定，需要先处理目录写入权限。
+`MATERIALBIN_IMAGE_TAG` 可切换到指定版本标签；从源码构建时，Compose 会同时创建
+`latest` 和当前 `APP_VERSION` 的标签，避免旧版本变成悬空镜像。已有部署的
+`MATERIALBIN_IMAGE=...` 仍兼容，且优先于新变量。`MATERIALBIN_DATA_VOLUME` 推荐保持默认
+named volume。如果设置成 `./docker-data` 这样的宿主目录绑定，需要先处理目录写入权限。
 
 容器启动时支持两种数据库配置方式：
 

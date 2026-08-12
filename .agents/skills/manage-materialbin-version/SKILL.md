@@ -86,6 +86,27 @@ git push origin v1.5.0
 Expect a `master` push to publish the exact version, `sha-*`, and `edge`. Expect the formal tag to
 also publish `MAJOR.MINOR` and `latest`.
 
+## Build Versioned Images Locally
+
+Build through both Compose files so one image receives the moving runtime tag and the immutable
+product version tag:
+
+```bash
+docker compose --env-file .env.docker -f compose.yaml -f compose.build.yaml build
+```
+
+Keep only the repository and runtime tag in `.env.docker`:
+
+```env
+MATERIALBIN_IMAGE_REPOSITORY=ghcr.io/fifcom/materialbin
+MATERIALBIN_IMAGE_TAG=latest
+```
+
+Let the hook synchronize the `APP_VERSION` default and matching `build.tags` entry in
+`compose.build.yaml`. Do not put `APP_VERSION` in the long-lived deployment environment file.
+After a build, require both `${MATERIALBIN_IMAGE_REPOSITORY}:${MATERIALBIN_IMAGE_TAG}` and
+`${MATERIALBIN_IMAGE_REPOSITORY}:${APP_VERSION}` to point to the same image ID.
+
 ## Amend Or Repair
 
 Preserve the current version when amending a commit instead of creating a new version:

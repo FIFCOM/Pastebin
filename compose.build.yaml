@@ -2,9 +2,11 @@ services:
   materialbin:
     build:
       context: .
+      tags:
+        - "${MATERIALBIN_IMAGE_REPOSITORY:-ghcr.io/fifcom/materialbin}:${APP_VERSION:-1.0.3}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
-        APP_VERSION: "${APP_VERSION:-1.0.2}"
+        APP_VERSION: "${APP_VERSION:-1.0.3}"
         VCS_REF: "${VCS_REF:-local}"
         BUILD_DATE: "${BUILD_DATE:-local}"
