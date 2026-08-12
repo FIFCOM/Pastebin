@@ -63,11 +63,6 @@ class TextRule:
 
 TEXT_RULES = (
     TextRule(
-        "environment example version",
-        ".env.example",
-        re.compile(r'(?m)^(VERSION=")[^"]+("\s*)$'),
-    ),
-    TextRule(
         "pyproject project version",
         "pyproject.toml",
         re.compile(r'(?m)^(version = ")[^"]+("\s*)$'),
@@ -118,6 +113,9 @@ TEXT_RULES = (
     ),
 )
 
+ENV_VERSION_RE = re.compile(r"^[ \t]*VERSION[ \t]*=")
+ENV_PATHS = (".env.example", ".env")
+
 
 def _replace_rule(rule: TextRule, version: Version) -> None:
     path = ROOT / rule.path
@@ -131,6 +129,34 @@ def _replace_rule(rule: TextRule, version: Version) -> None:
         )
     if updated != text:
         path.write_text(updated, encoding="utf-8")
+
+
+def _remove_env_version(path: Path) -> None:
+    if not path.exists():
+        return
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    updated = "".join(line for line in lines if not ENV_VERSION_RE.match(line))
+    current = "".join(lines)
+    if updated != current:
+        path.write_text(updated, encoding="utf-8")
+
+
+def _check_env_versions_absent() -> None:
+    invalid_paths = []
+    for relative_path in ENV_PATHS:
+        path = ROOT / relative_path
+        if not path.exists():
+            continue
+        if any(
+            ENV_VERSION_RE.match(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+        ):
+            invalid_paths.append(relative_path)
+    if invalid_paths:
+        raise VersioningError(
+            "VERSION must not be defined in environment files: "
+            + ", ".join(invalid_paths)
+        )
 
 
 def _extract_rule_from_text(rule: TextRule, text: str) -> Version:
@@ -157,6 +183,8 @@ def set_version(version: Version) -> None:
     (ROOT / "VERSION").write_text(f"{version}\n", encoding="utf-8")
     for rule in TEXT_RULES:
         _replace_rule(rule, version)
+    for relative_path in ENV_PATHS:
+        _remove_env_version(ROOT / relative_path)
 
     # Ensure targeted edits did not leave either JSON file malformed.
     for relative_path in ("web/package.json", "web/package-lock.json"):
@@ -175,6 +203,7 @@ def check_versions() -> None:
         raise VersioningError(
             "version fields are inconsistent:\n  " + "\n  ".join(mismatches)
         )
+    _check_env_versions_absent()
 
 
 def _read_file_at_ref(ref: str, path: str, *, required: bool = True) -> str | None:
@@ -217,6 +246,11 @@ def check_versions_at_ref(ref: str) -> None:
         actual = _extract_rule_from_text(rule, text)
         if actual != expected:
             mismatches.append(f"{rule.label}: {actual} (expected {expected})")
+    env_example = _read_file_at_ref(ref, ".env.example", required=False)
+    if env_example is not None and any(
+        ENV_VERSION_RE.match(line) for line in env_example.splitlines()
+    ):
+        mismatches.append(".env.example must not define VERSION")
     if mismatches:
         raise VersioningError(
             "version fields are inconsistent:\n  " + "\n  ".join(mismatches)

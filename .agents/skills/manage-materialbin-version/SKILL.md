@@ -16,6 +16,8 @@ version source and use `.githooks/versioning.py` to update its synchronized copi
 - Keep a release tag in the form `vX.Y.Z` exactly equal to the commit's `VERSION`.
 - Never edit only one managed version field or bypass the hook with `--no-verify`.
 - Do not move or reuse a published version tag. Publish a new patch version to correct a release.
+- Do not define `VERSION` in `.env` or `.env.example`. Let source runs use the synchronized
+  application default and let container builds inject `APP_VERSION` as runtime `VERSION`.
 
 ## Inspect Version State
 
@@ -99,5 +101,6 @@ python3 .githooks/versioning.py set "$(python3 .githooks/versioning.py current)"
 python3 .githooks/versioning.py check
 ```
 
-Treat a local `.env` `VERSION` value as an intentional runtime override. Remove it when local runs
-should report the repository version; the hook does not modify ignored `.env` files.
+Do not add `VERSION` to `.env` or `.env.example`. The version tool and commit hook remove that line
+when found, while preserving every other environment setting. This keeps long-lived production
+environment files independent from application releases.
