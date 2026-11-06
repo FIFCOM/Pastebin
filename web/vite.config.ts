@@ -1,7 +1,10 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { readFileSync } from 'node:fs'
 import path from 'path'
+
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, './package.json'), 'utf-8'))
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -9,6 +12,9 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_BACKEND || 'http://localhost:8000'
   
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version)
+    },
     base: env.VITE_BASE_PATH || '/',
     server: {
       proxy: {
