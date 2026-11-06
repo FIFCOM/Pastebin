@@ -318,6 +318,7 @@ interface HistoryPickerItem {
 }
 
 const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
+const VIEWER_ADMIN_KEY_HANDOFF_PREFIX = 'mb_viewer_admin_key_handoff:'
 
 const props = defineProps<{
   currentPasteId: string
@@ -1007,6 +1008,23 @@ async function handleOpenSharedPaste(paste: SharedPasteRecord): Promise<void> {
   try {
     const decryptedKey = await decryptWithKey(strToBytes(paste.encrypted_paste_key), roomKey)
     const urlSafeKey = keyToUrlSafeStr(decryptedKey)
+
+    // 共享记录附带 admin_key 时，交接给查看页以显示编辑按钮
+    if (paste.encrypted_admin_key) {
+      try {
+        const decryptedAdminKey = await decryptWithKey(strToBytes(paste.encrypted_admin_key), roomKey)
+        localStorage.setItem(
+          `${VIEWER_ADMIN_KEY_HANDOFF_PREFIX}${paste.paste_id}`,
+          JSON.stringify({
+            admin_key: new TextDecoder().decode(decryptedAdminKey),
+            created_at: Date.now()
+          })
+        )
+      } catch {
+        // 无法交接时仅以只读方式打开
+      }
+    }
+
     window.open(buildAbsoluteAppUrl(`/p/${paste.paste_id}#${urlSafeKey}`), '_blank', 'noopener')
   } catch (error) {
     snackbar({

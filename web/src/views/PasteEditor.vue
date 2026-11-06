@@ -33,7 +33,12 @@
               variant="tonal"
               :disabled="showPublishPanel"
             >
-              <mdui-icon slot="icon" name="upload"></mdui-icon>
+              <mdui-circular-progress
+                v-if="isUploaderUploading"
+                slot="icon"
+                class="upload-btn-spinner"
+              ></mdui-circular-progress>
+              <mdui-icon v-else slot="icon" name="upload"></mdui-icon>
               上传文件
               <mdui-icon slot="end-icon" :name="showUploader ? 'expand_less' : 'expand_more'"></mdui-icon>
             </mdui-button>
@@ -139,6 +144,7 @@ import { ref, onBeforeUnmount, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import 'mdui/components/text-field.js'
 import 'mdui/components/button.js'
+import 'mdui/components/circular-progress.js'
 import 'mdui/components/switch.js'
 import 'mdui/components/icon.js'
 import { confirm } from 'mdui/functions/confirm.js'
@@ -841,6 +847,13 @@ watch([activeRoom, roomHasGuests], ([room, hasGuests]) => {
 
 .upload-btn {
   margin-left: auto;
+}
+
+.upload-btn-spinner {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
 }
 
 .title-input {

@@ -11,3 +11,8 @@ Skill source:
 
 Do not duplicate version procedures here. Follow the skill and treat the root `VERSION` file as
 the repository's version source.
+
+## MDUI V2 Guide
+
+本项目用到的 MDUI V2 库，其指南见下（包括动态配色、文章排版、设计令牌、组件、函数、图标包等）：https://www.mdui.org/zh-cn/docs/2/llms.txt。
+

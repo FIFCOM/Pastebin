@@ -135,7 +135,7 @@ def _replace_rule(rule: TextRule, version: Version) -> None:
             f"{rule.label}: expected one version field in {rule.path}, found {count}"
         )
     if updated != text:
-        path.write_text(updated, encoding="utf-8")
+        path.write_text(updated, encoding="utf-8", newline="\n")
 
 
 def _remove_env_version(path: Path) -> None:
@@ -145,7 +145,7 @@ def _remove_env_version(path: Path) -> None:
     updated = "".join(line for line in lines if not ENV_VERSION_RE.match(line))
     current = "".join(lines)
     if updated != current:
-        path.write_text(updated, encoding="utf-8")
+        path.write_text(updated, encoding="utf-8", newline="\n")
 
 
 def _check_env_versions_absent() -> None:
@@ -187,7 +187,7 @@ def current_version() -> Version:
 
 
 def set_version(version: Version) -> None:
-    (ROOT / "VERSION").write_text(f"{version}\n", encoding="utf-8")
+    (ROOT / "VERSION").write_text(f"{version}\n", encoding="utf-8", newline="\n")
     for rule in TEXT_RULES:
         _replace_rule(rule, version)
     for relative_path in ENV_PATHS:
@@ -374,6 +374,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    # Emit LF only. Windows text-mode stdout would otherwise translate "\n"
+    # to CRLF, and the Git hooks that parse this output (mapfile, $(...))
+    # keep the stray "\r" and fail with bogus pathspecs like "VERSION?".
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
+
     args = build_parser().parse_args()
     try:
         if args.command == "current":

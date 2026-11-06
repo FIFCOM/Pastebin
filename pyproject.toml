@@ -1,6 +1,6 @@
 [project]
 name = "material-bin"
-version = "1.0.4"
+version = "1.0.5"
 description = "An open-source Pastebin with Material Design, data encrypted with AES-256-GCM, and enhanced features including file upload and sharing."
 authors = [{name = "FIFCOM"}]
 readme = "README.md"

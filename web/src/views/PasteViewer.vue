@@ -120,6 +120,8 @@ import { decryptContent, urlSafeStrToKey } from '@/utils/crypto'
 import { useTheme } from '@/composables/useTheme'
 import { useAuth } from '@/composables/useAuth'
 import { useFavorites } from '@/composables/useFavorites'
+import { loadGuestHistory } from '@/composables/useHistory'
+import { getHistoryDetail } from '@/services/history'
 import {
   registerHeaderActions,
   triggerHeaderActionFlash,
@@ -158,6 +160,12 @@ const {
 } = useFavorites()
 const HEADER_OWNER_ID = 'paste-viewer-page'
 const VIEWER_FAVORITE_ACTION_ID = 'paste-viewer-favorite'
+const VIEWER_EDIT_ACTION_ID = 'paste-viewer-edit'
+const EDIT_CONTEXT_STORAGE_KEY = 'mb_editor_edit_context_v1'
+const ADMIN_KEY_SESSION_PREFIX = 'mb_admin_key:'
+// 房间共享打开新标签页时，通过 localStorage 短时交接 admin_key
+const ADMIN_KEY_HANDOFF_PREFIX = 'mb_viewer_admin_key_handoff:'
+const ADMIN_KEY_HANDOFF_TTL_MS = 60 * 1000
 
 // 状态
 const pasteData = ref<PasteData | null>(null)
@@ -177,6 +185,9 @@ const accessKeyDialog = ref<any>(null)
 const accessKeyInput = ref<string>('')
 const accessKeyError = ref<boolean>(false)
 const currentAccessKey = ref<string | undefined>(undefined)
+
+// 编辑权限：存在 admin_key 时在顶栏显示编辑按钮
+const currentAdminKey = ref<string>('')
 
 // 错误对话框
 const errorDialog = ref<any>(null)
@@ -207,6 +218,96 @@ function currentUserId(): number | null {
 function currentUrlEncryptionKey(): string {
   if (typeof window === 'undefined') return ''
   return window.location.hash.substring(1).trim()
+}
+
+function takeSharedAdminKeyHandoff(id: string): string {
+  const storageKey = `${ADMIN_KEY_HANDOFF_PREFIX}${id}`
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return ''
+    localStorage.removeItem(storageKey)
+    const parsed = JSON.parse(raw) as { admin_key?: unknown; created_at?: unknown }
+    const adminKey = typeof parsed.admin_key === 'string' ? parsed.admin_key.trim() : ''
+    const createdAt = typeof parsed.created_at === 'number' ? parsed.created_at : 0
+    if (!adminKey || Date.now() - createdAt > ADMIN_KEY_HANDOFF_TTL_MS) return ''
+    return adminKey
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 解析当前 Paste 的 admin_key：
+ * 房间共享交接 > 本标签页缓存 > 游客本地历史 > 登录用户历史
+ */
+async function resolveAdminKey(): Promise<void> {
+  const id = pasteId.value
+  if (!id) return
+
+  const handoff = takeSharedAdminKeyHandoff(id)
+  if (handoff) {
+    currentAdminKey.value = handoff
+    try {
+      sessionStorage.setItem(`${ADMIN_KEY_SESSION_PREFIX}${id}`, handoff)
+    } catch {
+      // ignore
+    }
+    return
+  }
+
+  try {
+    const cached = sessionStorage.getItem(`${ADMIN_KEY_SESSION_PREFIX}${id}`)?.trim()
+    if (cached) {
+      currentAdminKey.value = cached
+      return
+    }
+  } catch {
+    // ignore
+  }
+
+  const guestItem = loadGuestHistory().find((item) => item.pasteId === id)
+  if (guestItem?.adminKey) {
+    currentAdminKey.value = guestItem.adminKey
+    return
+  }
+
+  if (!currentUser.value) return
+
+  try {
+    const detail = await getHistoryDetail(id)
+    if (pasteId.value === id && detail.admin_key) {
+      currentAdminKey.value = detail.admin_key
+    }
+  } catch {
+    // 不在历史记录中，视为无编辑权限
+  }
+}
+
+function openInEditor(): void {
+  const id = pasteId.value
+  const adminKey = currentAdminKey.value
+  const encryptionKey = currentUrlEncryptionKey()
+  if (!id || !adminKey || !encryptionKey) {
+    snackbar({ message: '缺少编辑所需密钥', closeable: true })
+    return
+  }
+
+  try {
+    sessionStorage.setItem(
+      EDIT_CONTEXT_STORAGE_KEY,
+      JSON.stringify({
+        paste_id: id,
+        admin_key: adminKey,
+        encryption_key: encryptionKey,
+        created_at: Date.now()
+      })
+    )
+  } catch {
+    snackbar({ message: '浏览器存储不可用，无法进入编辑模式', closeable: true })
+    return
+  }
+
+  void router.push({ path: '/', query: { edit: '1', paste_id: id } })
 }
 
 async function copyDecryptedContent(): Promise<void> {
@@ -397,7 +498,9 @@ async function loadPaste(pasteId: string, encryptionKey: Uint8Array, accessKey?:
     
     // 根据 paste 类型设置默认 viewer（不使用持久化）
     viewerType.value = data.type === 'md' ? 'md' : 'txt'
-    
+
+    void resolveAdminKey()
+
     return true
   } catch (e: any) {
     return handleLoadError(e)
@@ -491,6 +594,15 @@ async function handleAccessKeySubmit() {
 onMounted(async () => {
   registerHeaderActions(HEADER_OWNER_ID, [
     {
+      id: VIEWER_EDIT_ACTION_ID,
+      label: '编辑',
+      ariaLabel: '编辑此 Paste',
+      icon: 'edit',
+      kind: 'icon',
+      visible: () => !!currentAdminKey.value && !!pasteData.value,
+      onClick: openInEditor
+    },
+    {
       id: 'paste-viewer-copy',
       label: '复制内容',
       ariaLabel: '复制 Paste 内容',
@@ -567,6 +679,9 @@ watch(
       initFavoritesFromCache(userId)
     }
     void syncFavoriteState()
+    if (pasteData.value && !currentAdminKey.value) {
+      void resolveAdminKey()
+    }
   }
 )
 

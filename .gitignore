@@ -146,6 +146,9 @@ Thumbs.db
 # Windows
 $RECYCLE.BIN/
 Desktop.ini
+# Internet zone marker (Mark of the Web) ADS or its materialized copy
+*:Zone.Identifier
+*_Zone.Identifier
 
 # Linux
 *~

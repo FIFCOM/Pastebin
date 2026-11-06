@@ -833,6 +833,14 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .file-download-layout {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* 纵向布局下，子项（预览面板）需占满整行；flex-basis 0 在列方向会影响高度 */
+  .file-download-layout > * {
+    flex: none;
+    width: 100%;
+    box-sizing: border-box;
   }
 }
 
