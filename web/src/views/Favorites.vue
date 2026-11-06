@@ -1,5 +1,5 @@
 <template>
-  <div class="favorites-page">
+  <div class="favorites-page" data-stagger>
     <div class="page-header">
       <h1 class="page-title">收藏</h1>
     </div>

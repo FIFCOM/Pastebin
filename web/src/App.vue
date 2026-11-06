@@ -4,8 +4,11 @@
       <GlobalHeader v-if="!isInstallRoute"></GlobalHeader>
       <AppSidebar v-if="!isInstallRoute && isAppSidebarRoute"></AppSidebar>
       <mdui-layout-main ref="appMainRef" class="app-main">
-        <div class="app-main-shell">
-          <router-view />
+        <div class="app-main-shell" :data-page-animating="isPageAnimating || undefined">
+          <PageTransition
+            @animating="isPageAnimating = $event"
+            @enter="layoutPath = route.path"
+          />
         </div>
       </mdui-layout-main>
     </mdui-layout>
@@ -19,8 +22,9 @@ import 'mdui/mdui.css'
 import 'mdui'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
+import PageTransition from './components/common/PageTransition.vue'
 import CollabJoinDialog from './components/collab/CollabJoinDialog.vue'
 import GlobalHeader from './components/GlobalHeader.vue'
 import GlobalFooter from './components/GlobalFooter.vue'
@@ -28,9 +32,18 @@ import { useAppSidebarState } from './composables/useAppSidebarState'
 import { isDocsPath } from './content/api-docs'
 
 const route = useRoute()
+const router = useRouter()
 const { isAppSidebarOpen, setAppSidebarOpen, closeAppSidebar } = useAppSidebarState()
 const isInstallRoute = computed(() => route.path === '/install' || route.path.startsWith('/install/'))
-const isAppSidebarRoute = computed(() => isSidebarPath(route.path))
+// 侧栏及其带来的主区域内边距随新页面进入时才更新(PageTransition 的 enter 事件),
+// 否则离场中的旧页面会在动画途中被突然改宽。
+const layoutPath = ref(route.path)
+const isAppSidebarRoute = computed(() => isSidebarPath(layoutPath.value))
+const isPageAnimating = ref(false)
+// 首次导航不经过 enter 事件:路由就绪后直接同步
+void router.isReady().then(() => {
+  layoutPath.value = route.path
+})
 const appMainRef = ref<HTMLElement | null>(null)
 
 let usersSidebarMediaQuery: MediaQueryList | null = null
@@ -84,8 +97,8 @@ function syncAppSidebarForRoute(path: string): void {
     return
   }
 
+  // 这里不复位内边距:侧栏要等新页面进入(layoutPath 更新)才卸载,复位由 layoutPath 的 watcher 负责
   closeAppSidebar()
-  scheduleAppMainHorizontalPaddingReset()
 }
 
 function handleUsersSidebarBreakpointChange(event: MediaQueryListEvent): void {
@@ -170,6 +183,11 @@ watch(
 
 watch(isAppSidebarOpen, () => {
   syncDocumentScrollLock()
+})
+
+// 侧栏在新页面进入时才卸载,内边距复位要等它卸载之后
+watch(layoutPath, () => {
+  scheduleAppMainHorizontalPaddingReset()
 })
 
 onMounted(() => {

@@ -1,0 +1,191 @@
+/* app-motion-system / motion.css
+   全局动效:令牌 → 档位 → 总开关 → 层 A 页面过渡 → 层 B 内容错峰。
+   档位唯一来源是 <html data-motion>,由 page-motion.ts 写入“生效档位”。
+   页面预设来自 <html data-page-motion / data-page-dir>(router.beforeResolve 写入)。 */
+:root {
+  --motion-scale: 1; /* 乘在自写 CSS 的时长上;off 时为 0 */
+  --m-shift: 1; /* 乘在位移 / 缩放入场量上;reduced、off 时为 0 */
+  --m-ease: cubic-bezier(0.2, 0, 0, 1);
+  --m-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m-fast: 140ms;
+  --m-med: 220ms;
+  --stagger-dur: 320ms;
+  --stagger-step: 40ms;
+}
+
+/* ---- 档位 ----
+   full     完整。
+   reduced  只保留淡入淡出:凡是位移 / 缩放的入场量都写成 calc(Npx * var(--m-shift)),这里为 0 就只剩 opacity。
+            平滑滚动、高度补间、数字滚动由 JS 的 allowsFullMotion() 关闭。
+   off      不播放任何动画:见下方总开关。 */
+:root[data-motion="reduced"],
+:root[data-motion="off"] {
+  --m-shift: 0;
+  scroll-behavior: auto;
+}
+:root[data-motion="off"] {
+  --motion-scale: 0;
+  /* MDUI 2 在 shadow DOM 里按 CSS 变量取时长,全局选择器管不到,要把它的时长令牌归零。 */
+  --mdui-motion-duration-short1: 0ms;
+  --mdui-motion-duration-short2: 0ms;
+  --mdui-motion-duration-short3: 0ms;
+  --mdui-motion-duration-short4: 0ms;
+  --mdui-motion-duration-medium1: 0ms;
+  --mdui-motion-duration-medium2: 0ms;
+  --mdui-motion-duration-medium3: 0ms;
+  --mdui-motion-duration-medium4: 0ms;
+  --mdui-motion-duration-long1: 0ms;
+  --mdui-motion-duration-long2: 0ms;
+  --mdui-motion-duration-long3: 0ms;
+  --mdui-motion-duration-long4: 0ms;
+  --mdui-motion-duration-extra-long1: 0ms;
+  --mdui-motion-duration-extra-long2: 0ms;
+  --mdui-motion-duration-extra-long3: 0ms;
+  --mdui-motion-duration-extra-long4: 0ms;
+}
+/* ---- 总开关 ----
+   所有 CSS 动画和过渡压到 0.01ms。不用 animation: none,这样 animationend / transitionend 仍会触发,
+   依赖这些事件的代码不会卡住。循环动画只播一次。
+   html:root 提高优先级,盖过组件里带 !important 的过渡声明。 */
+html:root[data-motion="off"] *,
+html:root[data-motion="off"] *::before,
+html:root[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+/* ---- 层 A:页面过渡预设 ---- */
+:root {
+  --pm-in: 210ms;
+  --pm-out: 90ms;
+  --pm-dx: 0px;
+  --pm-dy: 0px;
+  --pm-s: 1;
+  --stagger-y: calc(12px * var(--m-shift));
+}
+:root[data-page-motion="fade"] {
+  --pm-in: 160ms;
+  --pm-out: 80ms;
+}
+:root[data-page-motion="fade-through"] {
+  --pm-s: 0.96;
+}
+:root[data-page-motion="shared-x"] {
+  --pm-in: 280ms;
+  --pm-out: 100ms;
+  --pm-dx: 24px;
+  --stagger-y: 0px; /* 横向位移时内容只淡入,不再上浮 */
+}
+:root[data-page-motion="shared-y"] {
+  --pm-in: 300ms;
+  --pm-out: 100ms;
+  --pm-dy: 28px;
+}
+:root[data-page-motion="shared-x"][data-page-dir="back"] {
+  --pm-dx: -24px;
+}
+:root[data-page-motion="shared-y"][data-page-dir="back"] {
+  --pm-dy: -28px;
+}
+:root[data-page-motion="none"] {
+  --pm-in: 0ms;
+  --pm-out: 0ms;
+}
+/* 进场用 backwards、离场用 forwards:
+   进场结束后不保留 transform,避免形成包含块(会让 position:fixed 的后代错位);
+   离场结束到 Vue 移除节点之间不能回弹,否则旧页面会多闪一次。 */
+.page-enter-active {
+  animation: pm-in calc(var(--pm-in) * var(--motion-scale)) var(--m-ease-enter) backwards;
+}
+.page-leave-active {
+  animation: pm-out calc(var(--pm-out) * var(--motion-scale)) var(--m-ease-exit) forwards;
+  pointer-events: none;
+}
+@keyframes pm-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--pm-dx), var(--pm-dy)) scale(var(--pm-s));
+  }
+}
+@keyframes pm-out {
+  to {
+    opacity: 0;
+    transform: translate(calc(var(--pm-dx) * -0.5), calc(var(--pm-dy) * -0.5));
+  }
+}
+/* fade 预设只改 opacity:任何 transform 动画都会让 position:fixed 的后代相对页面定位,动画结束时跳回视口 */
+:root[data-page-motion="fade"] .page-enter-active {
+  animation-name: pm-fade-in;
+}
+:root[data-page-motion="fade"] .page-leave-active {
+  animation-name: pm-fade-out;
+}
+@keyframes pm-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pm-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+/* 横向位移期间裁掉溢出,避免横向滚动条。用 clip 不用 hidden:clip 不创建滚动容器,不破坏 sticky。
+   容器是 App.vue 里包住 PageTransition 的 .app-main-shell,由它绑 :data-page-animating。 */
+.app-main-shell[data-page-animating] {
+  overflow-x: clip;
+}
+
+/* ---- 层 B:内容错峰入场 ----
+   给结构容器加 data-stagger,其直接子元素在创建时依次上浮淡入(最多 6 级,更多的并入最后一级)。
+   不要加在随筛选 / 分页变化的数据列表上,那类列表用 TransitionGroup。
+   只在导航后的短窗口(html[data-page-settling])内生效,之后条件渲染出现的子元素不会重播。
+   浮层类元素不参与:它们有自己的定位和过渡,transform 动画会覆盖。
+   :not() 里排除本项目的浮层:原生 dialog、MDUI 的对话框 / snackbar / 下拉 / 提示。 */
+:root[data-page-settling]
+  [data-stagger]
+  > :not(
+    dialog,
+    [role="dialog"],
+    [role="alert"],
+    .sr-only,
+    .fab,
+    mdui-dialog,
+    mdui-snackbar,
+    mdui-dropdown,
+    mdui-tooltip,
+    mdui-navigation-drawer,
+    mdui-fab
+  ) {
+  animation: st-in calc(var(--stagger-dur) * var(--motion-scale)) var(--m-ease-enter) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger-step) * var(--motion-scale));
+}
+[data-stagger] > :nth-child(2) {
+  --i: 1;
+}
+[data-stagger] > :nth-child(3) {
+  --i: 2;
+}
+[data-stagger] > :nth-child(4) {
+  --i: 3;
+}
+[data-stagger] > :nth-child(5) {
+  --i: 4;
+}
+[data-stagger] > :nth-child(6) {
+  --i: 5;
+}
+[data-stagger] > :nth-child(n + 7) {
+  --i: 6;
+}
+@keyframes st-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--stagger-y));
+  }
+}

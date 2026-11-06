@@ -1,5 +1,5 @@
 <template>
-  <div class="history-page">
+  <div class="history-page" data-stagger>
     <div class="page-header">
       <h1 class="page-title">历史记录</h1>
     </div>

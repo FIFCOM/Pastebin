@@ -373,11 +373,10 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .header-action--flash,
-  .header-action--flash::part(container) {
-    animation: headerActionReducedEmphasis 220ms ease-out 1 both;
-  }
+/* 精简档:只做一次淡入淡出的强调。关闭档由 motion.css 的总开关压到 0.01ms,不会命中这里 */
+:root[data-motion="reduced"] .header-action--flash,
+:root[data-motion="reduced"] .header-action--flash::part(container) {
+  animation: headerActionReducedEmphasis 220ms ease-out 1 both;
 }
 
 </style>

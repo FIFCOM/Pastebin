@@ -28,6 +28,7 @@ import markdownItTocDoneRight from 'markdown-it-toc-done-right'
 import markdownItKatex from '@vscode/markdown-it-katex'
 import ImagePreview from '@/components/common/ImagePreview.vue'
 import { useMbInternalImages } from '@/composables/useMbInternalImages'
+import { pageMotion } from '@/composables/page-motion'
 import { useTheme } from '@/composables/useTheme'
 import { buildMbDownloadPageHref, parseMbInternalFilePath } from '@/utils/mbFile'
 // 导入主题样式
@@ -400,7 +401,7 @@ function handleViewerClick(event: MouseEvent) {
 
   // 平滑滚动到目标位置，不修改 URL
   targetElement.scrollIntoView({
-    behavior: 'smooth',
+    behavior: pageMotion.allowsFullMotion() ? 'smooth' : 'auto',
     block: 'start'
   })
 }

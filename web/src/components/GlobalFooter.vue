@@ -54,6 +54,30 @@
         </div>
       </div>
 
+      <div class="theme-section">
+        <div class="section-title">动画效果</div>
+        <div class="mode-buttons">
+          <mdui-segmented-button-group
+            selects="single"
+            required
+            :value="motionLevel"
+            @click.capture="preventSelectedMotionDeselect"
+            @change="handleMotionGroupChange"
+          >
+            <mdui-segmented-button value="full">
+              <span>完整</span>
+            </mdui-segmented-button>
+            <mdui-segmented-button value="reduced">
+              <span>精简</span>
+            </mdui-segmented-button>
+            <mdui-segmented-button value="off">
+              <span>关闭</span>
+            </mdui-segmented-button>
+          </mdui-segmented-button-group>
+        </div>
+        <p class="motion-hint">精简只保留淡入淡出,关闭则不播放任何动画。系统开启“减少动态效果”时始终关闭。</p>
+      </div>
+
       <div class="dialog-actions">
         <mdui-button
           variant="text"
@@ -76,6 +100,7 @@ import 'mdui/components/dialog.js'
 import 'mdui/components/segmented-button-group.js'
 import 'mdui/components/segmented-button.js'
 
+import { pageMotion, type MotionLevel } from '../composables/page-motion'
 import { useTheme, presetColors } from '../composables/useTheme'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
@@ -137,6 +162,40 @@ const handleModeGroupChange = (event: Event) => {
   }
 
   group.value = themeMode.value
+}
+
+const motionLevel = pageMotion.level
+
+const isMotionLevel = (value: string | undefined): value is MotionLevel => {
+  return value === 'full' || value === 'reduced' || value === 'off'
+}
+
+const preventSelectedMotionDeselect = (event: MouseEvent) => {
+  const selectedButton = event
+    .composedPath()
+    .find((target) => {
+      const element = target as HTMLElement
+      return element.tagName === 'MDUI-SEGMENTED-BUTTON' && element.getAttribute('value') === motionLevel.value
+    })
+
+  if (!selectedButton) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const handleMotionGroupChange = (event: Event) => {
+  const group = event.currentTarget as HTMLElement & { value?: string }
+  const value = group.value
+
+  if (isMotionLevel(value)) {
+    pageMotion.setLevel(value)
+    return
+  }
+
+  group.value = motionLevel.value
 }
 
 const changeColor = (color: string) => {
@@ -217,6 +276,13 @@ onUnmounted(() => {
 
 .mode-button--active {
   background-color: color-mix(in srgb, rgb(var(--mdui-color-primary)) 12%, transparent);
+}
+
+.motion-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .color-palette {
