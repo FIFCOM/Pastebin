@@ -1,13 +1,20 @@
 <template>
   <div v-if="section" data-testid="api-docs-page" class="api-docs-page">
     <div data-testid="api-docs-content" class="api-docs-content" data-stagger>
-      <p v-if="loading && !markdownContent">加载中...</p>
+      <div
+        v-if="loading && !markdownContent"
+        class="api-docs-loading"
+        role="status"
+        aria-label="加载中"
+      >
+        <mdui-circular-progress></mdui-circular-progress>
+      </div>
       <Markdown v-else :content="markdownContent" />
     </div>
   </div>
 
-  <div v-else data-testid="api-docs-empty-state" class="api-docs-empty">
-    <p>加载中...</p>
+  <div v-else data-testid="api-docs-empty-state" class="api-docs-empty" role="status" aria-label="加载中">
+    <mdui-circular-progress></mdui-circular-progress>
   </div>
 </template>
 
@@ -133,6 +140,13 @@ onBeforeUnmount(() => {
 }
 
 .api-docs-content {
+  min-height: 200px;
+}
+
+.api-docs-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 200px;
 }
 
