@@ -141,6 +141,32 @@ html:root[data-motion="off"] *::after {
   overflow-x: clip;
 }
 
+/* ---- 层 C:同页内容切换 ----
+   页面不变、只换主体内容时用(/users 的面板切换、/install 的步骤切换):
+   <Transition name="content-switch" mode="out-in">,被切换的节点必须是单根元素。
+   和页面过渡一样,进场用 backwards、离场用 forwards;位移量乘 --m-shift,reduced 档只剩淡入淡出。 */
+:root {
+  --cs-y: calc(8px * var(--m-shift));
+}
+.content-switch-enter-active {
+  animation: cs-in calc(200ms * var(--motion-scale)) var(--m-ease-enter) backwards;
+}
+.content-switch-leave-active {
+  animation: cs-out calc(90ms * var(--motion-scale)) var(--m-ease-exit) forwards;
+  pointer-events: none;
+}
+@keyframes cs-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--cs-y));
+  }
+}
+@keyframes cs-out {
+  to {
+    opacity: 0;
+  }
+}
+
 /* ---- 层 B:内容错峰入场 ----
    给结构容器加 data-stagger,其直接子元素在创建时依次上浮淡入(最多 6 级,更多的并入最后一级)。
    不要加在随筛选 / 分页变化的数据列表上,那类列表用 TransitionGroup。

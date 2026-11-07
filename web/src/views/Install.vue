@@ -11,7 +11,8 @@
 
           <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
-          <template v-if="showRestartCard">
+          <Transition name="content-switch" mode="out-in">
+          <div v-if="showRestartCard" key="restart" class="restart-card">
             <div class="restart-status-title">正在等待服务端重启</div>
             <div v-if="isRestartPolling" class="restart-loading-row">
               <mdui-circular-progress></mdui-circular-progress>
@@ -34,9 +35,9 @@
             >
               手动重启后重新检测
             </mdui-button>
-          </template>
+          </div>
 
-          <form v-else-if="status" class="install-form" @submit.prevent="handleSubmit">
+          <form v-else-if="status" :key="currentStep" class="install-form" @submit.prevent="handleSubmit">
             <section v-if="isEnvStep" class="form-section">
               <InstallEnvGroupList
                 :groups="basicEnvGroups"
@@ -120,6 +121,7 @@
               {{ submitButtonLabel }}
             </mdui-button>
           </form>
+          </Transition>
         </div>
       </mdui-card>
     </div>

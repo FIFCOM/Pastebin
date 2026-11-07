@@ -2,9 +2,11 @@
   <div class="user-management">
     <div class="workspace-panel">
       <div class="content-panel">
-        <KeepAlive>
-          <component :is="activeComponent" />
-        </KeepAlive>
+        <Transition name="content-switch" mode="out-in">
+          <KeepAlive>
+            <component :is="activeComponent" />
+          </KeepAlive>
+        </Transition>
       </div>
     </div>
   </div>

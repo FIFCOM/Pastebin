@@ -1,6 +1,6 @@
 <template>
   <div v-if="section" data-testid="api-docs-page" class="api-docs-page">
-    <div data-testid="api-docs-content" class="api-docs-content">
+    <div data-testid="api-docs-content" class="api-docs-content" data-stagger>
       <p v-if="loading && !markdownContent">加载中...</p>
       <Markdown v-else :content="markdownContent" />
     </div>
